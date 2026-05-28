@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
+// Bump when the Terms/Privacy text changes materially so we can tell which
+// version a user consented to. Stored in the auth user's metadata at signup.
+const TERMS_VERSION = '2026-05-28'
+
 export default function SignupPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -12,16 +16,25 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [agreed, setAgreed] = useState(false)
 
   const supabase = createClient()
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError(null)
     setMessage(null)
+    if (!agreed) {
+      setError('Please accept the Terms of Service and Privacy Policy to continue.')
+      return
+    }
+    setLoading(true)
 
-    const { error, data } = await supabase.auth.signUp({ email, password })
+    const { error, data } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION } },
+    })
     if (error) {
       setError(error.message)
       setLoading(false)
@@ -34,6 +47,10 @@ export default function SignupPage() {
   }
 
   const handleGoogleLogin = async () => {
+    if (!agreed) {
+      setError('Please accept the Terms of Service and Privacy Policy to continue.')
+      return
+    }
     const origin = window.location.origin
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -145,6 +162,19 @@ export default function SignupPage() {
               onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
             />
           </div>
+
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 16, fontSize: '0.8125rem', color: '#475569' }}>
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              style={{ marginTop: 3, flexShrink: 0 }}
+            />
+            <span>I agree to the{' '}
+              <Link href="/legal/terms" target="_blank" style={{ color: '#135bec', fontWeight: 600 }}>Terms of Service</Link> and{' '}
+              <Link href="/legal/privacy" target="_blank" style={{ color: '#135bec', fontWeight: 600 }}>Privacy Policy</Link>.
+            </span>
+          </label>
 
           <button
             type="submit"

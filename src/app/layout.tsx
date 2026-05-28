@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Outfit, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import ChatPanel from '@/components/chat/ChatPanel'
+import ConsentBanner from '@/components/legal/ConsentBanner'
 import { AuthProvider } from '@/components/providers/AuthProvider'
 
 const inter = Inter({
@@ -41,6 +42,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <ChatPanel />
+          <ConsentBanner />
         </AuthProvider>
       </body>
     </html>
