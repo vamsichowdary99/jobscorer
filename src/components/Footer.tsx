@@ -46,9 +46,9 @@ export default function Footer() {
                     <div>
                         <h4 style={{ color: 'white', fontSize: '0.8125rem', fontWeight: 600, marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Company</h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            <Link href="#" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>About</Link>
-                            <Link href="#" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>Privacy Policy</Link>
-                            <Link href="#" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>Terms of Service</Link>
+                            <Link href="/legal/privacy" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>Privacy Policy</Link>
+                            <Link href="/legal/terms" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>Terms of Service</Link>
+                            <Link href="/legal/cookies" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>Cookie Policy</Link>
                         </div>
                     </div>
                 </div>
