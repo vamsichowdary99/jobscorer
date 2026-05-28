@@ -45,16 +45,16 @@ export async function updateSession(request: NextRequest) {
     if (hasAuthCookie) transientError = true
   }
 
-  // Public routes that don't require auth
-  const publicPaths = ['/', '/browse', '/login', '/signup', '/auth', '/legal']
-  const isPublic = publicPaths.some(
-    (path) => request.nextUrl.pathname === path || request.nextUrl.pathname.startsWith(path + '/')
-  )
+  // Only /dashboard (UI) and /api (data) require a session. Everything else —
+  // landing, browse, legal, auth callback, and any unknown URL — is public, so
+  // a mistyped path renders the 404 page instead of bouncing to /login.
+  const { pathname } = request.nextUrl
+  const isProtected = pathname.startsWith('/dashboard') || pathname.startsWith('/api/')
 
   // If Supabase failed transiently but the user clearly has a session cookie,
   // let the request through. The client-side Supabase will pick up the real
   // state on its own; better than a false-positive logout.
-  if (!user && !isPublic && !transientError) {
+  if (!user && isProtected && !transientError) {
     // API routes must answer with JSON 401 — never redirect to /login.
     // Otherwise client `fetch(...).json()` calls choke on the HTML login page
     // with "Unexpected token '<', '<!DOCTYPE'..." which is opaque to debug.

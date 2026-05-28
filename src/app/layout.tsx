@@ -4,6 +4,7 @@ import './globals.css'
 import ChatPanel from '@/components/chat/ChatPanel'
 import ConsentBanner from '@/components/legal/ConsentBanner'
 import { AuthProvider } from '@/components/providers/AuthProvider'
+import { SITE_URL, SITE_NAME, SITE_TAGLINE, SITE_DESCRIPTION } from '@/lib/site'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -27,8 +28,37 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'ResuScore — AI-Powered Job Matching & Resume Optimization',
-  description: 'Upload your resume, discover jobs, and get AI-scored matches with optimization recommendations. Stop searching, start matching.',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    template: `%s — ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    'job matching', 'resume optimization', 'AI resume', 'ATS resume',
+    'IT jobs India', 'fresher jobs', 'resume score', 'job search',
+  ],
+  authors: [{ name: SITE_NAME }],
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    locale: 'en_IN',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, 'max-image-preview': 'large' },
+  },
 }
 
 export default function RootLayout({

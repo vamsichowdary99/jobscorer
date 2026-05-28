@@ -13,6 +13,15 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/admin/') ||
     pathname.startsWith('/api/rag/') ||
     pathname === '/api/debug/redis' ||
+    // Public SEO / metadata routes — must be reachable without a session and
+    // never trigger a Supabase auth lookup (crawlers, social scrapers, favicon).
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname.startsWith('/opengraph-image') ||
+    pathname.startsWith('/twitter-image') ||
+    pathname.startsWith('/icon') ||
+    pathname.startsWith('/apple-icon') ||
     /\.(ttf|otf|woff|woff2|svg|png|jpg|jpeg|gif|webp|ico)$/.test(pathname)
   ) {
     return NextResponse.next()
