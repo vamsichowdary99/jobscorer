@@ -274,19 +274,15 @@ export default function SettingsPage() {
 
     const handleDeleteAccount = async () => {
         if (deleteConfirmText !== 'DELETE' || !user?.id) return
-        // Best-effort cleanup. The auth row itself needs a server-side admin call
-        // (Supabase doesn't allow self-delete from anon key); we sign the user out
-        // and let them request account deletion via support.
-        try {
-            await supabase.from('optimized_resumes' as any).delete().eq('user_id', user.id)
-            await supabase.from('user_job_matches').delete().eq('user_id', user.id)
-            await supabase.from('company_research_analysis' as any).delete().eq('user_id', user.id)
-            await supabase.from('company_research' as any).delete().eq('user_id', user.id)
-            await supabase.from('resumes').delete().eq('user_id', user.id)
-        } catch (err) {
-            console.warn('[delete account] partial cleanup failure:', err)
+        // Server route (service role) erases all data + storage AND deletes the
+        // auth user itself — full DPDP erasure, no "contact support" step.
+        const res = await fetch('/api/account/delete', { method: 'POST' })
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            alert(body.error ?? 'Account deletion failed. Please try again or contact support.')
+            return
         }
-        alert("Your data has been removed. Sign out now — account row removal must be completed by support.")
+        alert('Your account and all associated data have been permanently deleted.')
         await signOut()
         router.push('/login')
     }
@@ -711,6 +707,14 @@ export default function SettingsPage() {
                     <Card id="danger" refSetter={el => sectionRefs.current.danger = el}
                         title="Danger Zone" sub="Destructive actions. These cannot be undone." danger>
                         <div style={S.cardBody}>
+                            <div style={S.dangerRow}>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>Download your data</div>
+                                    <div style={{ fontSize: 13, color: '#64748b' }}>Export a JSON copy of your resumes, matches, optimized resumes, and settings.</div>
+                                </div>
+                                <a href="/api/account/export" style={{ ...S.btnOutline, textDecoration: 'none', whiteSpace: 'nowrap' }}>Download my data</a>
+                            </div>
+
                             <div style={S.dangerRow}>
                                 <div style={{ flex: 1 }}>
                                     <div style={S.dangerTitle}>Sign out everywhere</div>
