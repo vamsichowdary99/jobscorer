@@ -36,11 +36,14 @@ function limiters() {
     // window than 'ingest' since a single user has no legitimate reason to
     // upload >10 resumes in 5 minutes.
     resume: makeLimiter(10, 300, 'rl:resume'),
+    // Chat hits OpenAI (paid) per message; 20/min per user blocks abuse while
+    // staying well above normal interactive use.
+    chat: makeLimiter(20, 60, 'rl:chat'),
   };
   return _limiters;
 }
 
-export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume';
+export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume' | 'chat';
 
 /**
  * Check the limiter for a user. Returns null if the request is allowed

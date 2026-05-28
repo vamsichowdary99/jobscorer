@@ -4,6 +4,7 @@ import { chatTools } from '@/lib/chat/tool-definitions';
 import { executeTool } from '@/lib/chat/tools';
 import type { ChatRequest } from '@/lib/chat/types';
 import { createClient } from '@/lib/supabase/server';
+import { requireUserLimit } from '@/lib/rate-limit';
 
 function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const limited = await requireUserLimit(user.id, 'chat');
+  if (limited) return limited;
 
   let body: ChatRequest;
   try {
