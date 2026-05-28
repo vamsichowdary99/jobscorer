@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Resume Template Showcase — open-resume & resume-lm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --text: #111827;
+    --muted: #4b5563;
+    --soft: #6b7280;
+    --line: #e5e7eb;
+    --accent-open: #38bdf8;    /* open-resume default theme color (sky-ish) */
+    --accent-link: #2563eb;    /* resume-lm link color */
+    --page-shadow: 0 10px 30px rgba(15, 23, 42, 0.10), 0 2px 8px rgba(15, 23, 42, 0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, -apple-system, Segoe UI, sans-serif; }
+  .topbar {
+    background: #0f172a;
+    color: #f8fafc;
+    padding: 28px 32px;
+    border-bottom: 1px solid #1e293b;
+  }
+  .topbar h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  .topbar p { margin: 0; color: #94a3b8; font-size: 14px; }
+  .topbar a { color: #93c5fd; text-decoration: none; }
+  .topbar a:hover { text-decoration: underline; }
+
+  .legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding: 14px 32px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .legend span strong { color: var(--text); }
+
+  .stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    padding: 32px;
+    max-width: 1700px;
+    margin: 0 auto;
+  }
+  @media (max-width: 1200px) { .stage { grid-template-columns: 1fr; } }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .card header {
+    width: 100%;
+    max-width: 8.5in;
+    margin-bottom: 14px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    background: #eef2ff;
+    color: #4338ca;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .badge.alt { background: #ecfeff; color: #0e7490; }
+  .card h2 { margin: 8px 0 2px; font-size: 18px; font-weight: 700; }
+  .card .sub { color: var(--muted); font-size: 13px; }
+
+  /* ------------------------------------------------------------ */
+  /* A page-like sheet, US Letter ~ 8.5 x 11 in                     */
+  .sheet {
+    width: 8.5in;
+    min-height: 11in;
+    background: #ffffff;
+    box-shadow: var(--page-shadow);
+    border-radius: 4px;
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* ============================================================ */
+  /*   TEMPLATE 1 — open-resume                                    */
+  /*   Themed accent bar, left-aligned name, colored section titles*/
+  /* ============================================================ */
+  .open .accent-bar {
+    height: 10pt;
+    background: var(--accent-open);
+  }
+  .open .body {
+    padding: 18pt 60pt 24pt 60pt;
+    font-family: 'Roboto', 'Helvetica', sans-serif;
+    font-size: 11pt;
+    line-height: 1.45;
+    color: #111827;
+  }
+  .open .name {
+    font-size: 20pt;
+    font-weight: 700;
+    color: var(--accent-open);
+    margin: 0 0 4pt;
+  }
+  .open .summary { color: #1f2937; margin: 0 0 6pt; font-size: 11pt; }
+  .open .contact-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 6pt 14pt;
+    color: #374151;
+    font-size: 10.5pt;
+    margin-bottom: 14pt;
+  }
+  .open .contact-row .item { display: inline-flex; align-items: center; gap: 5pt; }
+  .open .contact-row .ico {
+    width: 11pt; height: 11pt; display: inline-block; flex: none;
+    color: #525252;
+  }
+  .open .section { margin-top: 14pt; }
+  .open .section-title {
+    font-size: 12pt;
+    font-weight: 700;
+    color: var(--accent-open);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1pt solid var(--accent-open);
+    padding-bottom: 2pt;
+    margin: 0 0 6pt;
+  }
+  .open .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12pt;
+  }
+  .open .row .left { font-weight: 600; color: #111827; }
+  .open .row .right { color: #4b5563; font-size: 10.5pt; white-space: nowrap; }
+  .open .sub-row { color: #374151; font-size: 10.5pt; margin-bottom: 4pt; }
+  .open ul { margin: 4pt 0 8pt; padding-left: 16pt; }
+  .open ul li { margin-bottom: 2pt; }
+  .open .skills-row {
+    display: flex; gap: 6pt; align-items: baseline; margin-bottom: 4pt;
+  }
+  .open .skills-row .cat { font-weight: 600; color: #111827; min-width: 110pt; }
+  .open .skills-row .vals { color: #374151; }
+
+  /* ============================================================ */
+  /*   TEMPLATE 2 — resume-lm                                      */
+  /*   Centered name + contact, uppercase underlined headings      */
+  /* ============================================================ */
+  .lm .body {
+    padding: 36pt 36pt;
+    font-family: 'Helvetica', 'Arial', sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #111827;
+  }
+  .lm .header { text-align: center; }
+  .lm .name {
+    font-size: 24pt;
+    font-weight: 700;
+    margin: 0 0 18pt;
+    color: #111827;
+    letter-spacing: 0.005em;
+  }
+  .lm .contact {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0 4pt;
+    font-size: 10pt;
+    color: #374151;
+  }
+  .lm .contact .dot { color: #4b5563; margin: 0 2pt; }
+  .lm .contact a { color: var(--accent-link); text-decoration: none; }
+  .lm .section { margin-top: 12pt; }
+  .lm .section-title {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #111827;
+    text-transform: uppercase;
+    border-bottom: 0.5pt solid var(--line);
+    padding-bottom: 1pt;
+    margin: 0 0 4pt;
+  }
+  .lm .item { margin-bottom: 6pt; }
+  .lm .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12pt;
+  }
+  .lm .item-head .role { font-weight: 700; color: #111827; }
+  .lm .item-head .org-row { color: #111827; display: flex; gap: 4pt; align-items: center; }
+  .lm .item-head .org-row .loc { color: #374151; }
+  .lm .item-head .date { color: #111827; white-space: nowrap; text-align: right; }
+  .lm ul.bullets { list-style: none; padding: 0; margin: 4pt 0 0; }
+  .lm ul.bullets li {
+    display: flex;
+    margin-left: 8pt;
+    padding-left: 6pt;
+    gap: 6pt;
+  }
+  .lm ul.bullets li::before {
+    content: '\2022';
+    color: #111827;
+  }
+  .lm .skills-line { margin-bottom: 2pt; }
+  .lm .skills-line strong { font-weight: 700; margin-right: 4pt; }
+  .lm .skills-line span { color: #374151; }
+  .lm .proj-tech { color: #374151; font-weight: 700; margin-top: 0; }
+  .lm a { color: var(--accent-link); text-decoration: none; }
+
+  /* Notes */
+  .footnote {
+    max-width: 1700px;
+    margin: 0 auto;
+    padding: 0 32px 48px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .footnote h3 { margin: 24px 0 8px; color: var(--text); font-size: 15px; }
+  .footnote ul { margin: 0; padding-left: 18px; }
+  .footnote code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Resume Template Showcase</h1>
+  <p>
+    Faithful HTML reproductions of the two reference resume designs in this repo:
+    <a href="https://github.com/xitanggg/open-resume" target="_blank" rel="noreferrer">open-resume</a>
+    and
+    <a href="https://github.com/olyaiy/resume-lm" target="_blank" rel="noreferrer">resume-lm</a>.
+  </p>
+</div>
+
+<div class="legend">
+  <span><strong>open-resume</strong> — themed accent bar, colored section headings, left-aligned profile, contact row with icons.</span>
+  <span><strong>resume-lm</strong> — minimalist ATS layout: centered name &amp; contact, uppercase underlined sections, dense bullets.</span>
+</div>
+
+<div class="stage">
+
+  <!-- ============== OPEN-RESUME ============== -->
+  <div class="card">
+    <header>
+      <span class="badge">Template 1</span>
+      <h2>open-resume</h2>
+      <div class="sub">Themed accent · colored section titles · icon contact strip</div>
+    </header>
+
+    <div class="sheet open">
+      <div class="accent-bar"></div>
+      <div class="body">
+        <div class="name">Aarav Sharma</div>
+        <div class="summary">
+          Computer Science fresher building full-stack web apps with React, Next.js, and Node.js. Looking for SDE / Frontend Engineer roles.
+        </div>
+        <div class="contact-row">
+          <span class="item">
+            <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v16H4z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 6l8 6 8-6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            aarav.sharma@example.com
+          </span>
+          <span class="item">
+            <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M5 4h4l2 5-3 2a12 12 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A18 18 0 0 1 3 6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            +91 98765 43210
+          </span>
+          <span class="item">
+            <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22s7-7.5 7-13a7 7 0 1 0-14 0c0 5.5 7 13 7 13z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="9" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            Hyderabad, IN
+          </span>
+          <span class="item">
+            <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 12a8.5 8.5 0 1 0 17 0 8.5 8.5 0 0 0-17 0z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 12h17M12 3.5c2.5 3 2.5 14 0 17M12 3.5c-2.5 3-2.5 14 0 17" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            linkedin.com/in/aarav
+          </span>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Work Experience</div>
+          <div class="row">
+            <div class="left">Software Engineering Intern</div>
+            <div class="right">May 2025 — Aug 2025</div>
+          </div>
+          <div class="sub-row">Razorpay · Bengaluru, IN</div>
+          <ul>
+            <li>Built a merchant-facing reconciliation dashboard in Next.js used by 800+ businesses, reducing manual support tickets by 32%.</li>
+            <li>Shipped a Redis-backed caching layer for the settlements API, cutting p95 latency from 540ms → 110ms.</li>
+            <li>Wrote 60+ Jest tests and integrated Playwright smoke checks into the team's CI pipeline.</li>
+          </ul>
+
+          <div class="row">
+            <div class="left">Open Source Contributor</div>
+            <div class="right">Jan 2024 — Present</div>
+          </div>
+          <div class="sub-row">React Hook Form</div>
+          <ul>
+            <li>Authored two merged PRs improving TypeScript inference for nested field arrays (300+ GitHub stars on the related discussion thread).</li>
+          </ul>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Education</div>
+          <div class="row">
+            <div class="left">B.Tech, Computer Science &amp; Engineering</div>
+            <div class="right">2022 — 2026</div>
+          </div>
+          <div class="sub-row">IIIT Hyderabad · CGPA 9.1 / 10</div>
+          <ul>
+            <li>Relevant coursework: Data Structures, Distributed Systems, Compilers, Machine Learning, DBMS.</li>
+          </ul>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Projects</div>
+          <div class="row">
+            <div class="left">ResuScore — AI Resume Matcher</div>
+            <div class="right">2025</div>
+          </div>
+          <div class="sub-row">Next.js · Supabase · OpenAI · n8n</div>
+          <ul>
+            <li>Designed a RAG pipeline scoring 10k+ Indian IT job postings against a user's resume in &lt; 4 seconds.</li>
+            <li>Implemented vector search with pgvector and tunable similarity thresholds (currently 0.3).</li>
+          </ul>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Skills</div>
+          <div class="skills-row"><span class="cat">Languages</span><span class="vals">TypeScript, Python, Go, SQL</span></div>
+          <div class="skills-row"><span class="cat">Frameworks</span><span class="vals">React, Next.js, Node.js, FastAPI, Tailwind CSS</span></div>
+          <div class="skills-row"><span class="cat">Tooling</span><span class="vals">PostgreSQL, Redis, Supabase, Docker, GitHub Actions</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============== RESUME-LM ============== -->
+  <div class="card">
+    <header>
+      <span class="badge alt">Template 2</span>
+      <h2>resume-lm</h2>
+      <div class="sub">Centered header · uppercase rules · dense ATS-friendly layout</div>
+    </header>
+
+    <div class="sheet lm">
+      <div class="body">
+        <div class="header">
+          <div class="name">Aarav Sharma</div>
+          <div class="contact">
+            <span>Hyderabad, IN</span><span class="dot">•</span>
+            <a href="mailto:aarav.sharma@example.com">aarav.sharma@example.com</a><span class="dot">•</span>
+            <span>+91 98765 43210</span><span class="dot">•</span>
+            <a href="#">linkedin.com/in/aarav</a><span class="dot">•</span>
+            <a href="#">github.com/aarav</a>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Skills</div>
+          <div class="skills-line"><strong>Languages:</strong><span>TypeScript, Python, Go, SQL, Java</span></div>
+          <div class="skills-line"><strong>Frameworks:</strong><span>React, Next.js, Node.js, FastAPI, Tailwind CSS</span></div>
+          <div class="skills-line"><strong>Tooling:</strong><span>PostgreSQL, Redis, Supabase, Docker, GitHub Actions, Vercel</span></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Experience</div>
+          <div class="item">
+            <div class="item-head">
+              <div>
+                <div class="role">Software Engineering Intern</div>
+                <div class="org-row"><span>Razorpay</span><span class="dot">•</span><span class="loc">Bengaluru, IN</span></div>
+              </div>
+              <div class="date">May 2025 — Aug 2025</div>
+            </div>
+            <ul class="bullets">
+              <li><span>Built a merchant-facing <strong>reconciliation dashboard</strong> in Next.js used by 800+ businesses, reducing support tickets by 32%.</span></li>
+              <li><span>Shipped a <strong>Redis-backed caching layer</strong> for the settlements API, cutting p95 latency from 540ms to 110ms.</span></li>
+              <li><span>Wrote 60+ Jest tests and integrated Playwright smoke checks into the team's CI pipeline.</span></li>
+            </ul>
+          </div>
+
+          <div class="item">
+            <div class="item-head">
+              <div>
+                <div class="role">Open Source Contributor</div>
+                <div class="org-row"><span>React Hook Form</span></div>
+              </div>
+              <div class="date">Jan 2024 — Present</div>
+            </div>
+            <ul class="bullets">
+              <li><span>Authored two merged PRs improving TypeScript inference for nested field arrays.</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Projects</div>
+          <div class="item">
+            <div class="item-head">
+              <div>
+                <div class="role">ResuScore — AI Resume Matcher</div>
+              </div>
+              <div class="date">
+                <a href="#">github.com/aarav/resuscore</a>
+              </div>
+            </div>
+            <div class="proj-tech">Next.js, Supabase, OpenAI, n8n, pgvector</div>
+            <ul class="bullets">
+              <li><span>Designed a <strong>RAG pipeline</strong> scoring 10k+ Indian IT job postings against a user's resume in &lt; 4 seconds.</span></li>
+              <li><span>Implemented vector search with pgvector and tunable similarity thresholds (currently 0.3).</span></li>
+            </ul>
+          </div>
+
+          <div class="item">
+            <div class="item-head">
+              <div>
+                <div class="role">Studyloop</div>
+              </div>
+              <div class="date">2024</div>
+            </div>
+            <div class="proj-tech">React, FastAPI, PostgreSQL</div>
+            <ul class="bullets">
+              <li><span>Spaced-repetition study app with 1.2k weekly active users at peak; scaled to 50k flashcards per user.</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Education</div>
+          <div class="item">
+            <div class="item-head">
+              <div>
+                <div class="role">IIIT Hyderabad</div>
+                <div class="org-row"><span>B.Tech Computer Science &amp; Engineering</span></div>
+              </div>
+              <div class="date">2022 — 2026</div>
+            </div>
+            <ul class="bullets">
+              <li><span>CGPA 9.1 / 10. Coursework: Distributed Systems, Compilers, ML, DBMS.</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footnote">
+  <h3>What you're looking at</h3>
+  <ul>
+    <li><strong>open-resume</strong> reproduces <code>references/open-resume/src/app/components/Resume/ResumePDF/*</code> — the themed accent bar (<code>themeColor</code>), 20pt left-aligned colored name, summary line, and the icon+text flex contact row from <code>ResumePDFProfile.tsx</code>. Section headings inherit the theme color with an underline.</li>
+    <li><strong>resume-lm</strong> reproduces <code>references/resume-lm/src/components/resume/editor/preview/resume-pdf-document.tsx</code> — centered 24pt bold Helvetica name, contact row with • separators, uppercase 10pt section titles with a thin <code>#e5e7eb</code> rule, and the dense bullet style with <code>•</code> dots.</li>
+    <li>Both pages target US Letter dimensions (8.5in × 11in) for a faithful preview of the printed/PDF result.</li>
+  </ul>
+
+  <h3>How to open</h3>
+  <ul>
+    <li>Run <code>npm run dev</code> in <code>resuscore/</code> and visit <code>http://localhost:3000/resume-templates-showcase.html</code>.</li>
+    <li>Or just open the file directly in any browser — no JS, no build needed.</li>
+  </ul>
+</div>
+
+</body>
+</html>

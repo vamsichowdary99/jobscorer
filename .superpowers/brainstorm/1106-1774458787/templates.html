@@ -1,0 +1,218 @@
+<h2>Choose Your 3 Resume Templates</h2>
+<p class="subtitle">These are the 3 ATS-friendly templates we'll build. Click a card to select it — or select all 3 if you want all of them.</p>
+
+<style>
+.template-cards {
+  display: flex;
+  gap: 24px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.tcard {
+  width: 260px;
+  border: 2px solid #2a2a3a;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s;
+  background: #16161e;
+}
+.tcard:hover { border-color: #6c63ff; transform: translateY(-2px); }
+.tcard.selected { border-color: #6c63ff; background: #1e1e2e; }
+.tcard-preview {
+  height: 320px;
+  padding: 18px 16px;
+  font-size: 7.5px;
+  line-height: 1.4;
+  overflow: hidden;
+  position: relative;
+  background: white;
+  color: #111;
+}
+.tcard-label {
+  padding: 14px 16px;
+  border-top: 1px solid #2a2a3a;
+}
+.tcard-label h3 { margin: 0 0 4px; font-size: 15px; color: #e2e8f0; }
+.tcard-label p { margin: 0; font-size: 12px; color: #94a3b8; }
+.tag {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  margin-top: 6px;
+  background: #1a3a2a;
+  color: #4ade80;
+  border: 1px solid #4ade80;
+}
+
+/* === TEMPLATE A: CLASSIC === */
+.classic-preview { font-family: Georgia, serif; }
+.classic-name { font-size: 16px; font-weight: bold; text-align: center; letter-spacing: 1px; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 5px; }
+.classic-contact { text-align: center; font-size: 6.5px; color: #444; margin-bottom: 7px; }
+.classic-section { font-size: 7px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #888; margin: 6px 0 3px; }
+.classic-job-title { font-style: italic; font-size: 7px; color: #444; }
+.classic-bullet { padding-left: 10px; position: relative; font-size: 6.5px; margin: 1px 0; }
+.classic-bullet::before { content: "•"; position: absolute; left: 2px; }
+
+/* === TEMPLATE B: MINIMALIST === */
+.minimal-preview { font-family: 'Arial', sans-serif; }
+.minimal-name { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 2px; }
+.minimal-contact { font-size: 6px; color: #666; margin-bottom: 10px; }
+.minimal-section { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #000; margin: 8px 0 3px; }
+.minimal-divider { border: none; border-top: 1px solid #eee; margin: 0 0 4px; }
+.minimal-row { display: flex; justify-content: space-between; font-size: 7px; font-weight: 600; }
+.minimal-sub { font-size: 6.5px; color: #555; margin-bottom: 1px; }
+.minimal-bullet { padding-left: 10px; position: relative; font-size: 6.5px; color: #333; margin: 1px 0; }
+.minimal-bullet::before { content: "—"; position: absolute; left: 0; color: #999; font-size: 6px; }
+
+/* === TEMPLATE C: MODERN === */
+.modern-preview { font-family: Roboto, 'Arial', sans-serif; }
+.modern-header { background: #1e3a5f; color: white; padding: 10px 12px 8px; margin: -18px -16px 10px; }
+.modern-name { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+.modern-contact { font-size: 6px; opacity: 0.85; margin-top: 2px; }
+.modern-section { font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #1e3a5f; margin: 7px 0 2px; border-left: 2px solid #1e3a5f; padding-left: 5px; }
+.modern-row { display: flex; justify-content: space-between; font-size: 7px; font-weight: 600; }
+.modern-date { font-size: 6px; color: #1e3a5f; background: #e8f0fe; padding: 1px 5px; border-radius: 3px; }
+.modern-sub { font-size: 6.5px; color: #555; margin-bottom: 1px; }
+.modern-bullet { padding-left: 10px; position: relative; font-size: 6.5px; color: #333; margin: 1px 0; }
+.modern-bullet::before { content: "▸"; position: absolute; left: 0; color: #1e3a5f; font-size: 6px; }
+.modern-skills { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+.modern-skill { font-size: 5.5px; padding: 1px 5px; background: #e8f0fe; color: #1e3a5f; border-radius: 3px; }
+</style>
+
+<div class="template-cards">
+
+  <!-- TEMPLATE A: CLASSIC -->
+  <div class="tcard" data-choice="classic" onclick="toggleSelect(this)">
+    <div class="tcard-preview classic-preview">
+      <div class="classic-name">VAMSI CHOWDARY</div>
+      <div class="classic-contact">vamsi@email.com  •  +91 98765 43210  •  Bangalore, India</div>
+
+      <div class="classic-section">Professional Summary</div>
+      <div style="font-size:6.5px;margin-bottom:5px">SOC Analyst skilled in SIEM and cloud security with hands-on experience using Wazuh and TheHive. Achieved 30% reduction in false positives through custom correlation rules.</div>
+
+      <div class="classic-section">Experience</div>
+      <div style="display:flex;justify-content:space-between;font-size:7px;font-weight:bold;margin-top:3px">
+        <span>HCLTECH</span><span>04/2024 – 01/2025</span>
+      </div>
+      <div class="classic-job-title">SOC Analyst – Internship · Bangalore, INDIA</div>
+      <div class="classic-bullet">Analyzed 500+ security alerts using SIEM tools, reducing false positives by 30%</div>
+      <div class="classic-bullet">Performed log analysis, triage, and escalation in 20+ incident investigations</div>
+      <div class="classic-bullet">Deployed 5+ detection rules for malware and suspicious activities</div>
+      <div class="classic-bullet">Improved response time by 40% through automation of alert handling tasks</div>
+
+      <div style="margin-top:4px;display:flex;justify-content:space-between;font-size:7px;font-weight:bold">
+        <span>EDZU EDTECH</span><span>01/2024 – 03/2024</span>
+      </div>
+      <div class="classic-job-title">System Administrator – Intern · Ahmedabad, India</div>
+      <div class="classic-bullet">Resolved hardware, software, and network issues for 100+ users</div>
+      <div class="classic-bullet">Managed Active Directory user accounts and group assignments</div>
+
+      <div class="classic-section">Education</div>
+      <div style="display:flex;justify-content:space-between;font-size:7px;font-weight:bold;margin-top:3px">
+        <span>EPITA – School of Engineering</span><span>06/2026</span>
+      </div>
+      <div class="classic-job-title">Master of Science</div>
+
+      <div class="classic-section">Technical Skills</div>
+      <div style="font-size:6.5px">SIEM, Wazuh, Splunk, TheHive, ELK Stack, Cloud Security, Network Security, Wireshark</div>
+    </div>
+    <div class="tcard-label">
+      <h3>Classic</h3>
+      <p>Serif font · Traditional layout · Timeless</p>
+      <span class="tag">✓ ATS Friendly</span>
+    </div>
+  </div>
+
+  <!-- TEMPLATE B: MINIMALIST -->
+  <div class="tcard" data-choice="minimal" onclick="toggleSelect(this)">
+    <div class="tcard-preview minimal-preview">
+      <div class="minimal-name">Vamsi Chowdary</div>
+      <div class="minimal-contact">vamsi@email.com  ·  +91 98765 43210  ·  Bangalore, India</div>
+
+      <div class="minimal-section">Summary</div>
+      <hr class="minimal-divider"/>
+      <div style="font-size:6.5px;margin-bottom:6px;color:#333">SOC Analyst skilled in SIEM and cloud security with hands-on experience using Wazuh and TheHive. Achieved 30% reduction in false positives through custom correlation rules.</div>
+
+      <div class="minimal-section">Experience</div>
+      <hr class="minimal-divider"/>
+      <div class="minimal-row"><span>HCLTECH</span><span>Apr 2024 – Jan 2025</span></div>
+      <div class="minimal-sub">SOC Analyst – Internship · Bangalore</div>
+      <div class="minimal-bullet">Analyzed 500+ security alerts using SIEM tools, reducing false positives by 30%</div>
+      <div class="minimal-bullet">Performed log analysis, triage, and escalation in 20+ incident investigations</div>
+      <div class="minimal-bullet">Deployed 5+ detection rules for malware and suspicious activities</div>
+
+      <div style="margin-top:5px"></div>
+      <div class="minimal-row"><span>EDZU EDTECH</span><span>Jan 2024 – Mar 2024</span></div>
+      <div class="minimal-sub">System Administrator – Intern · Ahmedabad</div>
+      <div class="minimal-bullet">Resolved issues for 100+ users, achieving avg resolution under 30 minutes</div>
+      <div class="minimal-bullet">Managed Active Directory accounts and group assignments</div>
+
+      <div class="minimal-section">Education</div>
+      <hr class="minimal-divider"/>
+      <div class="minimal-row"><span>EPITA – School of Engineering</span><span>2026</span></div>
+      <div class="minimal-sub">Master of Science · Computer Science</div>
+
+      <div class="minimal-section">Skills</div>
+      <hr class="minimal-divider"/>
+      <div style="font-size:6.5px;color:#333">SIEM  ·  Wazuh  ·  Splunk  ·  TheHive  ·  ELK Stack  ·  Cloud Security  ·  Network Security  ·  Wireshark  ·  Metasploit</div>
+    </div>
+    <div class="tcard-label">
+      <h3>Minimalist</h3>
+      <p>Sans-serif · Ultra-clean · Maximum whitespace</p>
+      <span class="tag">✓ ATS Friendly</span>
+    </div>
+  </div>
+
+  <!-- TEMPLATE C: MODERN -->
+  <div class="tcard" data-choice="modern" onclick="toggleSelect(this)">
+    <div class="tcard-preview modern-preview">
+      <div class="modern-header">
+        <div class="modern-name">Vamsi Chowdary</div>
+        <div class="modern-contact">vamsi@email.com  ·  +91 98765 43210  ·  Bangalore, India</div>
+      </div>
+
+      <div class="modern-section">Professional Summary</div>
+      <div style="font-size:6.5px;margin-bottom:6px;color:#333">SOC Analyst skilled in SIEM and cloud security with hands-on experience using Wazuh and TheHive. Achieved 30% reduction in false positives through custom correlation rules.</div>
+
+      <div class="modern-section">Experience</div>
+      <div class="modern-row" style="margin-top:3px"><span>HCLTECH</span><span class="modern-date">Apr 2024 – Jan 2025</span></div>
+      <div class="modern-sub">SOC Analyst – Internship · Bangalore, INDIA</div>
+      <div class="modern-bullet">Analyzed 500+ security alerts using SIEM, reducing false positives by 30%</div>
+      <div class="modern-bullet">Performed triage and escalation across 20+ incident investigations</div>
+      <div class="modern-bullet">Deployed 5+ detection rules; improved response time 40% via automation</div>
+
+      <div style="margin-top:4px"></div>
+      <div class="modern-row"><span>EDZU EDTECH</span><span class="modern-date">Jan 2024 – Mar 2024</span></div>
+      <div class="modern-sub">System Administrator – Intern · Ahmedabad, India</div>
+      <div class="modern-bullet">Resolved issues for 100+ users with avg resolution under 30 minutes</div>
+      <div class="modern-bullet">Maintained 99.9% server availability throughout internship period</div>
+
+      <div class="modern-section">Education</div>
+      <div class="modern-row" style="margin-top:3px"><span>EPITA – School of Engineering</span><span class="modern-date">2026</span></div>
+      <div class="modern-sub">Master of Science</div>
+
+      <div class="modern-section">Technical Skills</div>
+      <div class="modern-skills">
+        <span class="modern-skill">SIEM</span>
+        <span class="modern-skill">Wazuh</span>
+        <span class="modern-skill">Splunk</span>
+        <span class="modern-skill">TheHive</span>
+        <span class="modern-skill">ELK Stack</span>
+        <span class="modern-skill">Cloud Security</span>
+        <span class="modern-skill">Network Security</span>
+        <span class="modern-skill">Wireshark</span>
+      </div>
+    </div>
+    <div class="tcard-label">
+      <h3>Modern</h3>
+      <p>Navy header · Accent colors · Pill-style skills</p>
+      <span class="tag">✓ ATS Friendly</span>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:24px;text-align:center">All 3 templates are ATS-friendly: single-column, no tables, standard fonts, clean structure.</p>

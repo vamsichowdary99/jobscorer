@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>6 Competitor-Inspired Resume Templates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Rubik:wght@400;500;600;700&family=Source+Sans+3:wght@300;400;600;700&family=Lora:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  /* =========================================================
+     GLOBAL CHROME
+     ========================================================= */
+  :root {
+    --bg: #f1f5f9;
+    --ink: #0f172a;
+    --muted: #475569;
+    --soft: #64748b;
+    --line: #e5e7eb;
+    --page-shadow: 0 12px 36px rgba(15,23,42,0.10), 0 2px 8px rgba(15,23,42,0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; }
+
+  .topbar { background: linear-gradient(135deg,#0f172a,#1e293b); color: #f8fafc; padding: 36px 32px; }
+  .topbar h1 { margin: 0 0 6px; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+  .topbar p { margin: 0; color: #94a3b8; font-size: 14px; max-width: 900px; line-height: 1.5; }
+  .topbar a { color: #93c5fd; text-decoration: none; }
+  .topbar a:hover { text-decoration: underline; }
+
+  .stage { padding: 36px; max-width: 1700px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+  @media (max-width: 1200px) { .stage { grid-template-columns: 1fr; } }
+
+  .card { display: flex; flex-direction: column; align-items: center; }
+  .card-head { width: 100%; max-width: 8.5in; margin-bottom: 12px; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+  .card-head .left .badge {
+    display: inline-block; padding: 4px 10px; background: #ecfdf5; color: #047857;
+    border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .card-head .left h2 { margin: 6px 0 2px; font-size: 18px; font-weight: 700; }
+  .card-head .left .sub { color: var(--muted); font-size: 13px; }
+  .card-head .right a {
+    font-size: 12px; color: var(--ink); text-decoration: none; padding: 6px 10px;
+    background: #fff; border: 1px solid var(--line); border-radius: 6px; font-weight: 500; white-space: nowrap;
+  }
+  .card-head .right a:hover { background: #f8fafc; }
+
+  /* The page sheet — US Letter */
+  .sheet {
+    width: 8.5in;
+    min-height: 11in;
+    background: #ffffff;
+    box-shadow: var(--page-shadow);
+    border-radius: 4px;
+    overflow: hidden;
+    color: #111827;
+  }
+
+  /* Generic avatar (initials) reused across templates */
+  .avatar {
+    border-radius: 50%;
+    background: linear-gradient(135deg,#cbd5e1,#94a3b8);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-family: 'Poppins', sans-serif;
+    flex: none;
+  }
+
+  /* =========================================================
+     1) CASCADE  (Zety-inspired)
+     Navy left sidebar (1/3) · name in big white · skill bars · main column on right
+     ========================================================= */
+  .cascade { display: flex; min-height: 11in; }
+  .cascade .side {
+    width: 36%;
+    background: #1f3850;
+    color: #e2e8f0;
+    padding: 28pt 22pt;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.45;
+  }
+  .cascade .side .name {
+    font-size: 26pt; line-height: 1.05; font-weight: 700; color: #fff;
+    margin: 0 0 4pt; letter-spacing: -0.5pt;
+  }
+  .cascade .side .name .last { display: block; color: #fbbf24; }
+  .cascade .side .role {
+    font-size: 10pt; letter-spacing: 0.16em; text-transform: uppercase; color: #cbd5e1;
+    border-top: 1pt solid #475569; border-bottom: 1pt solid #475569; padding: 6pt 0; margin: 10pt 0 14pt;
+  }
+  .cascade .side .h {
+    font-size: 11pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #fbbf24; margin: 14pt 0 6pt;
+  }
+  .cascade .side p { margin: 2pt 0; color: #e2e8f0; }
+  .cascade .side a { color: #e2e8f0; text-decoration: none; }
+  .cascade .side .skill { margin-bottom: 7pt; }
+  .cascade .side .skill .lbl { display: flex; justify-content: space-between; font-size: 9pt; margin-bottom: 2pt; }
+  .cascade .side .skill .bar { background: #334155; height: 4pt; border-radius: 2pt; overflow: hidden; }
+  .cascade .side .skill .fill { height: 4pt; background: #fbbf24; border-radius: 2pt; }
+  .cascade .side .ctline { display: flex; gap: 6pt; align-items: baseline; font-size: 9pt; margin-bottom: 3pt; }
+  .cascade .side .ctline .k { color: #fbbf24; font-weight: 700; min-width: 38pt; text-transform: uppercase; letter-spacing: 0.08em; font-size: 8pt; }
+
+  .cascade .main {
+    flex: 1;
+    padding: 30pt 28pt;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 10pt;
+    line-height: 1.45;
+    color: #111827;
+  }
+  .cascade .main .h {
+    font-size: 12pt; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #1f3850; margin: 0 0 4pt;
+    border-bottom: 1pt solid #1f3850; padding-bottom: 2pt;
+  }
+  .cascade .main .blk { margin-bottom: 14pt; }
+  .cascade .main .ent { margin-bottom: 9pt; }
+  .cascade .main .ent .row1 { display: flex; justify-content: space-between; gap: 10pt; align-items: baseline; }
+  .cascade .main .ent .pos { font-weight: 700; color: #111827; }
+  .cascade .main .ent .date { color: #475569; font-size: 9pt; }
+  .cascade .main .ent .org { font-style: italic; color: #475569; font-size: 9.5pt; margin-bottom: 2pt; }
+  .cascade .main .ent ul { margin: 2pt 0 0 14pt; padding: 0; }
+  .cascade .main .ent ul li { margin-bottom: 1pt; }
+
+  /* =========================================================
+     2) STOCKHOLM  (Resume.io-inspired)
+     Header band with avatar + role · two-column body · skill bars
+     ========================================================= */
+  .stockholm .body {
+    padding: 0; font-family: 'Rubik', sans-serif; font-size: 10pt; color: #111827; line-height: 1.45;
+  }
+  .stockholm .band {
+    background: #0f3a5f; color: #fff; padding: 26pt 32pt; display: flex; align-items: center; gap: 18pt;
+  }
+  .stockholm .band .avatar { width: 64pt; height: 64pt; font-size: 22pt; background: linear-gradient(135deg,#60a5fa,#1d4ed8); color:#fff; }
+  .stockholm .band .name { font-size: 26pt; font-weight: 700; line-height: 1; letter-spacing: -0.5pt; }
+  .stockholm .band .role { font-size: 11pt; font-weight: 400; color: #c7d7e3; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 4pt; }
+  .stockholm .grid { display: grid; grid-template-columns: 1fr 2fr; gap: 0; }
+  .stockholm .grid > div { padding: 22pt 28pt; }
+  .stockholm .grid > div.left { border-right: 1pt solid #e5e7eb; background: #f8fafc; }
+  .stockholm .h {
+    font-size: 11pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #0f3a5f; margin: 0 0 6pt;
+  }
+  .stockholm .blk { margin-bottom: 14pt; }
+  .stockholm .skill { margin-bottom: 6pt; }
+  .stockholm .skill .lbl { font-size: 9.5pt; margin-bottom: 1pt; display: flex; justify-content: space-between; }
+  .stockholm .skill .bar { background: #d3dde5; height: 4pt; border-radius: 2pt; }
+  .stockholm .skill .fill { height: 4pt; background: #0f3a5f; border-radius: 2pt; }
+  .stockholm .ctline { font-size: 9.5pt; margin-bottom: 3pt; }
+  .stockholm .ctline strong { display: block; text-transform: uppercase; letter-spacing: 0.08em; color: #0f3a5f; font-size: 8.5pt; font-weight: 700; }
+  .stockholm .ent { margin-bottom: 10pt; }
+  .stockholm .ent .row1 { display: flex; justify-content: space-between; gap: 10pt; align-items: baseline; }
+  .stockholm .ent .pos { font-weight: 700; font-size: 10.5pt; }
+  .stockholm .ent .date { color: #475569; font-size: 9pt; }
+  .stockholm .ent .org { color: #0f3a5f; font-style: italic; font-size: 10pt; margin-bottom: 3pt; }
+  .stockholm .ent ul { margin: 2pt 0 0 14pt; padding: 0; }
+  .stockholm .ent ul li { margin-bottom: 1pt; }
+
+  /* =========================================================
+     3) ATHENA (Novoresume-inspired)
+     Burgundy accent · circle avatar · two-col with timeline dots
+     ========================================================= */
+  .athena .body {
+    padding: 28pt 30pt; font-family: 'Inter', sans-serif; font-size: 9.5pt;
+    color: #1f2937; line-height: 1.45;
+  }
+  .athena .top { display: flex; gap: 18pt; align-items: center; border-bottom: 2pt solid #831843; padding-bottom: 12pt; }
+  .athena .top .avatar { width: 72pt; height: 72pt; background: linear-gradient(135deg,#fda4af,#9f1239); color: #fff; font-size: 24pt; }
+  .athena .top .name { font-size: 28pt; font-weight: 800; color: #1f2937; line-height: 1.05; letter-spacing: -0.5pt; }
+  .athena .top .role { color: #831843; font-size: 11pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; margin-top: 2pt; }
+  .athena .top .meta { margin-left: auto; text-align: right; font-size: 9pt; color: #4b5563; line-height: 1.55; }
+  .athena .top .meta a { color: #831843; text-decoration: none; }
+
+  .athena .cols { display: grid; grid-template-columns: 2.1fr 1fr; gap: 22pt; margin-top: 14pt; }
+  .athena .h {
+    font-size: 11.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: #831843; margin: 0 0 6pt;
+  }
+  .athena .blk { margin-bottom: 14pt; }
+  .athena .ent { position: relative; padding-left: 14pt; margin-bottom: 9pt; border-left: 1pt solid #f9d6dd; }
+  .athena .ent::before {
+    content: ''; position: absolute; left: -3.5pt; top: 5pt;
+    width: 6pt; height: 6pt; border-radius: 50%; background: #831843;
+  }
+  .athena .ent .pos { font-weight: 700; color: #111827; }
+  .athena .ent .org { color: #831843; font-style: italic; font-size: 9.5pt; }
+  .athena .ent .date { color: #6b7280; font-size: 9pt; margin-bottom: 2pt; }
+  .athena .ent ul { margin: 2pt 0 0 14pt; padding: 0; }
+  .athena .ent ul li { margin-bottom: 1pt; }
+  .athena .pill {
+    display: inline-block; padding: 2pt 8pt; background: #fbe7ec; color: #831843;
+    border-radius: 999px; font-size: 8.5pt; margin: 0 3pt 3pt 0; font-weight: 500;
+  }
+  .athena .meter { margin-bottom: 5pt; }
+  .athena .meter .lbl { font-size: 9pt; display: flex; justify-content: space-between; }
+  .athena .meter .track { background: #fbe7ec; height: 5pt; border-radius: 4pt; margin-top: 1pt; }
+  .athena .meter .fill { height: 5pt; background: #831843; border-radius: 4pt; }
+
+  /* =========================================================
+     4) CRISP (Enhancv-inspired)
+     Pastel right-column background · dual-tone · "strengths" creative block · icons
+     ========================================================= */
+  .crisp .body {
+    padding: 0; font-family: 'Inter', sans-serif; font-size: 9.5pt; color: #111827; line-height: 1.5;
+  }
+  .crisp .header {
+    padding: 28pt 32pt 22pt; background: #fff; border-bottom: 1pt solid #e5e7eb;
+    display: flex; align-items: center; gap: 16pt;
+  }
+  .crisp .header .avatar { width: 60pt; height: 60pt; background: linear-gradient(135deg,#a7f3d0,#059669); color: #fff; font-size: 22pt; }
+  .crisp .header .name { font-size: 26pt; font-weight: 800; color: #064e3b; letter-spacing: -0.5pt; line-height: 1; }
+  .crisp .header .role { font-size: 11pt; color: #047857; font-weight: 600; margin-top: 3pt; }
+  .crisp .header .meta { margin-left: auto; text-align: right; font-size: 9pt; color: #475569; line-height: 1.55; }
+  .crisp .header .meta a { color: #047857; text-decoration: none; }
+
+  .crisp .grid { display: grid; grid-template-columns: 1.7fr 1fr; }
+  .crisp .grid > .left { padding: 22pt 30pt; }
+  .crisp .grid > .right { padding: 22pt 24pt; background: #f0fdf4; }
+  .crisp .h {
+    font-size: 11pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: #064e3b; margin: 0 0 6pt; display: flex; align-items: center; gap: 6pt;
+  }
+  .crisp .h .ic { width: 14pt; height: 14pt; background: #047857; color: #fff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 8pt; font-weight: 700; }
+  .crisp .blk { margin-bottom: 14pt; }
+  .crisp .ent { margin-bottom: 9pt; }
+  .crisp .ent .pos { font-weight: 700; color: #111827; }
+  .crisp .ent .org { color: #047857; font-style: italic; font-size: 9.5pt; }
+  .crisp .ent .date { color: #6b7280; font-size: 9pt; margin-bottom: 2pt; }
+  .crisp .ent ul { margin: 2pt 0 0 14pt; padding: 0; }
+  .crisp .ent ul li { margin-bottom: 1pt; }
+  .crisp .strength {
+    background: #fff; border: 1pt solid #bbf7d0; border-radius: 6pt; padding: 8pt 10pt; margin-bottom: 6pt;
+  }
+  .crisp .strength .t { font-weight: 700; color: #064e3b; font-size: 10pt; margin-bottom: 1pt; }
+  .crisp .strength .d { color: #475569; font-size: 9pt; line-height: 1.45; }
+  .crisp .chip { display: inline-block; padding: 2pt 7pt; background: #fff; border: 1pt solid #86efac; color: #047857; border-radius: 999px; font-size: 8.5pt; margin: 0 3pt 3pt 0; font-weight: 500; }
+
+  /* =========================================================
+     5) MODERNIST (Canva-inspired)
+     Bold blocky title · geometric accent · design-forward · big sans
+     ========================================================= */
+  .modernist .body {
+    padding: 0; font-family: 'Poppins', sans-serif; color: #111827; font-size: 9.5pt; line-height: 1.5;
+  }
+  .modernist .header {
+    position: relative; padding: 38pt 36pt 24pt; overflow: hidden;
+  }
+  .modernist .header::before {
+    content: ''; position: absolute; top: -40pt; right: -40pt; width: 240pt; height: 240pt;
+    border-radius: 50%; background: #fef3c7;
+  }
+  .modernist .header::after {
+    content: ''; position: absolute; bottom: -30pt; right: 80pt; width: 80pt; height: 80pt;
+    background: #f59e0b; border-radius: 50%;
+  }
+  .modernist .header .inner { position: relative; z-index: 2; }
+  .modernist .header .eyebrow {
+    display: inline-block; padding: 3pt 10pt; background: #111827; color: #fde68a;
+    border-radius: 999px; font-size: 9pt; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+  }
+  .modernist .header .name {
+    font-size: 44pt; font-weight: 800; letter-spacing: -1pt; line-height: 1; margin: 8pt 0 4pt;
+    color: #111827;
+  }
+  .modernist .header .role { font-size: 13pt; color: #4b5563; font-weight: 500; }
+  .modernist .header .contact {
+    margin-top: 10pt; font-size: 9.5pt; color: #4b5563; display: flex; flex-wrap: wrap; gap: 4pt 14pt;
+  }
+  .modernist .header .contact a { color: #b45309; text-decoration: none; font-weight: 600; }
+  .modernist .grid { display: grid; grid-template-columns: 1.7fr 1fr; gap: 0; }
+  .modernist .grid > div { padding: 24pt 32pt; }
+  .modernist .grid > .right { background: #fffbeb; padding-left: 26pt; }
+  .modernist .h {
+    font-size: 12pt; font-weight: 800; letter-spacing: -0.2pt;
+    color: #111827; margin: 0 0 6pt;
+    border-bottom: 3pt solid #f59e0b; display: inline-block; padding-bottom: 2pt;
+  }
+  .modernist .blk { margin-bottom: 14pt; }
+  .modernist .ent { margin-bottom: 9pt; }
+  .modernist .ent .pos { font-weight: 700; font-size: 10.5pt; color: #111827; }
+  .modernist .ent .org { color: #b45309; font-style: italic; font-size: 9.5pt; }
+  .modernist .ent .date { color: #6b7280; font-size: 9pt; margin-bottom: 2pt; }
+  .modernist .ent ul { margin: 2pt 0 0 14pt; padding: 0; }
+  .modernist .ent ul li { margin-bottom: 1pt; }
+  .modernist .pill {
+    display: inline-block; padding: 3pt 9pt; background: #fde68a; color: #92400e;
+    border-radius: 999px; font-size: 8.5pt; font-weight: 600; margin: 0 3pt 3pt 0;
+  }
+  .modernist .lang { display: flex; justify-content: space-between; font-size: 9.5pt; margin-bottom: 3pt; }
+  .modernist .lang .dots { color: #f59e0b; letter-spacing: 1pt; }
+  .modernist .lang .dots.off { color: #fde68a; }
+
+  /* =========================================================
+     6) ASPIRE (Kickresume/Teal-inspired)
+     Black header bar · name in white · clean two-column · startup feel
+     ========================================================= */
+  .aspire .body { padding: 0; font-family: 'Montserrat', sans-serif; color: #111827; font-size: 9.5pt; line-height: 1.5; }
+  .aspire .header {
+    background: #111827; color: #fff; padding: 24pt 32pt;
+    display: flex; align-items: center; gap: 16pt;
+  }
+  .aspire .header .name {
+    font-size: 30pt; font-weight: 800; letter-spacing: -0.5pt; line-height: 1;
+    text-transform: uppercase;
+  }
+  .aspire .header .name .accent { color: #34d399; }
+  .aspire .header .role {
+    font-size: 11pt; color: #d1d5db; margin-top: 4pt; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500;
+  }
+  .aspire .header .meta {
+    margin-left: auto; text-align: right; font-size: 9pt; color: #d1d5db; line-height: 1.55;
+  }
+  .aspire .header .meta a { color: #34d399; text-decoration: none; }
+  .aspire .grid { display: grid; grid-template-columns: 2fr 1fr; }
+  .aspire .grid > div { padding: 22pt 28pt; }
+  .aspire .grid > .right { background: #f9fafb; border-left: 1pt solid #e5e7eb; }
+  .aspire .h {
+    font-size: 10.5pt; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+    color: #111827; margin: 0 0 8pt; display: flex; align-items: center; gap: 8pt;
+  }
+  .aspire .h::before { content: ''; width: 18pt; height: 2pt; background: #34d399; }
+  .aspire .blk { margin-bottom: 14pt; }
+  .aspire .ent { margin-bottom: 9pt; }
+  .aspire .ent .row1 { display: flex; justify-content: space-between; gap: 10pt; align-items: baseline; }
+  .aspire .ent .pos { font-weight: 700; color: #111827; font-size: 10.5pt; }
+  .aspire .ent .date { color: #6b7280; font-size: 9pt; }
+  .aspire .ent .org { color: #047857; font-weight: 600; font-size: 9.5pt; margin-bottom: 2pt; }
+  .aspire .ent ul { margin: 2pt 0 0 14pt; padding: 0; }
+  .aspire .ent ul li { margin-bottom: 1pt; }
+  .aspire .tag { display: inline-block; padding: 2pt 8pt; background: #d1fae5; color: #065f46; border-radius: 4pt; font-size: 8.5pt; font-weight: 600; margin: 0 3pt 3pt 0; }
+
+  /* Footnote */
+  .footnote { max-width: 1700px; margin: 0 auto; padding: 0 36px 52px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .footnote h3 { margin: 24px 0 8px; color: var(--ink); font-size: 15px; }
+  .footnote ol { padding-left: 18px; }
+  .footnote li { margin-bottom: 10px; }
+  .footnote code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .footnote a { color: #1e40af; }
+  .notice {
+    background: #fffbeb; border: 1px solid #fde68a; padding: 12px 16px; border-radius: 6px;
+    color: #92400e; margin: 8px 0 24px; font-size: 13px; max-width: 1700px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>6 Competitor-Inspired Resume Templates</h1>
+  <p>
+    Visual styles inspired by the top resume-builder competitors — Zety, Resume.io, Novoresume, Enhancv, Canva, and Kickresume/Teal.
+    Each one is hand-built from scratch in HTML/CSS with original sample data — these are design references, not copies of any specific paid template.
+  </p>
+</div>
+
+<div style="padding: 0 36px;">
+<div class="notice">
+  <strong>Heads-up:</strong> These reproduce the <em>visual language</em> (layout structure, color palette, type choices) of competitor builders so you can decide which directions to evolve your own templates toward. Specific assets (illustrations, exact color codes, logos) and copy are original.
+</div>
+</div>
+
+<div class="stage">
+
+  <!-- =================================== 1) CASCADE =================================== -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Inspired by</span>
+        <h2>Cascade — Zety</h2>
+        <div class="sub">Navy sidebar · skill bars · gold accent · the #1 paid-builder look</div>
+      </div>
+      <div class="right"><a href="https://zety.com/resume-templates" target="_blank" rel="noreferrer">zety.com</a></div>
+    </div>
+
+    <div class="sheet">
+      <div class="cascade">
+        <div class="side">
+          <div class="name">Aarav<span class="last">Sharma</span></div>
+          <div class="role">Software Engineer</div>
+
+          <div class="h">Contact</div>
+          <div class="ctline"><span class="k">Phone</span><span>+91 98765 43210</span></div>
+          <div class="ctline"><span class="k">Email</span><span>aarav@example.com</span></div>
+          <div class="ctline"><span class="k">Site</span><span>aarav.dev</span></div>
+          <div class="ctline"><span class="k">City</span><span>Hyderabad, IN</span></div>
+
+          <div class="h">Skills</div>
+          <div class="skill"><div class="lbl"><span>TypeScript / React</span><span>★★★★★</span></div><div class="bar"><div class="fill" style="width: 92%"></div></div></div>
+          <div class="skill"><div class="lbl"><span>Python / FastAPI</span><span>★★★★★</span></div><div class="bar"><div class="fill" style="width: 88%"></div></div></div>
+          <div class="skill"><div class="lbl"><span>PostgreSQL / Redis</span><span>★★★★☆</span></div><div class="bar"><div class="fill" style="width: 80%"></div></div></div>
+          <div class="skill"><div class="lbl"><span>Docker / GitHub Actions</span><span>★★★★☆</span></div><div class="bar"><div class="fill" style="width: 76%"></div></div></div>
+          <div class="skill"><div class="lbl"><span>PyTorch / ML</span><span>★★★☆☆</span></div><div class="bar"><div class="fill" style="width: 64%"></div></div></div>
+
+          <div class="h">Languages</div>
+          <div class="skill"><div class="lbl"><span>English</span><span>Fluent</span></div><div class="bar"><div class="fill" style="width: 95%"></div></div></div>
+          <div class="skill"><div class="lbl"><span>Hindi</span><span>Native</span></div><div class="bar"><div class="fill" style="width: 100%"></div></div></div>
+          <div class="skill"><div class="lbl"><span>Telugu</span><span>Native</span></div><div class="bar"><div class="fill" style="width: 100%"></div></div></div>
+
+          <div class="h">Awards</div>
+          <p>ACM-ICPC Regionalist · 2024</p>
+          <p>SIH Winner · 2023</p>
+          <p>KVPY Fellow · 2022</p>
+        </div>
+
+        <div class="main">
+          <div class="blk">
+            <div class="h">Profile</div>
+            <p>Computer Science senior at IIIT Hyderabad with internship experience at Razorpay and a published workshop paper. Looking to ship developer-facing tools that combine clean engineering with measurable business impact.</p>
+          </div>
+
+          <div class="blk">
+            <div class="h">Work Experience</div>
+            <div class="ent">
+              <div class="row1"><span class="pos">Software Engineering Intern</span><span class="date">May 2025 – Aug 2025</span></div>
+              <div class="org">Razorpay · Bengaluru, IN</div>
+              <ul>
+                <li>Built a merchant reconciliation dashboard in Next.js used by 800+ businesses; reduced support tickets by 32%.</li>
+                <li>Shipped a Redis-backed cache for the settlements API; p95 latency 540 ms → 110 ms.</li>
+                <li>Authored 60+ Jest tests and integrated Playwright smoke checks into the team CI.</li>
+              </ul>
+            </div>
+            <div class="ent">
+              <div class="row1"><span class="pos">Undergraduate Research Assistant</span><span class="date">Jan 2024 – Apr 2025</span></div>
+              <div class="org">IIIT-H CVIT Lab · Hyderabad, IN</div>
+              <ul>
+                <li>Implemented attention-based pose estimation in PyTorch (+3.2 mAP over baseline).</li>
+                <li>Co-author, ICVGIP 2025 workshop paper.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="blk">
+            <div class="h">Education</div>
+            <div class="ent">
+              <div class="row1"><span class="pos">B.Tech, Computer Science &amp; Engineering</span><span class="date">2022 – 2026</span></div>
+              <div class="org">IIIT Hyderabad · CGPA 9.1 / 10</div>
+            </div>
+          </div>
+
+          <div class="blk">
+            <div class="h">Projects</div>
+            <div class="ent">
+              <div class="row1"><span class="pos">ResuScore — AI Resume Matcher</span><span class="date">2025</span></div>
+              <div class="org">Next.js · Supabase · OpenAI · pgvector</div>
+              <ul><li>RAG pipeline scoring 10k+ IT job postings vs. a user resume in &lt; 4 seconds.</li></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================== 2) STOCKHOLM =================================== -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Inspired by</span>
+        <h2>Stockholm — Resume.io</h2>
+        <div class="sub">Color band header with avatar · two-column body · skill progress bars</div>
+      </div>
+      <div class="right"><a href="https://resume.io/resume-templates" target="_blank" rel="noreferrer">resume.io</a></div>
+    </div>
+
+    <div class="sheet">
+      <div class="stockholm">
+        <div class="body">
+          <div class="band">
+            <div class="avatar">AS</div>
+            <div>
+              <div class="name">Aarav Sharma</div>
+              <div class="role">Software Engineer</div>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="left">
+              <div class="blk">
+                <div class="h">Details</div>
+                <div class="ctline"><strong>Phone</strong>+91 98765 43210</div>
+                <div class="ctline"><strong>Email</strong>aarav@example.com</div>
+                <div class="ctline"><strong>Site</strong>aarav.dev</div>
+                <div class="ctline"><strong>Location</strong>Hyderabad, IN</div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Skills</div>
+                <div class="skill"><div class="lbl"><span>TypeScript</span><span>Expert</span></div><div class="bar"><div class="fill" style="width:92%"></div></div></div>
+                <div class="skill"><div class="lbl"><span>Python</span><span>Advanced</span></div><div class="bar"><div class="fill" style="width:85%"></div></div></div>
+                <div class="skill"><div class="lbl"><span>React / Next.js</span><span>Expert</span></div><div class="bar"><div class="fill" style="width:94%"></div></div></div>
+                <div class="skill"><div class="lbl"><span>PostgreSQL</span><span>Advanced</span></div><div class="bar"><div class="fill" style="width:80%"></div></div></div>
+                <div class="skill"><div class="lbl"><span>Docker</span><span>Proficient</span></div><div class="bar"><div class="fill" style="width:70%"></div></div></div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Languages</div>
+                <div class="skill"><div class="lbl"><span>English</span><span>C1</span></div><div class="bar"><div class="fill" style="width:90%"></div></div></div>
+                <div class="skill"><div class="lbl"><span>Hindi</span><span>Native</span></div><div class="bar"><div class="fill" style="width:100%"></div></div></div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Hobbies</div>
+                <p style="font-size:9.5pt;color:#1f2937;">Long-distance running, classical guitar, FIDE-rated chess.</p>
+              </div>
+            </div>
+
+            <div class="right">
+              <div class="blk">
+                <div class="h">Profile</div>
+                <p>Computer Science senior at IIIT Hyderabad. Internship at Razorpay shipping a merchant dashboard used by 800+ businesses. Looking for developer-facing SDE roles where I can ship measurable user impact.</p>
+              </div>
+
+              <div class="blk">
+                <div class="h">Employment History</div>
+                <div class="ent">
+                  <div class="row1"><span class="pos">Software Engineering Intern</span><span class="date">May 2025 – Aug 2025</span></div>
+                  <div class="org">Razorpay, Bengaluru</div>
+                  <ul>
+                    <li>Built merchant reconciliation dashboard used by 800+ businesses; cut support tickets by 32%.</li>
+                    <li>Shipped Redis-backed cache for settlements API; p95 latency 540 ms → 110 ms.</li>
+                    <li>Authored 60+ Jest tests + Playwright smoke checks integrated into CI.</li>
+                  </ul>
+                </div>
+                <div class="ent">
+                  <div class="row1"><span class="pos">Research Assistant</span><span class="date">Jan 2024 – Apr 2025</span></div>
+                  <div class="org">IIIT-H CVIT Lab, Hyderabad</div>
+                  <ul>
+                    <li>Attention-based pose-estimation pipeline in PyTorch (+3.2 mAP).</li>
+                    <li>Co-author, ICVGIP 2025 workshop paper.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Education</div>
+                <div class="ent">
+                  <div class="row1"><span class="pos">B.Tech, Computer Science</span><span class="date">2022 – 2026</span></div>
+                  <div class="org">IIIT Hyderabad · CGPA 9.1 / 10</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================== 3) ATHENA =================================== -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Inspired by</span>
+        <h2>Athena — Novoresume</h2>
+        <div class="sub">Avatar + burgundy accent · timeline-dot experience · proficiency meters</div>
+      </div>
+      <div class="right"><a href="https://novoresume.com/resume-templates" target="_blank" rel="noreferrer">novoresume.com</a></div>
+    </div>
+
+    <div class="sheet">
+      <div class="athena">
+        <div class="body">
+          <div class="top">
+            <div class="avatar">AS</div>
+            <div>
+              <div class="name">Aarav Sharma</div>
+              <div class="role">Software Engineer</div>
+            </div>
+            <div class="meta">
+              +91 98765 43210<br/>
+              <a href="#">aarav@example.com</a><br/>
+              <a href="#">linkedin/aarav</a> · <a href="#">github.com/aarav</a><br/>
+              Hyderabad, India
+            </div>
+          </div>
+
+          <div class="cols">
+            <div class="lcol">
+              <div class="blk">
+                <div class="h">About Me</div>
+                <p>Computer Science senior at IIIT Hyderabad with internship experience shipping production payments tooling to 800+ businesses. Comfortable across the stack — React, Next.js, FastAPI, Postgres — with a soft spot for build tooling and ML infra.</p>
+              </div>
+
+              <div class="blk">
+                <div class="h">Work Experience</div>
+                <div class="ent">
+                  <div class="pos">Software Engineering Intern</div>
+                  <div class="org">Razorpay · Bengaluru, IN</div>
+                  <div class="date">May 2025 – Aug 2025</div>
+                  <ul>
+                    <li>Built merchant reconciliation dashboard in Next.js used by 800+ businesses; ↓ support tickets 32%.</li>
+                    <li>Shipped Redis caching layer for settlements API; p95 latency 540 ms → 110 ms.</li>
+                  </ul>
+                </div>
+                <div class="ent">
+                  <div class="pos">Undergraduate Research Assistant</div>
+                  <div class="org">IIIT-H CVIT Lab · Hyderabad, IN</div>
+                  <div class="date">Jan 2024 – Apr 2025</div>
+                  <ul>
+                    <li>Attention-based pose-estimation pipeline in PyTorch (+3.2 mAP).</li>
+                    <li>Co-authored ICVGIP 2025 workshop paper.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Education</div>
+                <div class="ent">
+                  <div class="pos">B.Tech, Computer Science &amp; Engineering</div>
+                  <div class="org">IIIT Hyderabad · CGPA 9.1 / 10</div>
+                  <div class="date">2022 – 2026</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rcol">
+              <div class="blk">
+                <div class="h">Skills</div>
+                <div class="meter"><div class="lbl"><span>TypeScript</span><span>★★★★★</span></div><div class="track"><div class="fill" style="width:92%"></div></div></div>
+                <div class="meter"><div class="lbl"><span>Python</span><span>★★★★☆</span></div><div class="track"><div class="fill" style="width:85%"></div></div></div>
+                <div class="meter"><div class="lbl"><span>React / Next.js</span><span>★★★★★</span></div><div class="track"><div class="fill" style="width:94%"></div></div></div>
+                <div class="meter"><div class="lbl"><span>Postgres / Redis</span><span>★★★★☆</span></div><div class="track"><div class="fill" style="width:80%"></div></div></div>
+                <div class="meter"><div class="lbl"><span>Docker</span><span>★★★☆☆</span></div><div class="track"><div class="fill" style="width:70%"></div></div></div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Tools</div>
+                <span class="pill">VS Code</span><span class="pill">Linear</span><span class="pill">Figma</span>
+                <span class="pill">Datadog</span><span class="pill">Vercel</span><span class="pill">Supabase</span>
+              </div>
+
+              <div class="blk">
+                <div class="h">Languages</div>
+                <div class="meter"><div class="lbl"><span>English</span><span>Fluent</span></div><div class="track"><div class="fill" style="width:95%"></div></div></div>
+                <div class="meter"><div class="lbl"><span>Hindi</span><span>Native</span></div><div class="track"><div class="fill" style="width:100%"></div></div></div>
+                <div class="meter"><div class="lbl"><span>Telugu</span><span>Native</span></div><div class="track"><div class="fill" style="width:100%"></div></div></div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Awards</div>
+                <p style="font-size:9pt;">ACM-ICPC Regionalist · 2024</p>
+                <p style="font-size:9pt;">SIH Winner · 2023</p>
+                <p style="font-size:9pt;">KVPY Fellow · 2022</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================== 4) CRISP =================================== -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Inspired by</span>
+        <h2>Crisp — Enhancv</h2>
+        <div class="sub">Pastel right-column · "strength" cards · icon-lead headings · creative</div>
+      </div>
+      <div class="right"><a href="https://enhancv.com/resume-templates/two-column/" target="_blank" rel="noreferrer">enhancv.com</a></div>
+    </div>
+
+    <div class="sheet">
+      <div class="crisp">
+        <div class="body">
+          <div class="header">
+            <div class="avatar">AS</div>
+            <div>
+              <div class="name">Aarav Sharma</div>
+              <div class="role">Software Engineer · IIIT Hyderabad</div>
+            </div>
+            <div class="meta">
+              +91 98765 43210<br/>
+              <a href="#">aarav@example.com</a><br/>
+              <a href="#">aarav.dev</a> · <a href="#">github.com/aarav</a><br/>
+              Hyderabad, IN
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="left">
+              <div class="blk">
+                <div class="h"><span class="ic">i</span>Summary</div>
+                <p>Computer Science senior at IIIT Hyderabad. Interned at Razorpay shipping merchant tooling used by 800+ businesses. Curious across the full stack and increasingly drawn to ML infra and retrieval systems.</p>
+              </div>
+
+              <div class="blk">
+                <div class="h"><span class="ic">★</span>Experience</div>
+                <div class="ent">
+                  <div class="pos">Software Engineering Intern</div>
+                  <div class="org">Razorpay</div>
+                  <div class="date">May 2025 – Aug 2025 · Bengaluru, IN</div>
+                  <ul>
+                    <li>Designed &amp; shipped a merchant reconciliation dashboard in Next.js used by 800+ businesses → support tickets ↓ 32%.</li>
+                    <li>Engineered a Redis-backed caching layer for the settlements API → p95 latency 540 ms → 110 ms.</li>
+                  </ul>
+                </div>
+                <div class="ent">
+                  <div class="pos">Research Assistant</div>
+                  <div class="org">IIIT-H CVIT Lab</div>
+                  <div class="date">Jan 2024 – Apr 2025 · Hyderabad, IN</div>
+                  <ul>
+                    <li>Attention-based pose-estimation pipeline in PyTorch (+3.2 mAP). Co-author, ICVGIP 2025 workshop.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="blk">
+                <div class="h"><span class="ic">⌂</span>Education</div>
+                <div class="ent">
+                  <div class="pos">B.Tech, Computer Science &amp; Engineering</div>
+                  <div class="org">IIIT Hyderabad</div>
+                  <div class="date">2022 – 2026 · CGPA 9.1 / 10</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="right">
+              <div class="blk">
+                <div class="h">My strengths</div>
+                <div class="strength">
+                  <div class="t">Ships measurable impact</div>
+                  <div class="d">Every project ends with a number — tickets ↓, latency ↓, mAP ↑.</div>
+                </div>
+                <div class="strength">
+                  <div class="t">Comfortable across the stack</div>
+                  <div class="d">From SQL tuning to React state to PyTorch training loops.</div>
+                </div>
+                <div class="strength">
+                  <div class="t">Writes the docs</div>
+                  <div class="d">If it isn't documented, it doesn't exist.</div>
+                </div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Skills</div>
+                <span class="chip">TypeScript</span><span class="chip">Python</span><span class="chip">Go</span>
+                <span class="chip">React</span><span class="chip">Next.js</span><span class="chip">FastAPI</span>
+                <span class="chip">PostgreSQL</span><span class="chip">Redis</span><span class="chip">Docker</span>
+                <span class="chip">PyTorch</span><span class="chip">pgvector</span>
+              </div>
+
+              <div class="blk">
+                <div class="h">Most proud of</div>
+                <p style="font-size:9pt;color:#475569;">🏆 ACM-ICPC Regionalist · 2024</p>
+                <p style="font-size:9pt;color:#475569;">🥇 Smart India Hackathon Winner · 2023</p>
+                <p style="font-size:9pt;color:#475569;">🎓 KVPY Fellow · 2022</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================== 5) MODERNIST =================================== -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Inspired by</span>
+        <h2>Modernist — Canva</h2>
+        <div class="sub">Bold huge name · geometric accents · designer-feel</div>
+      </div>
+      <div class="right"><a href="https://www.canva.com/resumes/templates/modern/" target="_blank" rel="noreferrer">canva.com</a></div>
+    </div>
+
+    <div class="sheet">
+      <div class="modernist">
+        <div class="body">
+          <div class="header">
+            <div class="inner">
+              <span class="eyebrow">Software Engineer · Hyderabad</span>
+              <div class="name">Aarav<br/>Sharma.</div>
+              <div class="role">CS senior · Next.js, Python, ML infra · open to SDE roles 2026</div>
+              <div class="contact">
+                <span>+91 98765 43210</span>
+                <span>·</span>
+                <a href="#">aarav@example.com</a>
+                <span>·</span>
+                <a href="#">aarav.dev</a>
+                <span>·</span>
+                <a href="#">github.com/aarav</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="left">
+              <div class="blk">
+                <div class="h">Experience</div>
+                <div class="ent">
+                  <div class="pos">Software Engineering Intern</div>
+                  <div class="org">Razorpay · Bengaluru</div>
+                  <div class="date">May 2025 – Aug 2025</div>
+                  <ul>
+                    <li>Designed and shipped a merchant reconciliation dashboard in Next.js used by 800+ businesses; cut support tickets by 32%.</li>
+                    <li>Engineered a Redis caching layer for the settlements API; p95 latency 540 ms → 110 ms.</li>
+                    <li>60+ Jest tests + Playwright smoke checks integrated into the CI pipeline.</li>
+                  </ul>
+                </div>
+                <div class="ent">
+                  <div class="pos">Undergraduate Research Assistant</div>
+                  <div class="org">IIIT-H CVIT Lab · Hyderabad</div>
+                  <div class="date">Jan 2024 – Apr 2025</div>
+                  <ul>
+                    <li>Attention-based pose-estimation pipeline in PyTorch (+3.2 mAP). Co-author, ICVGIP 2025 workshop paper.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Education</div>
+                <div class="ent">
+                  <div class="pos">B.Tech, Computer Science &amp; Engineering</div>
+                  <div class="org">IIIT Hyderabad · CGPA 9.1 / 10</div>
+                  <div class="date">2022 – 2026</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="right">
+              <div class="blk">
+                <div class="h">Toolbox</div>
+                <span class="pill">TypeScript</span><span class="pill">Python</span><span class="pill">Go</span>
+                <span class="pill">React</span><span class="pill">Next.js</span><span class="pill">FastAPI</span>
+                <span class="pill">PostgreSQL</span><span class="pill">Redis</span><span class="pill">Docker</span>
+                <span class="pill">PyTorch</span>
+              </div>
+
+              <div class="blk">
+                <div class="h">Languages</div>
+                <div class="lang"><span>English</span><span><span class="dots">●●●●</span><span class="dots off">●</span></span></div>
+                <div class="lang"><span>Hindi</span><span><span class="dots">●●●●●</span></span></div>
+                <div class="lang"><span>Telugu</span><span><span class="dots">●●●●●</span></span></div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Honors</div>
+                <p style="font-size:9pt; color:#4b5563;">🏆 ACM-ICPC Regionalist · 2024</p>
+                <p style="font-size:9pt; color:#4b5563;">🥇 Smart India Hackathon · 2023</p>
+                <p style="font-size:9pt; color:#4b5563;">🎓 KVPY Fellow · 2022</p>
+              </div>
+
+              <div class="blk">
+                <div class="h">Outside work</div>
+                <p style="font-size:9pt; color:#4b5563;">Long-distance running · classical guitar · FIDE-rated chess (1750).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================== 6) ASPIRE =================================== -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Inspired by</span>
+        <h2>Aspire — Kickresume / Teal</h2>
+        <div class="sub">Black header bar · green accent · startup-y · feels like 2026</div>
+      </div>
+      <div class="right"><a href="https://www.kickresume.com/en/templates/resume/" target="_blank" rel="noreferrer">kickresume.com</a></div>
+    </div>
+
+    <div class="sheet">
+      <div class="aspire">
+        <div class="body">
+          <div class="header">
+            <div>
+              <div class="name">Aarav <span class="accent">Sharma</span></div>
+              <div class="role">Software Engineer · Open to SDE 2026</div>
+            </div>
+            <div class="meta">
+              +91 98765 43210<br/>
+              <a href="#">aarav@example.com</a><br/>
+              <a href="#">aarav.dev</a> · <a href="#">github.com/aarav</a><br/>
+              Hyderabad, IN
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="left">
+              <div class="blk">
+                <div class="h">Summary</div>
+                <p>CS senior at IIIT Hyderabad. Shipped production-grade payments tooling at Razorpay used by 800+ businesses. Strongest in TypeScript + Python; increasingly drawn to ML infra and retrieval systems.</p>
+              </div>
+
+              <div class="blk">
+                <div class="h">Experience</div>
+                <div class="ent">
+                  <div class="row1"><span class="pos">Software Engineering Intern</span><span class="date">May 2025 – Aug 2025</span></div>
+                  <div class="org">Razorpay · Bengaluru, IN</div>
+                  <ul>
+                    <li>Built a merchant reconciliation dashboard in Next.js used by 800+ businesses; cut support tickets by 32%.</li>
+                    <li>Shipped a Redis-backed caching layer for the settlements API; p95 latency 540 ms → 110 ms.</li>
+                    <li>Authored 60+ Jest tests + integrated Playwright smoke checks into team CI.</li>
+                  </ul>
+                </div>
+                <div class="ent">
+                  <div class="row1"><span class="pos">Undergraduate Research Assistant</span><span class="date">Jan 2024 – Apr 2025</span></div>
+                  <div class="org">IIIT-H CVIT Lab · Hyderabad, IN</div>
+                  <ul>
+                    <li>Attention-based pose-estimation pipeline in PyTorch (+3.2 mAP). Co-author, ICVGIP 2025 workshop.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Projects</div>
+                <div class="ent">
+                  <div class="row1"><span class="pos">ResuScore — AI Resume Matcher</span><span class="date">2025</span></div>
+                  <div class="org">Next.js · Supabase · OpenAI · pgvector</div>
+                  <ul><li>RAG pipeline scoring 10k+ Indian IT postings vs. a user resume in &lt; 4 s.</li></ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="right">
+              <div class="blk">
+                <div class="h">Education</div>
+                <div class="ent">
+                  <div class="pos">B.Tech, Computer Science</div>
+                  <div class="org">IIIT Hyderabad</div>
+                  <div class="date">2022 – 2026 · CGPA 9.1 / 10</div>
+                </div>
+              </div>
+
+              <div class="blk">
+                <div class="h">Stack</div>
+                <span class="tag">TypeScript</span><span class="tag">Python</span><span class="tag">Go</span>
+                <span class="tag">React</span><span class="tag">Next.js</span><span class="tag">FastAPI</span>
+                <span class="tag">PostgreSQL</span><span class="tag">Redis</span><span class="tag">Docker</span>
+                <span class="tag">PyTorch</span>
+              </div>
+
+              <div class="blk">
+                <div class="h">Awards</div>
+                <p style="font-size:9pt; color:#475569;">ACM-ICPC Regionalist · 2024</p>
+                <p style="font-size:9pt; color:#475569;">SIH Winner · 2023</p>
+                <p style="font-size:9pt; color:#475569;">KVPY Fellow · 2022</p>
+              </div>
+
+              <div class="blk">
+                <div class="h">Links</div>
+                <p style="font-size:9pt;"><a href="#" style="color:#047857; text-decoration:none;">github.com/aarav</a></p>
+                <p style="font-size:9pt;"><a href="#" style="color:#047857; text-decoration:none;">linkedin.com/in/aarav</a></p>
+                <p style="font-size:9pt;"><a href="#" style="color:#047857; text-decoration:none;">aarav.dev</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footnote">
+  <h3>What each one borrows from its source</h3>
+  <ol>
+    <li><strong>Cascade (Zety)</strong> — colored sidebar (1/3) with the name in big white type, skill bars, gold accents. The signature "premium paid resume builder" look. <a href="https://zety.com/resume-templates" target="_blank">zety.com</a></li>
+    <li><strong>Stockholm (Resume.io)</strong> — top color band with avatar &amp; role title, two-column body where the narrow left column holds details + skill bars. <a href="https://resume.io/resume-templates" target="_blank">resume.io</a></li>
+    <li><strong>Athena (Novoresume)</strong> — circular avatar, burgundy/wine accent, timeline-dot experience entries, proficiency meters. <a href="https://novoresume.com/resume-templates" target="_blank">novoresume.com</a></li>
+    <li><strong>Crisp (Enhancv)</strong> — soft pastel right-column background, creative "My strengths" cards, chip tag rows, icon-lead section heads. <a href="https://enhancv.com/resume-templates/two-column/" target="_blank">enhancv.com</a></li>
+    <li><strong>Modernist (Canva)</strong> — oversize bold name, geometric shape accents in the header, designer-feel sans-serif (Poppins). <a href="https://www.canva.com/resumes/templates/modern/" target="_blank">canva.com</a></li>
+    <li><strong>Aspire (Kickresume / Teal)</strong> — black header bar with two-color name, green accent, startup-y sans (Montserrat), light right-column. <a href="https://www.kickresume.com/en/templates/resume/" target="_blank">kickresume.com</a></li>
+  </ol>
+
+  <h3>How to view</h3>
+  <p>Run <code>npm run dev</code> from <code>resuscore/</code> and open <code>http://localhost:3000/competitor-templates-pack.html</code>. Or just double-click the file in <code>resuscore/public/</code> in any browser.</p>
+
+  <h3>ATS warning on these</h3>
+  <p>
+    The competitor builders all claim "ATS-friendly," but sidebar/two-column layouts <strong>do</strong> drop parser accuracy on stricter ATS (Workday, Taleo). Industry tests show single-column Jake's-style templates parse at 98–100%, while two-column with colored sidebars drop to ~75–90% on the same ATS.
+    For ResuScore's IT-fresher target audience, I'd recommend offering <em>both</em> — sidebar designs for screening rounds + a single-column "safe" toggle for ATS-heavy applications.
+  </p>
+
+  <h3>Wiring into your app</h3>
+  <p>To use any of these in ResuScore, each needs a <code>@react-pdf/renderer</code> port under <code>resuscore/src/components/ResumeRenderer/</code>, then registered in <code>resuscore/src/templates/catalog.ts</code> (which currently lists 4 templates). Tell me which 1–3 you want me to port first — Cascade and Stockholm are the highest-converting on competitor sites.</p>
+</div>
+
+</body>
+</html>

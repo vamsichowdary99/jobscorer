@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>6 ATS-Friendly Resume Templates — Pack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lato:wght@400;700;900&family=Raleway:wght@500;700;800&family=Source+Sans+3:wght@400;600;700&family=EB+Garamond:wght@400;500;700&family=Latin+Modern+Roman:wght@400;700&family=Cormorant+Garamond:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  /* =========================================================
+     GLOBAL CHROME
+     ========================================================= */
+  :root {
+    --bg: #f1f5f9;
+    --ink: #0f172a;
+    --muted: #475569;
+    --soft: #64748b;
+    --line: #e5e7eb;
+    --page-shadow: 0 10px 30px rgba(15,23,42,0.10), 0 2px 8px rgba(15,23,42,0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; }
+
+  .topbar { background: #0f172a; color: #f8fafc; padding: 32px; }
+  .topbar h1 { margin: 0 0 6px; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+  .topbar p { margin: 0; color: #94a3b8; font-size: 14px; }
+  .topbar a { color: #93c5fd; text-decoration: none; }
+  .topbar a:hover { text-decoration: underline; }
+
+  .stage { padding: 32px; max-width: 1700px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
+  @media (max-width: 1200px) { .stage { grid-template-columns: 1fr; } }
+
+  .card { display: flex; flex-direction: column; align-items: center; }
+  .card-head { width: 100%; max-width: 8.5in; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+  .card-head .left .badge {
+    display: inline-block; padding: 4px 10px; background: #eef2ff; color: #4338ca;
+    border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .card-head .left h2 { margin: 6px 0 2px; font-size: 18px; font-weight: 700; }
+  .card-head .left .sub { color: var(--muted); font-size: 13px; }
+  .card-head .right a {
+    font-size: 12px; color: var(--ink); text-decoration: none; padding: 6px 10px;
+    background: #fff; border: 1px solid var(--line); border-radius: 6px; font-weight: 500;
+  }
+  .card-head .right a:hover { background: #f8fafc; }
+
+  /* Page sheet — US Letter */
+  .sheet {
+    width: 8.5in;
+    min-height: 11in;
+    background: #ffffff;
+    box-shadow: var(--page-shadow);
+    border-radius: 4px;
+    overflow: hidden;
+    color: #111827;
+  }
+
+  /* =========================================================
+     1) JAKE'S RESUME
+     Single-column · Latin Modern Roman serif · small-caps section heads with rule
+     ========================================================= */
+  .jake .body {
+    padding: 0.5in 0.6in;
+    font-family: 'Latin Modern Roman', 'EB Garamond', 'Cambria', 'Times New Roman', serif;
+    font-size: 10.5pt;
+    line-height: 1.25;
+    color: #111827;
+  }
+  .jake .header { text-align: center; padding-bottom: 4pt; }
+  .jake .header .name { font-size: 24pt; font-weight: 700; margin: 0; }
+  .jake .header .contact { margin-top: 3pt; font-size: 10pt; color: #1f2937; }
+  .jake .header .contact a { color: #1f2937; text-decoration: underline; }
+  .jake .header .contact span.sep { margin: 0 4pt; color: #6b7280; }
+  .jake .section-title {
+    font-variant: small-caps;
+    letter-spacing: 0.04em;
+    font-size: 12pt;
+    font-weight: 700;
+    margin: 10pt 0 1pt;
+    border-bottom: 0.6pt solid #111827;
+    padding-bottom: 1pt;
+  }
+  .jake .entry { margin-top: 4pt; }
+  .jake .entry .row1 {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12pt;
+  }
+  .jake .entry .row1 .l { font-weight: 700; }
+  .jake .entry .row1 .r { font-style: italic; color: #111827; }
+  .jake .entry .row2 {
+    display: flex; justify-content: space-between; align-items: baseline; font-style: italic; color: #1f2937;
+  }
+  .jake .entry ul { margin: 2pt 0 4pt 16pt; padding: 0; }
+  .jake .entry ul li { margin-bottom: 1pt; }
+  .jake .skills p { margin: 2pt 0; }
+  .jake .skills strong { font-weight: 700; }
+
+  /* =========================================================
+     2) DEEDY — asymmetric two-column · Raleway/Lato · red accent
+     ========================================================= */
+  .deedy .body {
+    padding: 0.4in 0.5in;
+    font-family: 'Lato', 'Helvetica', sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.35;
+    color: #111827;
+  }
+  .deedy .header { display: flex; align-items: baseline; gap: 12pt; padding-bottom: 6pt; border-bottom: 2pt solid #111827; }
+  .deedy .header .first { font-family: 'Raleway', sans-serif; font-weight: 500; font-size: 30pt; color: #111827; letter-spacing: -0.5pt; }
+  .deedy .header .last { font-family: 'Raleway', sans-serif; font-weight: 800; font-size: 30pt; color: #111827; margin-left: -8pt; letter-spacing: -0.5pt; }
+  .deedy .header .meta { margin-left: auto; text-align: right; font-size: 9pt; color: #1f2937; line-height: 1.4; }
+  .deedy .header .meta a { color: #1f2937; text-decoration: none; }
+  .deedy .columns { display: grid; grid-template-columns: 1fr 2fr; gap: 20pt; margin-top: 14pt; }
+  .deedy .section-title {
+    font-family: 'Raleway', sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #b91c1c; /* deedy red */
+    letter-spacing: 0.08em;
+    font-size: 11pt;
+    margin: 0 0 3pt;
+    border-bottom: 0.6pt solid #111827;
+    padding-bottom: 2pt;
+  }
+  .deedy .blk { margin-bottom: 10pt; }
+  .deedy .l-entry { margin-bottom: 6pt; }
+  .deedy .l-entry .school { font-weight: 700; }
+  .deedy .l-entry .deg { color: #1f2937; font-style: italic; font-size: 9pt; }
+  .deedy .l-entry .date { color: #4b5563; font-size: 8.5pt; }
+  .deedy .courses { font-size: 9pt; color: #1f2937; }
+  .deedy .courses span { display: block; }
+  .deedy .skills-line { font-size: 9pt; margin: 1pt 0; }
+  .deedy .skills-line strong { font-weight: 700; }
+  .deedy .r-entry { margin-bottom: 8pt; }
+  .deedy .r-entry .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10pt; }
+  .deedy .r-entry .row1 .pos { font-weight: 700; }
+  .deedy .r-entry .row1 .date { color: #4b5563; font-size: 9pt; }
+  .deedy .r-entry .row2 { display: flex; justify-content: space-between; font-style: italic; color: #1f2937; font-size: 9pt; }
+  .deedy .r-entry ul { margin: 2pt 0 0 14pt; padding: 0; }
+  .deedy .r-entry ul li { margin-bottom: 1pt; }
+
+  /* =========================================================
+     3) AWESOME-CV (posquit0) — Source Sans · blue accent · icon row · subtitle quote
+     ========================================================= */
+  .awesome .body {
+    padding: 36pt 48pt;
+    font-family: 'Source Sans 3', 'Source Sans Pro', 'Helvetica', sans-serif;
+    font-size: 10pt;
+    line-height: 1.4;
+    color: #5d5d5d;
+  }
+  .awesome .header { text-align: center; padding-bottom: 14pt; border-bottom: 1pt solid #d8d8d8; }
+  .awesome .name {
+    font-size: 32pt;
+    color: #222;
+    margin: 0;
+    letter-spacing: 0.04em;
+  }
+  .awesome .name .first { font-weight: 300; }
+  .awesome .name .last { font-weight: 700; }
+  .awesome .position { color: #0E5484; font-size: 11pt; font-weight: 600; margin: 4pt 0 0; letter-spacing: 0.04em; text-transform: uppercase; }
+  .awesome .quote { color: #777; font-style: italic; font-size: 10pt; margin: 6pt 0 8pt; }
+  .awesome .contact { display: flex; justify-content: center; flex-wrap: wrap; gap: 4pt 12pt; font-size: 9.5pt; color: #5d5d5d; }
+  .awesome .contact .item { display: inline-flex; align-items: center; gap: 4pt; }
+  .awesome .contact .ico { color: #0E5484; font-weight: 700; }
+  .awesome .section-title {
+    font-size: 14pt;
+    font-weight: 600;
+    color: #0E5484;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 14pt 0 4pt;
+  }
+  .awesome .section-rule { height: 0.5pt; background: #d8d8d8; margin-bottom: 6pt; }
+  .awesome .entry { margin-bottom: 8pt; }
+  .awesome .entry .row1 { display: flex; justify-content: space-between; align-items: baseline; }
+  .awesome .entry .row1 .l { font-weight: 700; color: #222; font-size: 10.5pt; }
+  .awesome .entry .row1 .r { color: #5d5d5d; font-style: italic; font-size: 9.5pt; }
+  .awesome .entry .row2 { display: flex; justify-content: space-between; color: #0E5484; font-size: 10pt; margin-top: 1pt; }
+  .awesome .entry .row2 .pos { font-weight: 600; }
+  .awesome .entry .row2 .loc { font-style: italic; color: #5d5d5d; }
+  .awesome .entry ul { margin: 3pt 0 0 14pt; padding: 0; }
+  .awesome .entry ul li { margin-bottom: 1pt; }
+  .awesome .skill-row { display: flex; gap: 10pt; margin-bottom: 2pt; align-items: baseline; }
+  .awesome .skill-row .cat { color: #222; font-weight: 700; min-width: 90pt; text-align: right; }
+
+  /* =========================================================
+     4) sb2nov — classic single-column · plain serif · underlined heads
+     ========================================================= */
+  .sb2nov .body {
+    padding: 0.5in 0.7in;
+    font-family: 'EB Garamond', 'Cambria', 'Times New Roman', serif;
+    font-size: 11pt;
+    line-height: 1.3;
+    color: #000;
+  }
+  .sb2nov .header { text-align: center; padding-bottom: 4pt; }
+  .sb2nov .header .name { font-size: 22pt; font-weight: 700; margin: 0; letter-spacing: 0.5pt; }
+  .sb2nov .header .contact { margin-top: 3pt; font-size: 10.5pt; }
+  .sb2nov .header .contact a { color: #000; text-decoration: none; }
+  .sb2nov .header .contact span.sep { margin: 0 4pt; }
+  .sb2nov .section-title {
+    text-transform: uppercase;
+    font-weight: 700;
+    font-size: 12pt;
+    margin: 10pt 0 2pt;
+    border-bottom: 1pt solid #000;
+    padding-bottom: 1pt;
+    letter-spacing: 0.04em;
+  }
+  .sb2nov .entry { margin-top: 4pt; }
+  .sb2nov .entry .row1 { display: flex; justify-content: space-between; gap: 10pt; }
+  .sb2nov .entry .row1 .l { font-weight: 700; }
+  .sb2nov .entry .row1 .r { color: #000; }
+  .sb2nov .entry .row2 { display: flex; justify-content: space-between; font-style: italic; color: #1f2937; }
+  .sb2nov .entry ul { margin: 2pt 0 4pt 18pt; padding: 0; }
+  .sb2nov .entry ul li { margin-bottom: 1pt; }
+  .sb2nov .skills p { margin: 1pt 0; }
+
+  /* =========================================================
+     5) RENDERCV CLASSIC — Source Sans · centered head · partial rule lines
+     ========================================================= */
+  .rcv .body {
+    padding: 36pt 48pt;
+    font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+    font-size: 10pt;
+    line-height: 1.35;
+    color: #000;
+  }
+  .rcv .header { text-align: center; }
+  .rcv .header .name { font-size: 24pt; font-weight: 700; margin: 0; color: #000; }
+  .rcv .header .headline { color: #404040; margin-top: 2pt; font-weight: 500; }
+  .rcv .header .contact { margin-top: 4pt; font-size: 10pt; color: #404040; display: flex; justify-content: center; flex-wrap: wrap; gap: 0 6pt; }
+  .rcv .header .contact .dot { color: #404040; }
+  .rcv .header .contact a { color: #004f6d; text-decoration: none; }
+  .rcv .section { margin-top: 10pt; }
+  .rcv .section-title {
+    display: flex; align-items: center; gap: 10pt;
+    font-size: 14pt; font-weight: 700; color: #000;
+    margin: 0 0 4pt;
+  }
+  .rcv .section-title .line {
+    flex: 1; height: 0.5pt; background: #000;
+  }
+  .rcv .entry { margin-bottom: 6pt; }
+  .rcv .entry .row1 { display: flex; justify-content: space-between; align-items: baseline; }
+  .rcv .entry .row1 .l strong { font-weight: 700; }
+  .rcv .entry .row1 .r { color: #404040; font-style: italic; }
+  .rcv .entry .row2 { display: flex; justify-content: space-between; color: #404040; font-style: italic; }
+  .rcv .entry ul { margin: 2pt 0 0 14pt; padding: 0; }
+  .rcv .entry ul li { margin-bottom: 1pt; }
+
+  /* =========================================================
+     6) HARVARD / HBS CLASSIC — Times · pure B/W · centered head · ALL-CAPS rule
+     ========================================================= */
+  .harvard .body {
+    padding: 0.5in 0.75in;
+    font-family: 'Times New Roman', 'EB Garamond', serif;
+    font-size: 11pt;
+    line-height: 1.25;
+    color: #000;
+  }
+  .harvard .header { text-align: center; padding-bottom: 6pt; }
+  .harvard .header .name {
+    font-size: 18pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin: 0;
+  }
+  .harvard .header .contact { margin-top: 3pt; font-size: 10.5pt; }
+  .harvard .section-title {
+    text-transform: uppercase;
+    font-weight: 700;
+    font-size: 11.5pt;
+    margin: 10pt 0 2pt;
+    border-bottom: 1pt solid #000;
+    padding-bottom: 1pt;
+    letter-spacing: 0.06em;
+  }
+  .harvard .entry { margin-top: 4pt; }
+  .harvard .entry .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10pt; }
+  .harvard .entry .row1 .org { font-weight: 700; }
+  .harvard .entry .row1 .loc { font-style: italic; }
+  .harvard .entry .row2 { display: flex; justify-content: space-between; }
+  .harvard .entry .row2 .role { font-style: italic; }
+  .harvard .entry .row2 .date { font-style: italic; }
+  .harvard .entry ul { margin: 2pt 0 4pt 22pt; padding: 0; }
+  .harvard .entry ul li { margin-bottom: 1pt; }
+
+  /* Footer notes */
+  .footnote { max-width: 1700px; margin: 0 auto; padding: 0 32px 48px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .footnote h3 { margin: 24px 0 8px; color: var(--ink); font-size: 15px; }
+  .footnote ol { padding-left: 18px; }
+  .footnote li { margin-bottom: 8px; }
+  .footnote code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  .footnote a { color: #1e40af; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>6 ATS-Friendly Resume Templates</h1>
+  <p>
+    Curated and faithfully reproduced from the most-trusted real-world resume designs.
+    Hand-built in HTML/CSS — no JS, no images. Each sheet is US Letter (8.5&Prime; × 11&Prime;).
+  </p>
+</div>
+
+<div class="stage">
+
+  <!-- ============================================================ 1) JAKE'S RESUME ============================================================ -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Template 1</span>
+        <h2>Jake's Resume</h2>
+        <div class="sub">Single-column · Latin Modern serif · most-forked CS resume</div>
+      </div>
+      <div class="right"><a href="https://github.com/jakegut/resume" target="_blank" rel="noreferrer">github.com/jakegut/resume</a></div>
+    </div>
+
+    <div class="sheet jake">
+      <div class="body">
+        <div class="header">
+          <div class="name">Aarav Sharma</div>
+          <div class="contact">
+            +91 98765 43210 <span class="sep">|</span>
+            <a href="mailto:aarav@example.com">aarav@example.com</a> <span class="sep">|</span>
+            <a href="#">linkedin.com/in/aarav</a> <span class="sep">|</span>
+            <a href="#">github.com/aarav</a>
+          </div>
+        </div>
+
+        <div class="section-title">Education</div>
+        <div class="entry">
+          <div class="row1"><span class="l">International Institute of Information Technology</span><span class="r">Hyderabad, IN</span></div>
+          <div class="row2"><span>B.Tech in Computer Science &amp; Engineering · CGPA 9.1 / 10</span><span>Aug 2022 – May 2026</span></div>
+        </div>
+
+        <div class="section-title">Experience</div>
+        <div class="entry">
+          <div class="row1"><span class="l">Software Engineering Intern</span><span class="r">May 2025 – Aug 2025</span></div>
+          <div class="row2"><span>Razorpay</span><span>Bengaluru, IN</span></div>
+          <ul>
+            <li>Built a merchant reconciliation dashboard in Next.js used by 800+ businesses, cutting support tickets by 32%.</li>
+            <li>Shipped a Redis caching layer for settlements API, dropping p95 latency 540 ms → 110 ms.</li>
+            <li>Authored 60+ Jest tests; integrated Playwright smoke checks into team CI.</li>
+          </ul>
+        </div>
+        <div class="entry">
+          <div class="row1"><span class="l">Undergraduate Research Assistant</span><span class="r">Jan 2024 – Apr 2025</span></div>
+          <div class="row2"><span>IIIT-H Center for Visual Information Tech.</span><span>Hyderabad, IN</span></div>
+          <ul>
+            <li>Implemented attention-based pose estimation pipeline in PyTorch; +3.2 mAP over the prior baseline.</li>
+            <li>Co-authored a workshop paper accepted at ICVGIP 2025.</li>
+          </ul>
+        </div>
+
+        <div class="section-title">Projects</div>
+        <div class="entry">
+          <div class="row1"><span class="l">ResuScore — AI Resume Matcher</span><span class="r">Next.js, Supabase, OpenAI, pgvector</span></div>
+          <ul>
+            <li>RAG pipeline scoring 10k+ Indian IT job postings against a user's resume in &lt; 4 seconds.</li>
+            <li>Hybrid keyword + cosine search; tunable similarity threshold (currently 0.3).</li>
+          </ul>
+        </div>
+        <div class="entry">
+          <div class="row1"><span class="l">Studyloop</span><span class="r">React, FastAPI, Postgres</span></div>
+          <ul>
+            <li>Spaced-repetition study app with 1.2k weekly active users at peak; scaled to 50k flashcards / user.</li>
+          </ul>
+        </div>
+
+        <div class="section-title">Technical Skills</div>
+        <div class="skills">
+          <p><strong>Languages:</strong> Python, TypeScript, Go, C++, SQL, Bash</p>
+          <p><strong>Frameworks:</strong> React, Next.js, Node.js, FastAPI, PyTorch, Tailwind</p>
+          <p><strong>Tools:</strong> Git, Docker, PostgreSQL, Redis, GitHub Actions, Vercel</p>
+          <p><strong>Libraries:</strong> NumPy, Pandas, scikit-learn, Hugging Face, LangChain</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ 2) DEEDY ============================================================ -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Template 2</span>
+        <h2>Deedy</h2>
+        <div class="sub">Asymmetric two-column · Lato/Raleway · red accent</div>
+      </div>
+      <div class="right"><a href="https://github.com/deedy/Deedy-Resume" target="_blank" rel="noreferrer">github.com/deedy/Deedy-Resume</a></div>
+    </div>
+
+    <div class="sheet deedy">
+      <div class="body">
+        <div class="header">
+          <div>
+            <span class="first">Aarav</span><span class="last">Sharma</span>
+          </div>
+          <div class="meta">
+            aarav@example.com<br/>
+            +91 98765 43210<br/>
+            <a href="#">github.com/aarav</a> · <a href="#">linkedin/aarav</a>
+          </div>
+        </div>
+
+        <div class="columns">
+          <div class="leftcol">
+            <div class="blk">
+              <div class="section-title">Education</div>
+              <div class="l-entry">
+                <div class="school">IIIT Hyderabad</div>
+                <div class="deg">B.Tech, Computer Science</div>
+                <div class="date">2022 — 2026</div>
+                <div class="deg">CGPA: 9.1 / 10</div>
+              </div>
+            </div>
+
+            <div class="blk">
+              <div class="section-title">Links</div>
+              <div class="courses">
+                <span>Github:// <strong>aarav</strong></span>
+                <span>LinkedIn:// <strong>aarav</strong></span>
+                <span>Twitter:// <strong>@aarav</strong></span>
+                <span>Site:// <strong>aarav.dev</strong></span>
+              </div>
+            </div>
+
+            <div class="blk">
+              <div class="section-title">Coursework</div>
+              <div class="courses">
+                <span>Distributed Systems</span>
+                <span>Compilers</span>
+                <span>Machine Learning</span>
+                <span>Database Systems</span>
+                <span>Operating Systems</span>
+                <span>Computer Networks</span>
+                <span>Algorithms</span>
+              </div>
+            </div>
+
+            <div class="blk">
+              <div class="section-title">Skills</div>
+              <div class="courses">
+                <span style="font-weight:700; color:#000; margin-top:2pt;">Programming</span>
+              </div>
+              <p class="skills-line">over <strong>5000</strong> lines:</p>
+              <p class="skills-line">Python · TypeScript · Go</p>
+              <p class="skills-line">over <strong>1000</strong> lines:</p>
+              <p class="skills-line">C++ · SQL · Bash · Rust</p>
+              <p class="skills-line">familiar:</p>
+              <p class="skills-line">Java · Solidity</p>
+            </div>
+
+            <div class="blk">
+              <div class="section-title">Awards</div>
+              <p class="skills-line"><strong>2024</strong> · ACM-ICPC Regionalist</p>
+              <p class="skills-line"><strong>2023</strong> · Smart India Hackathon Winner</p>
+              <p class="skills-line"><strong>2022</strong> · KVPY Fellow</p>
+            </div>
+          </div>
+
+          <div class="rightcol">
+            <div class="blk">
+              <div class="section-title">Experience</div>
+              <div class="r-entry">
+                <div class="row1"><span class="pos">Razorpay</span><span class="date">May 2025 – Aug 2025</span></div>
+                <div class="row2"><span>Software Engineering Intern</span><span>Bengaluru, IN</span></div>
+                <ul>
+                  <li>Built a merchant reconciliation dashboard in Next.js used by 800+ businesses, cutting support tickets by <strong>32%</strong>.</li>
+                  <li>Shipped a Redis caching layer for the settlements API: p95 latency 540ms → 110ms.</li>
+                  <li>60+ Jest tests + Playwright smoke checks integrated into team CI pipeline.</li>
+                </ul>
+              </div>
+              <div class="r-entry">
+                <div class="row1"><span class="pos">IIIT-H CVIT Lab</span><span class="date">Jan 2024 – Apr 2025</span></div>
+                <div class="row2"><span>Undergraduate Researcher</span><span>Hyderabad, IN</span></div>
+                <ul>
+                  <li>Implemented attention-based pose-estimation pipeline in PyTorch (+3.2 mAP over baseline).</li>
+                  <li>Co-author of a workshop paper accepted at <strong>ICVGIP 2025</strong>.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="blk">
+              <div class="section-title">Projects</div>
+              <div class="r-entry">
+                <div class="row1"><span class="pos">ResuScore</span><span class="date">2025</span></div>
+                <div class="row2"><span>AI Resume &amp; Job Matcher</span><span>Next.js · Supabase · OpenAI</span></div>
+                <ul>
+                  <li>RAG pipeline scoring 10k+ Indian IT job postings vs. user resume in &lt; 4s.</li>
+                  <li>Hybrid keyword + pgvector cosine search with tunable similarity threshold.</li>
+                </ul>
+              </div>
+              <div class="r-entry">
+                <div class="row1"><span class="pos">Studyloop</span><span class="date">2024</span></div>
+                <div class="row2"><span>Spaced-repetition study app</span><span>React · FastAPI · Postgres</span></div>
+                <ul>
+                  <li>Hit 1.2k WAU at peak; 50k flashcards per user supported by streaming server-sent events.</li>
+                </ul>
+              </div>
+              <div class="r-entry">
+                <div class="row1"><span class="pos">react-hook-form</span><span class="date">2024</span></div>
+                <div class="row2"><span>Open Source Contributor</span><span>TypeScript</span></div>
+                <ul>
+                  <li>Two merged PRs improving inference for nested field arrays.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ 3) AWESOME-CV ============================================================ -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Template 3</span>
+        <h2>Awesome-CV (posquit0)</h2>
+        <div class="sub">Source Sans · blue accent · quote subtitle · iconified contact row</div>
+      </div>
+      <div class="right"><a href="https://github.com/posquit0/Awesome-CV" target="_blank" rel="noreferrer">github.com/posquit0/Awesome-CV</a></div>
+    </div>
+
+    <div class="sheet awesome">
+      <div class="body">
+        <div class="header">
+          <div class="name"><span class="first">Aarav</span> <span class="last">Sharma</span></div>
+          <div class="position">Software Engineer · CS Senior @ IIIT Hyderabad</div>
+          <div class="quote">"Build small, fast, useful things — and keep the seams clean."</div>
+          <div class="contact">
+            <span class="item"><span class="ico">✆</span> +91 98765 43210</span>
+            <span class="item"><span class="ico">✉</span> aarav@example.com</span>
+            <span class="item"><span class="ico">⌂</span> aarav.dev</span>
+            <span class="item"><span class="ico">⚲</span> github.com/aarav</span>
+            <span class="item"><span class="ico">in</span> linkedin/aarav</span>
+            <span class="item"><span class="ico">⌖</span> Hyderabad, IN</span>
+          </div>
+        </div>
+
+        <div class="section-title">Experience</div>
+        <div class="section-rule"></div>
+        <div class="entry">
+          <div class="row1"><span class="l">Razorpay</span><span class="r">May 2025 – Aug 2025</span></div>
+          <div class="row2"><span class="pos">Software Engineering Intern</span><span class="loc">Bengaluru, IN</span></div>
+          <ul>
+            <li>Built a merchant reconciliation dashboard in Next.js used by 800+ businesses; cut support tickets by 32%.</li>
+            <li>Engineered a Redis-backed caching layer for the settlements API; p95 latency 540 ms → 110 ms.</li>
+            <li>Authored 60+ Jest tests and Playwright smoke checks integrated into team CI.</li>
+          </ul>
+        </div>
+        <div class="entry">
+          <div class="row1"><span class="l">IIIT-H CVIT Lab</span><span class="r">Jan 2024 – Apr 2025</span></div>
+          <div class="row2"><span class="pos">Undergraduate Research Assistant</span><span class="loc">Hyderabad, IN</span></div>
+          <ul>
+            <li>Implemented attention-based pose estimation pipeline in PyTorch (+3.2 mAP over baseline).</li>
+            <li>Co-author of a workshop paper accepted at ICVGIP 2025.</li>
+          </ul>
+        </div>
+
+        <div class="section-title">Education</div>
+        <div class="section-rule"></div>
+        <div class="entry">
+          <div class="row1"><span class="l">International Institute of Information Technology</span><span class="r">2022 – 2026</span></div>
+          <div class="row2"><span class="pos">B.Tech, Computer Science &amp; Engineering · CGPA 9.1</span><span class="loc">Hyderabad, IN</span></div>
+        </div>
+
+        <div class="section-title">Skills</div>
+        <div class="section-rule"></div>
+        <div class="skill-row"><span class="cat">Languages</span><span>Python · TypeScript · Go · C++ · SQL · Bash</span></div>
+        <div class="skill-row"><span class="cat">Frameworks</span><span>React · Next.js · Node.js · FastAPI · PyTorch</span></div>
+        <div class="skill-row"><span class="cat">Tooling</span><span>Docker · Postgres · Redis · GitHub Actions · Vercel · pgvector</span></div>
+        <div class="skill-row"><span class="cat">Spoken</span><span>English (fluent) · Hindi (native) · Telugu (native)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ 4) sb2nov ============================================================ -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Template 4</span>
+        <h2>sb2nov Resume</h2>
+        <div class="sub">Classic serif single-column · the parent of Jake's Resume</div>
+      </div>
+      <div class="right"><a href="https://github.com/sb2nov/resume" target="_blank" rel="noreferrer">github.com/sb2nov/resume</a></div>
+    </div>
+
+    <div class="sheet sb2nov">
+      <div class="body">
+        <div class="header">
+          <div class="name">Aarav Sharma</div>
+          <div class="contact">
+            Hyderabad, IN <span class="sep">·</span>
+            <a href="mailto:aarav@example.com">aarav@example.com</a> <span class="sep">·</span>
+            +91 98765 43210 <span class="sep">·</span>
+            <a href="#">aarav.dev</a>
+          </div>
+        </div>
+
+        <div class="section-title">Education</div>
+        <div class="entry">
+          <div class="row1"><span class="l">International Institute of Information Technology</span><span class="r">Hyderabad, IN</span></div>
+          <div class="row2"><span>Bachelor of Technology in Computer Science &amp; Engineering</span><span>2022 – 2026</span></div>
+        </div>
+
+        <div class="section-title">Experience</div>
+        <div class="entry">
+          <div class="row1"><span class="l">Razorpay</span><span class="r">Bengaluru, IN</span></div>
+          <div class="row2"><span>Software Engineering Intern</span><span>May 2025 – August 2025</span></div>
+          <ul>
+            <li>Designed and shipped a merchant-facing reconciliation dashboard in Next.js used by 800+ businesses.</li>
+            <li>Built a Redis-backed caching layer for the settlements API, reducing p95 latency from 540 ms to 110 ms.</li>
+            <li>Wrote 60+ Jest tests and integrated Playwright smoke checks into the team's CI pipeline.</li>
+          </ul>
+        </div>
+        <div class="entry">
+          <div class="row1"><span class="l">IIIT-H Center for Visual Information Technology</span><span class="r">Hyderabad, IN</span></div>
+          <div class="row2"><span>Undergraduate Research Assistant</span><span>January 2024 – April 2025</span></div>
+          <ul>
+            <li>Implemented attention-based pose estimation pipeline in PyTorch, improving mAP by 3.2 over the prior baseline.</li>
+            <li>Co-authored a workshop paper accepted at ICVGIP 2025.</li>
+          </ul>
+        </div>
+
+        <div class="section-title">Projects</div>
+        <div class="entry">
+          <div class="row1"><span class="l">ResuScore</span><span class="r">Next.js, Supabase, OpenAI</span></div>
+          <ul>
+            <li>RAG-based AI resume-to-job matcher scoring 10k+ Indian IT postings against a user's resume in under 4 seconds.</li>
+          </ul>
+        </div>
+        <div class="entry">
+          <div class="row1"><span class="l">Studyloop</span><span class="r">React, FastAPI, Postgres</span></div>
+          <ul>
+            <li>Spaced-repetition study app; reached 1.2k weekly active users at peak.</li>
+          </ul>
+        </div>
+
+        <div class="section-title">Programming Skills</div>
+        <div class="skills">
+          <p><strong>Languages:</strong> Python, TypeScript, Go, C++, SQL, Bash</p>
+          <p><strong>Technologies:</strong> React, Next.js, Node.js, FastAPI, PyTorch, Docker, PostgreSQL, Redis</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ 5) RenderCV CLASSIC ============================================================ -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Template 5</span>
+        <h2>RenderCV — Classic Theme</h2>
+        <div class="sub">Source Sans · centered head · partial-rule section titles</div>
+      </div>
+      <div class="right"><a href="https://github.com/rendercv/rendercv" target="_blank" rel="noreferrer">github.com/rendercv/rendercv</a></div>
+    </div>
+
+    <div class="sheet rcv">
+      <div class="body">
+        <div class="header">
+          <div class="name">Aarav Sharma</div>
+          <div class="headline">Software Engineer</div>
+          <div class="contact">
+            <span>Hyderabad, IN</span><span class="dot">|</span>
+            <a href="mailto:aarav@example.com">aarav@example.com</a><span class="dot">|</span>
+            <span>+91 98765 43210</span><span class="dot">|</span>
+            <a href="#">aarav.dev</a><span class="dot">|</span>
+            <a href="#">github.com/aarav</a><span class="dot">|</span>
+            <a href="#">linkedin/aarav</a>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Education<span class="line"></span></div>
+          <div class="entry">
+            <div class="row1"><span class="l"><strong>IIIT Hyderabad</strong>, B.Tech in Computer Science</span><span class="r">Aug 2022 – May 2026</span></div>
+            <ul>
+              <li>CGPA: 9.1 / 10</li>
+              <li>Relevant coursework: Distributed Systems, Compilers, Machine Learning, DBMS</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Experience<span class="line"></span></div>
+          <div class="entry">
+            <div class="row1"><span class="l"><strong>Software Engineering Intern</strong>, Razorpay</span><span class="r">May 2025 – Aug 2025</span></div>
+            <div class="row2"><span>Bengaluru, IN</span></div>
+            <ul>
+              <li>Built a merchant reconciliation dashboard in Next.js used by 800+ businesses; cut support tickets by 32%.</li>
+              <li>Shipped a Redis caching layer for the settlements API; p95 latency 540 ms → 110 ms.</li>
+              <li>Authored 60+ Jest tests; integrated Playwright into CI.</li>
+            </ul>
+          </div>
+          <div class="entry">
+            <div class="row1"><span class="l"><strong>Research Assistant</strong>, CVIT Lab</span><span class="r">Jan 2024 – Apr 2025</span></div>
+            <div class="row2"><span>Hyderabad, IN</span></div>
+            <ul>
+              <li>Pose-estimation pipeline in PyTorch (+3.2 mAP).</li>
+              <li>Co-author, ICVGIP 2025 workshop paper.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Projects<span class="line"></span></div>
+          <div class="entry">
+            <div class="row1"><span class="l"><strong>ResuScore</strong></span><span class="r"><a href="#">github.com/aarav/resuscore</a></span></div>
+            <ul>
+              <li>Tools: Next.js, Supabase, OpenAI, pgvector.</li>
+              <li>RAG pipeline scoring 10k+ jobs vs. user resume in &lt; 4s.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Technologies<span class="line"></span></div>
+          <div class="entry">
+            <div class="row1"><span class="l"><strong>Languages:</strong> Python, TypeScript, Go, C++, SQL</span></div>
+            <div class="row1"><span class="l"><strong>Tools:</strong> React, Next.js, FastAPI, PyTorch, Docker, Postgres, Redis</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ 6) HARVARD / HBS ============================================================ -->
+  <div class="card">
+    <div class="card-head">
+      <div class="left">
+        <span class="badge">Template 6</span>
+        <h2>Harvard Classic (HBS-style)</h2>
+        <div class="sub">Times Roman · pure B/W · the ATS gold standard</div>
+      </div>
+      <div class="right"><a href="https://careerservices.fas.harvard.edu/resources/bullet-point-resume-template/" target="_blank" rel="noreferrer">careerservices.fas.harvard.edu</a></div>
+    </div>
+
+    <div class="sheet harvard">
+      <div class="body">
+        <div class="header">
+          <div class="name">Aarav Sharma</div>
+          <div class="contact">
+            Hyderabad, India · +91 98765 43210 · aarav@example.com · linkedin.com/in/aarav
+          </div>
+        </div>
+
+        <div class="section-title">Education</div>
+        <div class="entry">
+          <div class="row1"><span class="org">International Institute of Information Technology, Hyderabad</span><span class="loc">Hyderabad, India</span></div>
+          <div class="row2"><span class="role">Bachelor of Technology in Computer Science &amp; Engineering · CGPA 9.1 / 10</span><span class="date">Aug 2022 – May 2026</span></div>
+          <ul>
+            <li>Relevant coursework: Distributed Systems, Compilers, Machine Learning, Database Systems.</li>
+            <li>Awards: ACM-ICPC Regionalist (2024); Smart India Hackathon Winner (2023); KVPY Fellow (2022).</li>
+          </ul>
+        </div>
+
+        <div class="section-title">Experience</div>
+        <div class="entry">
+          <div class="row1"><span class="org">Razorpay</span><span class="loc">Bengaluru, India</span></div>
+          <div class="row2"><span class="role">Software Engineering Intern</span><span class="date">May 2025 – August 2025</span></div>
+          <ul>
+            <li>Designed and shipped a merchant-facing reconciliation dashboard in Next.js used by 800+ businesses, reducing manual support tickets by 32%.</li>
+            <li>Engineered a Redis-backed caching layer for the settlements API; reduced p95 latency from 540 ms to 110 ms.</li>
+            <li>Authored 60+ Jest tests and integrated Playwright smoke checks into the team CI pipeline.</li>
+          </ul>
+        </div>
+        <div class="entry">
+          <div class="row1"><span class="org">IIIT-H Center for Visual Information Technology</span><span class="loc">Hyderabad, India</span></div>
+          <div class="row2"><span class="role">Undergraduate Research Assistant</span><span class="date">January 2024 – April 2025</span></div>
+          <ul>
+            <li>Implemented attention-based pose estimation pipeline in PyTorch, improving mAP by 3.2 over the prior baseline.</li>
+            <li>Co-authored a workshop paper accepted at ICVGIP 2025.</li>
+          </ul>
+        </div>
+
+        <div class="section-title">Leadership &amp; Activities</div>
+        <div class="entry">
+          <div class="row1"><span class="org">IIIT-H Open Source Society</span><span class="loc">Hyderabad, India</span></div>
+          <div class="row2"><span class="role">Lead, Web &amp; Tooling</span><span class="date">Aug 2023 – Present</span></div>
+          <ul>
+            <li>Mentored 25+ underclassmen on open-source contribution workflow; group landed 40+ merged PRs in 2024.</li>
+          </ul>
+        </div>
+
+        <div class="section-title">Skills &amp; Interests</div>
+        <div class="entry">
+          <ul style="margin-left:18pt;">
+            <li><strong>Technical:</strong> Python, TypeScript, Go, C++, SQL, React, Next.js, FastAPI, PyTorch, PostgreSQL, Docker.</li>
+            <li><strong>Languages:</strong> English (fluent), Hindi (native), Telugu (native).</li>
+            <li><strong>Interests:</strong> long-distance running, classical guitar, chess (FIDE 1750).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footnote">
+  <h3>About these templates</h3>
+  <ol>
+    <li><strong>Jake's Resume</strong> — Most-forked CS resume on GitHub. Single column, Latin Modern Roman, small-caps section headings under a rule. <a href="https://github.com/jakegut/resume" target="_blank">github.com/jakegut/resume</a></li>
+    <li><strong>Deedy</strong> — 1/3 + 2/3 asymmetric two-column layout in Lato/Raleway. Sidebar holds Education, Coursework, Skills; main column holds Experience &amp; Projects. <a href="https://github.com/deedy/Deedy-Resume" target="_blank">github.com/deedy/Deedy-Resume</a></li>
+    <li><strong>Awesome-CV</strong> by posquit0 — Source Sans Pro, "awesome-blue" accent (#0E5484), tagline/quote slot, iconified contact row, structured experience entries. <a href="https://github.com/posquit0/Awesome-CV" target="_blank">github.com/posquit0/Awesome-CV</a></li>
+    <li><strong>sb2nov Resume</strong> — Classic serif single-column. The parent template that Jake's was forked from; still in active use. <a href="https://github.com/sb2nov/resume" target="_blank">github.com/sb2nov/resume</a></li>
+    <li><strong>RenderCV — Classic Theme</strong> — YAML → PDF builder for engineers/academics. Centered header + partial rule lines beside section titles. <a href="https://github.com/rendercv/rendercv" target="_blank">github.com/rendercv/rendercv</a></li>
+    <li><strong>Harvard Classic (HBS bullet-point format)</strong> — Times New Roman, pure black-and-white, all-caps name with letter-spacing. The most universally ATS-safe layout — recommended by Harvard FAS Career Services. <a href="https://careerservices.fas.harvard.edu/resources/bullet-point-resume-template/" target="_blank">careerservices.fas.harvard.edu</a></li>
+  </ol>
+
+  <h3>How to open</h3>
+  <p>Run <code>npm run dev</code> in <code>resuscore/</code> and visit <code>http://localhost:3000/resume-templates-pack.html</code> — or just double-click the file in <code>resuscore/public/</code> to open it in any browser.</p>
+
+  <h3>Wiring into ResuScore</h3>
+  <p>To use these as real PDF templates inside the app, each one needs a <code>@react-pdf/renderer</code> port under <code>resuscore/src/components/ResumeRenderer/</code> (similar to your existing <code>ClassicPdfDocument</code>, <code>LondonPdfDocument</code>, etc.), then registered in <code>resuscore/src/templates/catalog.ts</code>.</p>
+</div>
+
+</body>
+</html>
