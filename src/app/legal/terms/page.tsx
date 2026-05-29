@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import LegalPageLayout, { LegalSection } from '@/components/legal/LegalPageLayout'
 
-export const metadata: Metadata = { title: 'Terms of Service — ResuScore' }
+export const metadata: Metadata = { title: 'Terms of Service' }
 
 export default function TermsPage() {
   return (

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import LegalPageLayout, { LegalSection } from '@/components/legal/LegalPageLayout'
 
-export const metadata: Metadata = { title: 'Cookie Policy — ResuScore' }
+export const metadata: Metadata = { title: 'Cookie Policy' }
 
 export default function CookiePolicyPage() {
   return (
