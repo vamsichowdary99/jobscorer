@@ -164,13 +164,34 @@
 
 /* ── Mobile responsive fixes ───────────────────────────────── */
 
+/* Pricing cards: set default 3-col via CSS so the media queries below
+   override cleanly without fighting inline-style specificity */
+.jobscorer-landing .pricing-cards {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 /* Features: illustration fills full width when feat-row stacks to column */
 @media (max-width: 900px) {
   .jobscorer-landing .feat-row > div:first-child { width: 100% !important; flex: none !important; }
   .jobscorer-landing .feat-row > div:last-child  { width: 100% !important; }
 }
 
-/* Journey: tighter side padding on phones */
+/* Hero: reduce top/side padding on mobile */
+@media (max-width: 768px) {
+  .jobscorer-landing .hero-section {
+    padding-top: 88px !important;
+    padding-bottom: 48px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+/* Journey: tighter side padding on tablets */
+@media (max-width: 820px) {
+  .jobscorer-landing .sn-wrap { padding-left: 20px !important; padding-right: 20px !important; }
+}
+
+/* Journey: even tighter on phones */
 @media (max-width: 480px) {
   .jobscorer-landing .sn-wrap { padding: 0 16px !important; }
 }

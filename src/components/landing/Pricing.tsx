@@ -124,7 +124,7 @@ export default function Pricing() {
           </div>
 
           {/* 4 Cards */}
-          <div className="pricing-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, alignItems: 'stretch' }}>
+          <div className="pricing-cards" style={{ display: 'grid', gap: 16, alignItems: 'stretch' }}>
             {PLANS.map(plan => (
               <div
                 key={plan.id}

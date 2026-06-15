@@ -7,7 +7,7 @@ import ResumeShowcase from './ResumeShowcase';
 
 export default function Hero() {
   return (
-    <section style={{ padding: '128px 24px 64px', background: C.bg, overflow: 'hidden' }}>
+    <section className="hero-section" style={{ padding: '128px 24px 64px', background: C.bg, overflow: 'hidden' }}>
       <div style={{ maxWidth: 680, margin: '0 auto', textAlign: 'center' }}>
         {/* Kicker badge */}
         <div
