@@ -161,3 +161,34 @@
   .jobscorer-landing .logo-marquee { animation: none; }
   .jobscorer-landing .rs-carousel-card { transition: none !important; }
 }
+
+/* ── Mobile responsive fixes ───────────────────────────────── */
+
+/* Features: illustration fills full width when feat-row stacks to column */
+@media (max-width: 900px) {
+  .jobscorer-landing .feat-row > div:first-child { width: 100% !important; flex: none !important; }
+  .jobscorer-landing .feat-row > div:last-child  { width: 100% !important; }
+}
+
+/* Journey: tighter side padding on phones */
+@media (max-width: 480px) {
+  .jobscorer-landing .sn-wrap { padding: 0 16px !important; }
+}
+
+/* Pricing: toggle row wraps gracefully on small phones */
+@media (max-width: 540px) {
+  .jobscorer-landing .pricing-toggle {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    padding: 10px 14px !important;
+    gap: 8px !important;
+  }
+  .jobscorer-landing .pricing-save-badge { display: none !important; }
+  .jobscorer-landing .faq-btn {
+    font-size: 16px !important;
+    padding: 18px 20px !important;
+  }
+  .jobscorer-landing .faq-btn + div {
+    padding: 0 20px 18px !important;
+  }
+}

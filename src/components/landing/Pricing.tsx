@@ -106,7 +106,7 @@ export default function Pricing() {
               Start free. Upgrade when you&apos;re ready.<br />No hidden fees. Cancel anytime.
             </p>
             {/* Toggle */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, padding: '8px 8px 8px 20px', background: DARK2, borderRadius: 999, border: `1px solid ${C.border}` }}>
+            <div className="pricing-toggle" style={{ display: 'inline-flex', alignItems: 'center', gap: 12, padding: '8px 8px 8px 20px', background: DARK2, borderRadius: 999, border: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 14, fontWeight: isYearly ? 500 : 700, color: isYearly ? DIM : C.primary, transition: 'color .2s, font-weight .2s' }}>Monthly</span>
               <div
                 role="switch"
@@ -119,7 +119,7 @@ export default function Pricing() {
                 <div style={{ position: 'absolute', top: 3, left: isYearly ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: WHITE, boxShadow: '0 1px 4px rgba(0,0,0,.18)', transition: `left .2s ${EASE}` }} />
               </div>
               <span style={{ fontSize: 14, fontWeight: isYearly ? 700 : 500, color: isYearly ? C.primary : DIM, transition: 'color .2s, font-weight .2s' }}>Annual</span>
-              <span style={{ padding: '4px 12px', background: '#ecfdf5', color: C.success, border: '1px solid #a7f3d0', borderRadius: 999, fontSize: 11, fontWeight: 700, fontFamily: MONO }}>Save up to 30%</span>
+              <span className="pricing-save-badge" style={{ padding: '4px 12px', background: '#ecfdf5', color: C.success, border: '1px solid #a7f3d0', borderRadius: 999, fontSize: 11, fontWeight: 700, fontFamily: MONO }}>Save up to 30%</span>
             </div>
           </div>
 
@@ -377,6 +377,7 @@ export default function Pricing() {
               >
                 <button
                   onClick={() => setFaqOpen(faqOpen === fi ? null : fi)}
+                  className="faq-btn"
                   style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 28px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: INTER, fontSize: 18.5, fontWeight: 600, color: DARK, textAlign: 'left', gap: 18 }}
                 >
                   {faq.q}
