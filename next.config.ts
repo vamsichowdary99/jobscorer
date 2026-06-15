@@ -47,15 +47,17 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
-  // Sentry org/project + auth token are read from env at build time. When
-  // absent (e.g. local dev), source-map upload is skipped — the SDK still
-  // captures errors at runtime via the instrumentation files.
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
-  silent: !process.env.CI,
-  widenClientFileUpload: true,
-  // Tree-shakes Sentry's internal logger from the client bundle.
-  disableLogger: true,
-});
+// Only wrap with Sentry when SENTRY_AUTH_TOKEN is present.
+// Without it, Sentry's webpack plugin prevents middleware.js.nft.json from
+// being generated, which causes Vercel deploys to fail with ENOENT.
+// Runtime error tracking still works via src/sentry.*.config.ts files.
+export default process.env.SENTRY_AUTH_TOKEN
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      silent: !process.env.CI,
+      widenClientFileUpload: true,
+      disableLogger: true,
+    })
+  : nextConfig;
