@@ -2,12 +2,10 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
-  // Turbopack config (Next.js 16 default bundler)
-  // Fix: explicitly set root to avoid Next.js picking up parent package-lock.json
-  turbopack: {
-    root: __dirname,
-  },
-  // Webpack fallback for @react-pdf/renderer (used when running with --webpack)
+  // Webpack fallback for @react-pdf/renderer — also used for production builds on Vercel.
+  // Turbopack is intentionally excluded from next.config: it doesn't emit the
+  // middleware.js.nft.json that Vercel's build infra expects, causing deploy errors.
+  // Use `next dev --turbopack` for local fast HMR instead.
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
