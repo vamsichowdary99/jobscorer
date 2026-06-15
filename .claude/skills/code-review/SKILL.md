@@ -1,10 +1,10 @@
 ---
 name: code-review
-description: Use when reviewing a diff, PR, or recently-changed files in ResuScore. Project-aware reviewer for Next.js 16 + React 19 + Supabase + n8n proxy architecture. Complements (does not replace) superpowers:requesting-code-review.
+description: Use when reviewing a diff, PR, or recently-changed files in JobScorer. Project-aware reviewer for Next.js 16 + React 19 + Supabase + n8n proxy architecture. Complements (does not replace) superpowers:requesting-code-review.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
-# Code Review — ResuScore
+# Code Review — JobScorer
 
 Targeted review for this codebase's specific conventions. Use alongside (not instead of) standard reviewer tools.
 
@@ -23,7 +23,7 @@ git log --oneline -10          # recent history for style/convention
 If no diff is provided, ask which scope: staged / branch / a specific path.
 
 ### 2. Apply the project filter (this skill's value-add)
-Sweep the ResuScore-specific checks below BEFORE running generic review checks. These catch the failures most likely in this codebase.
+Sweep the JobScorer-specific checks below BEFORE running generic review checks. These catch the failures most likely in this codebase.
 
 ### 3. Apply standard checks
 Type safety, error handling, dead code, tests, naming. Skip stylistic nits unless they violate a convention documented in [CLAUDE.md](../../../../CLAUDE.md) or visible in surrounding code.
@@ -36,7 +36,7 @@ Organize by severity. End with a verdict table.
 
 ---
 
-## ResuScore-specific checks (run FIRST)
+## JobScorer-specific checks (run FIRST)
 
 ### Architecture rule: API routes are thin n8n proxies
 Per CLAUDE.md: *"Never put AI calls, job fetching, or scoring logic directly in Next.js API routes."*
@@ -193,4 +193,4 @@ Verdict rules:
 - It doesn't replace `/review` or `/security-review` built-ins
 - It doesn't run automated tests or lint — call those separately
 
-This skill's value: the ResuScore-specific filter at the top. If you only had one minute, that section catches the failures most likely in this codebase.
+This skill's value: the JobScorer-specific filter at the top. If you only had one minute, that section catches the failures most likely in this codebase.

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { embedJob } from '@/lib/rag/embeddings';
+import { isValidInternalToken } from '@/lib/adminAuth';
 
 export const maxDuration = 30;
 
@@ -12,9 +13,7 @@ export const maxDuration = 30;
  * Called by the Anti-Gravity Job Ingestion n8n workflow after each row insert.
  */
 export async function POST(req: NextRequest) {
-    const token = req.headers.get('x-internal-token') || '';
-    const expected = process.env.N8N_INTERNAL_TOKEN || '';
-    if (!expected || token !== expected) {
+    if (!isValidInternalToken(req)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

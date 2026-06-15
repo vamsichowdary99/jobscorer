@@ -5,6 +5,7 @@ import { KEY, TTL } from '@/lib/redis-keys'
 import { requireUserLimit } from '@/lib/rate-limit'
 import { enqueue } from '@/lib/queue'
 import { matchAndPromote } from '@/lib/poolMatch'
+import { checkQuota } from '@/lib/plan'
 
 // Pool hit threshold: when the warm pool has at least this many fresh matches
 // for the user's query, we promote them into `jobs` and skip the n8n round-trip.
@@ -111,6 +112,11 @@ export async function POST(request: NextRequest) {
         // Non-fatal — continue to existing path
     }
 
+    // Past cache + pool short-circuits → a fresh, paid job fetch will run.
+    // Count it against the monthly job-search quota.
+    const overQuota = await checkQuota(user.id, 'job_search')
+    if (overQuota) return overQuota
+
     // 2. Queue mode (default): enqueue the job and return immediately
     const queueMode = process.env.N8N_QUEUE_MODE !== 'disabled'
     if (queueMode) {
@@ -154,23 +160,34 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Direct call fallback (legacy or queue-failed)
-    const webhookUrl =
-        process.env.N8N_JOB_INGESTION_WEBHOOK_URL ||
-        'http://localhost:5678/webhook/ingest-jobs'
+    const webhookUrl = process.env.N8N_JOB_INGESTION_WEBHOOK_URL
+    if (!webhookUrl) {
+        console.error('[/api/ingest-jobs] N8N_JOB_INGESTION_WEBHOOK_URL not configured')
+        return NextResponse.json(
+            { success: false, error: 'Job ingestion is not configured' },
+            { status: 500 }
+        )
+    }
 
+    // Bound the outbound call — n8n workflows can hang for minutes. (M10)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000)
     let n8nResponse: Response
     try {
         n8nResponse = await fetch(webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
+            signal: controller.signal,
         })
     } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error'
+        console.error('[/api/ingest-jobs] could not reach n8n:', err)
         return NextResponse.json(
-            { success: false, error: `Could not reach n8n: ${message}` },
+            { success: false, error: 'Job ingestion service is unavailable' },
             { status: 502 }
         )
+    } finally {
+        clearTimeout(timeout)
     }
 
     const text = await n8nResponse.text()

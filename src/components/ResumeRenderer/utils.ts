@@ -1,30 +1,27 @@
 /**
- * Ligature-defeat helper for ATS-safe PDF output.
+ * Text passthrough for PDF renderers (formerly a ligature-defeat helper).
  *
- * Why this exists: fonts like Lato, Lora, Roboto, and Merriweather embed
- * OpenType "liga" features that auto-form fi / fl / ff / ffi / ffl ligatures.
- * @react-pdf/renderer respects those features and writes the ligature glyph
- * to the PDF text stream. Most ATS parsers (Workday, Greenhouse, Lever,
- * iCIMS, Taleo) then decompose that glyph to just "f", silently dropping
- * the "i" or "l" — so "workflows" parses as "workfows", "Proficient" as
- * "Profcient", "firewalls" as "frewalls", and so on. Keywords vanish from
- * the JD match scan.
+ * History: this used to insert a zero-width-non-joiner (U+200C) between
+ * f-cluster letters (fi / fl / ff / ffi / ffl) on the theory that
+ * @react-pdf/renderer would emit a single ligature glyph that ATS parsers
+ * decompose to just "f", dropping the following letter ("workflows" →
+ * "workfows").
  *
- * Fix: insert a zero-width-non-joiner (U+200C) between the letters that
- * would otherwise form a ligature. ZWNJ suppresses OpenType shaping at
- * that boundary, so the renderer emits two separate glyphs. ATS parsers
- * strip ZWNJ during tokenization, so "workflows" parses correctly.
+ * That theory was tested and DISPROVEN for @react-pdf/renderer 4.3.2.
+ * Rendering the words "efficiency office affluent firewall proficient
+ * workflows fluffy difficult financial flagship" in every body font the
+ * templates use (Open Sans, Roboto, Lora, Lato, Merriweather, Montserrat,
+ * Caladea, Raleway, Playfair Display, Roboto Slab, plus base-14 Times-Roman
+ * and Helvetica) and extracting with PyMuPDF returns each word 100% intact —
+ * no ligature glyphs (U+FB00–FB06), no dropped letters.
  *
- * Visually: humans see no change (ZWNJ has zero width, just no ligature).
+ * Worse, the ZWNJ "fix" was actively harmful: most embedded font subsets do
+ * not include a U+200C glyph, so the renderer fell back to Helvetica for each
+ * ZWNJ and the PDF text stream came out as "ef\x0cf\x0ciciency" — a form-feed
+ * (U+000C) wedged into every f-word, which is far worse for ATS keyword
+ * matching than the (non-existent) ligature problem it was meant to solve.
+ *
+ * So this is now an identity passthrough. The name and signature are kept so
+ * the templates that call `dL(...)` don't need to change.
  */
-const ZWNJ = '‌'
-
-export const defeatLigatures = (s: string | null | undefined): string => {
-    if (!s) return ''
-    // Order matters: handle 3-char clusters before 2-char so ffi/ffl don't
-    // get processed twice.
-    return s
-        .replace(/(ffi|ffl)/g, (m) => m[0] + ZWNJ + m[1] + ZWNJ + m[2])
-        .replace(/(fi|fl|ff)/g, (m) => m[0] + ZWNJ + m[1])
-        .replace(/(Fi|Fl|Ff)/g, (m) => m[0] + ZWNJ + m[1])
-}
+export const defeatLigatures = (s: string | null | undefined): string => s ?? ''

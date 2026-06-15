@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { embedJob, embedResume } from '@/lib/rag/embeddings';
+import { isValidAdminToken } from '@/lib/adminAuth';
 
 type SB = ReturnType<typeof createServiceClient>;
 
@@ -22,9 +23,7 @@ export const maxDuration = 300;
  * remaining counts hit zero.
  */
 export async function POST(req: NextRequest) {
-    const token = req.headers.get('x-admin-token') || '';
-    const expected = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!expected || token !== expected) {
+    if (!isValidAdminToken(req)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

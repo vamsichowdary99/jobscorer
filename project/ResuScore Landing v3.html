@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JobScorer — AI Career Platform for Indian IT Freshers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: #f8fafc; color: #0f172a; line-height: 1.6; overflow-x: hidden; }
+    :focus-visible { outline: 2px solid #135bec; outline-offset: 2px; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes confettiFall { 0% { transform:translateY(0) rotate(0deg); opacity:1; } 100% { transform:translateY(48px) rotate(270deg) scale(.5); opacity:0; } }
+    @keyframes receiptFadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes snFade { from { opacity:0; transform:scale(1.16) translateY(8px); } to { opacity:1; transform:scale(1.26) translateY(0); } }
+    @media(max-width:820px) {
+      .sn-wrap { grid-template-columns:1fr !important; gap:18px !important; }
+      .sn-visual { display:none !important; }
+      .sn-mobile-illo { display:flex !important; }
+      .sn-rail-spacer { display:none !important; }
+    }
+    .fade-hero { opacity:0; animation: fadeUp .65s cubic-bezier(.22,1,.36,1) both; }
+    .fh1{animation-delay:0ms} .fh2{animation-delay:80ms} .fh3{animation-delay:160ms} .fh4{animation-delay:240ms} .fh5{animation-delay:320ms}
+    ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:3px; }
+
+    /* 3D carousel cards */
+    .rs-carousel-card { transition: filter 260ms ease, box-shadow 320ms cubic-bezier(0.22,0.65,0.28,1); }
+    @media (max-width:760px) {
+      .rs-carousel-card { width:170px !important; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .rs-carousel-card { transition:none !important; }
+    }
+    @media(max-width:900px) { .feat-row{flex-direction:column !important} .india-grid{grid-template-columns:1fr !important} .hero-left-col{text-align:center} .hero-right-col{align-items:center !important} .hero-c-row{grid-template-columns:1fr !important; text-align:center} .hero-c-stats{flex-direction:column !important} .ba-grid{grid-template-columns:1fr !important} }
+    @media(max-width:768px) { .hero-product{display:none !important} .hero-two{grid-template-columns:1fr !important} .hero-left-col + .hero-right-col{display:none !important} .hero-c-row > div{justify-content:center !important} }
+    @media(max-width:640px) { .how-grid{grid-template-columns:1fr !important} .trust-strip{flex-wrap:wrap !important} body { font-size:16px; } }
+    /* Journey grid responsive */
+    @media(max-width:980px) { .journey-grid{ grid-template-columns:repeat(2,1fr) !important; } }
+    @media(max-width:600px) { .journey-grid{ grid-template-columns:1fr !important; padding:0 24px !important; } }
+    /* Pricing cards responsive */
+    @media(max-width:980px) { .pricing-cards{ grid-template-columns:repeat(2,1fr) !important; } .pricing-cards > div[style*="translateY(-12px)"]{ transform:none !important; } }
+    @media(max-width:560px) { .pricing-cards{ grid-template-columns:1fr !important; } }
+    /* Comparison table: horizontal scroll + sticky first column on small screens */
+    @media(max-width:760px) {
+      .cmp-table-wrap{ overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+      .cmp-table{ min-width:640px; }
+      .cmp-table th:first-child, .cmp-table td:first-child{
+        position:sticky; left:0; z-index:6; background:#fff !important;
+        box-shadow:2px 0 0 rgba(15,23,42,0.06);
+      }
+      .cmp-table thead th{ position:static !important; }
+    }
+    @media(max-width:480px) { #pricing > div:first-child > div:last-child > div { grid-template-columns:1fr !important; } }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="carousel-hero.jsx"></script>
+<script type="text/babel" src="resuscore-receipts.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+const { useState, useEffect } = React;
+const { TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor, useTweaks } = window;
+
+// ─── Design tokens ────────────────────────────────────────────────────────
+const C = {
+  primary:'#135bec', primaryHover:'#0f4cc7', primaryLight:'#e8f0fe',
+  bg:'#f8fafc', surface:'#ffffff', surfaceAlt:'#f1f5f9',
+  text:'#0f172a', textSec:'#64748b', textTer:'#94a3b8',
+  border:'#e2e8f0', borderFaint:'#f1f5f9',
+  success:'#10b981', successBg:'#ecfdf5', successBorder:'#a7f3d0',
+};
+const SANS = "'Plus Jakarta Sans', system-ui, sans-serif";
+const MONO = "'JetBrains Mono', monospace";
+
+// ─── Primitives ───────────────────────────────────────────────────────────
+function Eyebrow({ color=C.textTer, mb=12, children }) {
+  return <div style={{ fontFamily:MONO, fontSize:'0.625rem', fontWeight:700, letterSpacing:'0.18em', textTransform:'uppercase', color, marginBottom:mb }}>{children}</div>;
+}
+
+function Btn({ children, href='#', variant='primary', sx={} }) {
+  const base = { display:'inline-flex', alignItems:'center', gap:7, padding:'13px 26px', borderRadius:9, fontSize:'0.9375rem', fontWeight:600, fontFamily:SANS, textDecoration:'none', cursor:'pointer', transition:'all 0.15s', border:'none', lineHeight:1 };
+  const vs = {
+    primary: { background:C.primary, color:'white' },
+    ghost:   { background:'transparent', color:C.primary, border:`1.5px solid ${C.border}` },
+  };
+  return (
+    <a href={href} style={{ ...base, ...vs[variant], ...sx }}
+      onMouseEnter={e => { e.currentTarget.style.opacity='.86'; e.currentTarget.style.transform='translateY(-1px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.transform='none'; }}
+    >{children}</a>
+  );
+}
+
+// ─── Nav ──────────────────────────────────────────────────────────────────
+function Nav() {
+  const [sc, setSc] = useState(false);
+  const [st, setSt] = useState(false);
+  useEffect(() => {
+    const fn = () => { setSc(window.scrollY > 80); setSt(window.scrollY > 600); };
+    window.addEventListener('scroll', fn, { passive:true });
+    return () => window.removeEventListener('scroll', fn);
+  }, []);
+
+  return (
+    <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:200, height:64, display:'flex', alignItems:'center', padding:'0 32px', background: sc ? 'rgba(248,250,252,.9)' : 'transparent', backdropFilter: sc ? 'blur(12px)' : 'none', WebkitBackdropFilter: sc ? 'blur(12px)' : 'none', borderBottom:`1px solid ${sc ? C.border : 'transparent'}`, transition:'all 0.25s ease' }}>
+      <div style={{ maxWidth:1200, width:'100%', margin:'0 auto', display:'flex', alignItems:'center' }}>
+        <a href="#" style={{ display:'flex', alignItems:'center', gap:9, textDecoration:'none', marginRight:40 }}>
+          <div style={{ position:'relative', width:32, height:32, borderRadius:9, background:`linear-gradient(135deg, ${C.primary} 0%, #2563eb 100%)`, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 3px 8px -1px ${C.primary}55` }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 18 L9 12 L13 15 L20 6" />
+              <path d="M15 6 L20 6 L20 11" />
+            </svg>
+          </div>
+          <span style={{ fontFamily:SANS, fontWeight:800, fontSize:'1.1875rem', letterSpacing:'-0.025em' }}>
+            <span style={{ color:C.text }}>Job</span><span style={{ color:C.primary }}>Scorer</span>
+          </span>
+        </a>
+        <div style={{ display:'flex', alignItems:'center', gap:2 }}>
+          {[['Browse Jobs','#browse'],['How it works','#how'],['Pricing','#pricing']].map(([l,h]) => (
+            <a key={l} href={h} style={{ padding:'7px 13px', fontSize:'0.875rem', fontWeight:500, color:C.textSec, textDecoration:'none', borderRadius:7, transition:'all 0.15s' }}
+              onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.background='rgba(15,23,42,.05)';}}
+              onMouseLeave={e=>{e.currentTarget.style.color=C.textSec;e.currentTarget.style.background='transparent';}}
+            >{l}</a>
+          ))}
+        </div>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+          {st && <a href="/signup" style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 16px', background:C.primary, color:'white', borderRadius:7, fontSize:'0.8125rem', fontWeight:600, textDecoration:'none', animation:'fadeUp 0.3s ease both' }}>Upload resume</a>}
+          <a href="/login" style={{ padding:'8px 13px', fontSize:'0.875rem', fontWeight:500, color:C.textSec, textDecoration:'none', borderRadius:7 }}>Sign in</a>
+          {!st && <a href="/signup" style={{ display:'inline-flex', alignItems:'center', padding:'9px 18px', background:C.primary, color:'white', borderRadius:7, fontSize:'0.875rem', fontWeight:600, textDecoration:'none', transition:'background 0.15s' }} onMouseEnter={e=>e.currentTarget.style.background=C.primaryHover} onMouseLeave={e=>e.currentTarget.style.background=C.primary}>Upload resume</a>}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+// ─── Trust bar ────────────────────────────────────────────────────────────
+function TrustBar() {
+  const LOGOS = [
+    { name:'TCS',           color:'#1e2a78', weight:'800', spacing:'1px' },
+    { name:'Infosys',       color:'#0b5caa', weight:'700' },
+    { name:'Wipro',         color:'#341f6b', weight:'800' },
+    { name:'HCLTech',       color:'#0075c9', accent:'#1a1a1a', parts:['HCL','Tech'] },
+    { name:'Tech Mahindra', color:'#e31837', weight:'700' },
+    { name:'Cognizant',     color:'#1a3ca6', weight:'700' },
+    { name:'Capgemini',     color:'#0070ad', weight:'700' },
+    { name:'Accenture',     color:'#a100ff', weight:'800' },
+    { name:'Deloitte',      color:'#1a1a1a', accent:'#86bc25', parts:['Deloitte','.'] },
+    { name:'HSBC',          color:'#db0011', weight:'800', spacing:'1px' },
+    { name:'Dell',          color:'#007db8', weight:'800', spacing:'1px' },
+    { name:'Wells Fargo',   color:'#d71e28', weight:'700' },
+    { name:'Amazon',        color:'#232f3e', accent:'#ff9900', parts:['amaz','on'] },
+    { name:'Microsoft',     color:'#5e5e5e', weight:'600' },
+    { name:'Salesforce',    color:'#00a1e0', weight:'700', font:"Georgia,serif" },
+    { name:'Flipkart',      color:'#2874f0', weight:'800' },
+    { name:'Razorpay',      color:'#0f172a', accent:'#2563eb', parts:['razor','pay'] },
+    { name:'Zoho',          color:'#e42527', weight:'700' },
+  ];
+
+  const renderLogo = (co, key) => (
+    <span key={key}
+      style={{
+        fontFamily: co.font || SANS,
+        fontWeight: co.weight || '700',
+        fontSize: 20,
+        color: co.color,
+        letterSpacing: co.spacing || '-0.01em',
+        opacity: 0.9,
+        lineHeight: 1.5,
+        padding: '2px 0',
+        userSelect: 'none',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+      }}
+    >
+      {co.parts
+        ? <><span>{co.parts[0]}</span><span style={{ color:co.accent }}>{co.parts[1]}</span></>
+        : co.name}
+    </span>
+  );
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:32, paddingTop:40, borderTop:`1px solid ${C.border}` }}>
+      {/* Company logos — scrolling marquee */}
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:18, width:'100%' }}>
+        <span style={{ fontFamily:MONO, fontSize:'0.6875rem', letterSpacing:'0.16em', textTransform:'uppercase', color:C.textTer, fontWeight:'600' }}>
+          Land interviews at companies like
+        </span>
+        <div style={{ width:'100%', overflow:'hidden', WebkitMaskImage:'linear-gradient(90deg,transparent 0,black 8%,black 92%,transparent 100%)', maskImage:'linear-gradient(90deg,transparent 0,black 8%,black 92%,transparent 100%)' }}>
+          <div className="logo-marquee" style={{ display:'flex', gap:48, alignItems:'center', width:'max-content', padding:'4px 0' }}>
+            {LOGOS.map((co,i) => renderLogo(co, 'a'+i))}
+            {LOGOS.map((co,i) => renderLogo(co, 'b'+i))}
+          </div>
+        </div>
+      </div>
+      <style>{`
+        @keyframes logoMarquee { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+        .logo-marquee { animation: logoMarquee 48s linear infinite; }
+        @media (prefers-reduced-motion: reduce) { .logo-marquee { animation:none; } }
+      `}</style>
+    </div>
+  );
+}
+
+
+// ─── How it works ─────────────────────────────────────────────────────────
+function ForIndia() {
+  const bullets = [
+    'Scores jobs from Naukri, LinkedIn India, Instahyre & Internshala',
+    'India-specific salary bands in ₹ LPA — not USD or "competitive"',
+    'ATS patterns trained on TCS, Infosys, Wipro hiring systems',
+    'Understands CGPA, B.Tech projects & Indian academic formats',
+    'Live counter: freshers hired at partner companies right now',
+    'GST-compliant billing — no UPI gymnastics for payment',
+  ];
+  return (
+    <section style={{ padding:'96px 32px', background:C.bg }}>
+      <div className="india-grid" style={{ maxWidth:1200, margin:'0 auto', display:'grid', gridTemplateColumns:'1fr 1fr', gap:80, alignItems:'center' }}>
+        <div>
+          <Eyebrow color={C.primary}>Built for you</Eyebrow>
+          <h2 style={{ fontFamily:SANS, fontSize:'clamp(1.75rem,3vw,2.5rem)', fontWeight:800, letterSpacing:'-0.03em', color:C.text, lineHeight:1.15, marginBottom:20 }}>We built this for the Indian IT fresher.</h2>
+          <p style={{ fontSize:'0.9375rem', color:C.textSec, lineHeight:1.75, marginBottom:32 }}>Global AI tools don't know that Naukri ATS scores differently than LinkedIn's, or that a CGPA of 8.5 from NIT Trichy carries weight that a score from an unknown college doesn't. We do.</p>
+          <Btn href="/signup">Try it free →</Btn>
+        </div>
+        <div>
+          {bullets.map((b,i) => (
+            <div key={i} style={{ display:'flex', gap:14, alignItems:'flex-start', padding:'14px 0', borderBottom:i<bullets.length-1?`1px solid ${C.border}`:'none' }}>
+              <div style={{ width:20, height:20, borderRadius:5, flexShrink:0, marginTop:2, background:C.primaryLight, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.5"><path d="M5 12l5 5L20 7"/></svg>
+              </div>
+              <p style={{ fontSize:'0.875rem', color:C.text, lineHeight:1.6, margin:0 }}>{b}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Testimonials ─────────────────────────────────────────────────────────
+function Testimonials() {
+  const STAR_COLOR = '#f59e0b';
+  const REVIEWS = [
+    {
+      parts: [
+        { text:'Got 4 callbacks in 2 weeks after running the ' },
+        { text:'ATS analysis on Naukri', hi:true },
+        { text:'. Was missing 8 of 12 keywords — fixed in an afternoon.' },
+      ],
+      name:'Arjun K.', outcome:'Now SDE-1 at Razorpay', stars:5, initials:'AK', color:'#1e3a5f',
+    },
+    {
+      parts: [
+        { text:'Pasted a Swiggy JD and got a ' },
+        { text:'91% fit score with exact bullet rewrites', hi:true },
+        { text:'. ATS keyword score went from 42 to 78 overnight.' },
+      ],
+      name:'Priya M.', outcome:'Now Backend Engineer at Swiggy', stars:5, initials:'PM', color:'#C2410C',
+    },
+    {
+      parts: [
+        { text:'The company research is wild — ' },
+        { text:'actual salary ranges, tech stack, and hiring signals', hi:true },
+        { text:'. Walked into my CRED interview more prepared than ever.' },
+      ],
+      name:'Rohan S.', outcome:'Now Platform Engineer at CRED', stars:5, initials:'RS', color:'#0f172a',
+    },
+    {
+      parts: [
+        { text:'JobScorer told me exactly which roles to skip. ' },
+        { text:'Stopped wasting time on mismatched JDs', hi:true },
+        { text:' and landed an interview at Razorpay in week 2.' },
+      ],
+      name:'Sneha T.', outcome:'Now SDE at Razorpay', stars:5, initials:'ST', color:'#135bec',
+    },
+    {
+      parts: [
+        { text:'The gap analysis showed me I needed ' },
+        { text:'Docker and system design basics', hi:true },
+        { text:'. Upskilled in 3 weeks and got shortlisted at Postman.' },
+      ],
+      name:'Karan V.', outcome:'Now Full Stack Engineer at Postman', stars:4, initials:'KV', color:'#7c3aed',
+    },
+    {
+      parts: [
+        { text:'Finally understood why I was getting ghosted. ' },
+        { text:'The fit score report', hi:true },
+        { text:' is brutally honest — and that\'s exactly what I needed.' },
+      ],
+      name:'Meera R.', outcome:'Now Associate Engineer at Infosys', stars:5, initials:'MR', color:'#0891b2',
+    },
+    {
+      parts: [
+        { text:'Scored 15 jobs in one evening. ' },
+        { text:'The batch scoring saved me hours', hi:true },
+        { text:' and I could see at a glance which ones were actually worth applying to.' },
+      ],
+      name:'Dev P.', outcome:'Now Senior Engineer at Zepto', stars:5, initials:'DP', color:'#059669',
+    },
+    {
+      parts: [
+        { text:'Interview prep + STAR stories are ' },
+        { text:'genuinely better than anything I found on YouTube', hi:true },
+        { text:'. Got my Swiggy offer after bombing 6 previous interviews.' },
+      ],
+      name:'Ananya B.', outcome:'Now SDE-2 at Swiggy', stars:5, initials:'AB', color:'#b45309',
+    },
+  ];
+
+  const Stars = ({count}) => (
+    <div style={{display:'flex', gap:2}}>
+      {[1,2,3,4,5].map(i => (
+        <svg key={i} width="16" height="16" viewBox="0 0 24 24">
+          <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"
+            fill={i<=count ? STAR_COLOR : '#e2e8f0'} />
+        </svg>
+      ))}
+    </div>
+  );
+
+  const Card = ({r}) => (
+    <div style={{
+      width:320, flexShrink:0,
+      background:'#fff', borderRadius:18,
+      border:'1px solid #e4e4e7',
+      padding:'28px 26px 22px',
+      boxShadow:'0 2px 12px rgba(15,23,42,0.06)',
+      display:'flex', flexDirection:'column', justifyContent:'space-between',
+      userSelect:'none',
+    }}>
+      {/* Quote */}
+      <p style={{fontSize:15, color:'#111827', lineHeight:1.65, marginBottom:28, fontFamily:SANS}}>
+        {r.parts.map((p,i) => p.hi
+          ? <mark key={i} style={{background:'#e4e4e7', color:'inherit', borderRadius:3, padding:'1px 2px', textDecoration:'underline', textDecorationColor:'#aaa', textUnderlineOffset:2}}>{p.text}</mark>
+          : <span key={i}>{p.text}</span>
+        )}
+      </p>
+      {/* Footer */}
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
+        <div style={{display:'flex', alignItems:'center', gap:10}}>
+          <div style={{width:40, height:40, borderRadius:'50%', background:r.color, display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,.9)', fontSize:13, fontWeight:700, flexShrink:0, fontFamily:SANS}}>
+            {r.initials}
+          </div>
+          <div>
+            <div style={{fontWeight:700, fontSize:14, color:'#111827', fontFamily:SANS}}>{r.name}</div>
+            <div style={{fontSize:12, color:C.success, fontWeight:600, marginTop:2, fontFamily:SANS}}>{r.outcome}</div>
+          </div>
+        </div>
+        <Stars count={r.stars} />
+      </div>
+    </div>
+  );
+
+  // ── Marquee engine: rAF-driven so we can pause + manually nudge ──
+  const trackRef = React.useRef(null);
+  const offsetRef = React.useRef(0);
+  const pausedRef = React.useRef(false);
+  const halfRef = React.useRef(0);
+  const [paused, setPaused] = React.useState(false);
+  const SPEED = 28; // px/sec — slowed from the old 36s loop
+
+  React.useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const measure = () => { halfRef.current = track.scrollWidth / 2; };
+    measure();
+    window.addEventListener('resize', measure);
+    let raf, last = null;
+    const tick = (t) => {
+      if (last === null) last = t;
+      const dt = (t - last) / 1000; last = t;
+      if (!pausedRef.current && halfRef.current > 0) {
+        offsetRef.current += SPEED * dt;
+        if (offsetRef.current >= halfRef.current) offsetRef.current -= halfRef.current;
+        if (offsetRef.current < 0) offsetRef.current += halfRef.current;
+        track.style.transform = `translateX(${-offsetRef.current}px)`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure); };
+  }, []);
+
+  const setPause = (v) => { pausedRef.current = v; setPaused(v); };
+  const nudge = (dir) => {
+    const half = halfRef.current || 1;
+    let next = offsetRef.current + dir * 348; // one card (320) + gap (20) + a hair
+    if (next >= half) next -= half;
+    if (next < 0) next += half;
+    offsetRef.current = next;
+    if (trackRef.current) trackRef.current.style.transform = `translateX(${-next}px)`;
+  };
+
+  const arrowBtn = {
+    width:44, height:44, borderRadius:'50%', border:`1px solid ${C.border}`,
+    background:'#fff', color:C.text, display:'flex', alignItems:'center', justifyContent:'center',
+    cursor:'pointer', boxShadow:'0 2px 8px rgba(15,23,42,0.10)', flexShrink:0,
+    transition:'background .15s, border-color .15s, transform .15s',
+  };
+
+  return (
+    <section style={{padding:'80px 0', background:'#f4f4f5', overflow:'hidden'}}>
+      {/* Header */}
+      <div style={{textAlign:'center', marginBottom:48, padding:'0 32px'}}>
+        <h2 style={{fontFamily:SANS, fontSize:'clamp(2rem,3.5vw,2.75rem)', fontWeight:800, letterSpacing:'-0.03em', color:C.primary, marginBottom:8}}>Our Testimonials</h2>
+        <p style={{fontFamily:SANS, fontSize:'clamp(1rem,1.5vw,1.125rem)', color:C.textSec, marginBottom:0}}>Real engineers. Real callbacks.</p>
+      </div>
+
+      {/* Marquee + manual controls */}
+      <style>{`
+        .testim-arrow:hover { background:#135bec !important; color:#fff !important; border-color:#135bec !important; transform:translateY(-1px); }
+        .testim-arrow:focus-visible { outline:3px solid #135bec; outline-offset:2px; }
+        .testim-scroller:focus-visible { outline:3px solid #135bec; outline-offset:4px; border-radius:14px; }
+      `}</style>
+
+      <div style={{display:'flex', alignItems:'center', gap:16, maxWidth:'100%'}}>
+        {/* Prev */}
+        <button
+          className="testim-arrow" style={{...arrowBtn, marginLeft:'clamp(12px,3vw,40px)'}}
+          aria-label="Previous testimonials" onClick={() => nudge(-1)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+
+        {/* Scroller */}
+        <div
+          className="testim-scroller"
+          tabIndex={0}
+          role="group"
+          aria-label="Customer testimonials. Hover or focus to pause auto-scroll. Use arrow buttons to navigate."
+          onMouseEnter={() => setPause(true)}
+          onMouseLeave={() => setPause(false)}
+          onFocus={() => setPause(true)}
+          onBlur={() => setPause(false)}
+          onKeyDown={(e) => { if(e.key==='ArrowRight'){e.preventDefault();nudge(1);} if(e.key==='ArrowLeft'){e.preventDefault();nudge(-1);} }}
+          style={{flex:1, overflow:'hidden', WebkitMaskImage:'linear-gradient(90deg,transparent 0%,black 6%,black 94%,transparent 100%)', maskImage:'linear-gradient(90deg,transparent 0%,black 6%,black 94%,transparent 100%)'}}
+        >
+          <div ref={trackRef} className="testim-track" style={{display:'flex', gap:20, width:'max-content', padding:'8px 0 16px', willChange:'transform'}}>
+            {/* Duplicate for seamless loop */}
+            {[...REVIEWS, ...REVIEWS].map((r, i) => <Card key={i} r={r} />)}
+          </div>
+        </div>
+
+        {/* Next */}
+        <button
+          className="testim-arrow" style={{...arrowBtn, marginRight:'clamp(12px,3vw,40px)'}}
+          aria-label="Next testimonials" onClick={() => nudge(1)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ─── Pricing (full page) ──────────────────────────────────────────────────
+function PricingTeaser() {
+  const [isYearly, setIsYearly] = React.useState(false);
+  const [faqOpen, setFaqOpen] = React.useState(null);
+  const INTER = "'Inter', 'Plus Jakarta Sans', system-ui, sans-serif";
+
+  const PLANS = [
+    {
+      id:'free', name:'Free', tagline:'Test the waters, no card needed',
+      monthlyPrice:'₹0', yearlyPrice:'₹0',
+      monthlyLabel:'forever', yearlyLabel:'forever',
+      yearlySaving: null,
+      badge:null, hero:false,
+      cta:'Upload your resume — free →', href:'/signup',
+      features:['3 job searches / month','1 AI resume generation','2 company researches','5 AI chat messages','Basic scoring overview','1 application tracked'],
+    },
+    {
+      id:'starter', name:'Starter', tagline:'Apply with more confidence',
+      monthlyPrice:'₹199', yearlyPrice:'₹1,799',
+      monthlyLabel:'/month', yearlyLabel:'/year',
+      yearlySaving:'You save ₹589 vs monthly',
+      badge:null, hero:false,
+      cta:'Start Starter Plan →', href:'/signup',
+      features:['15 job searches / month','5 AI resume generations','10 company researches','50 AI chat messages','Unlimited application tracking','Skill gap insights','Email job notifications','Weekly match updates'],
+    },
+    {
+      id:'pro', name:'Pro', tagline:'Land interviews faster',
+      monthlyPrice:'₹299', yearlyPrice:'₹2,499',
+      monthlyLabel:'/month', yearlyLabel:'/year',
+      yearlySaving:'You save ₹1,089 vs monthly',
+      badge:'⭐ RECOMMENDED', hero:true,
+      cta:'Start Pro Plan →', href:'/signup',
+      features:['50 job searches / month','15 AI resume generations','30 company researches','Unlimited AI chat','Priority AI job matching','Advanced analytics dashboard','Weekly career insights report','Interview prep + STAR stories','Ghost job detection','Real-time job alerts'],
+    },
+    {
+      id:'power', name:'Max', tagline:'Go all-in on your search',
+      monthlyPrice:'₹599', yearlyPrice:'₹4,999',
+      monthlyLabel:'/month', yearlyLabel:'/year',
+      yearlySaving:'You save ₹2,189 vs monthly',
+      badge:null, hero:false,
+      cta:'Start Max Plan →', href:'/signup',
+      features:['Unlimited everything','1-on-1 monthly career consultation','WhatsApp priority support','Beta features early access','Mock interview AI practice','Salary negotiation intelligence','LinkedIn profile optimization','Dedicated success manager'],
+    },
+  ];
+
+  const TABLE_ROWS = [
+    { section:'Core Features' },
+    { label:'Job Searches/month',        vals:['3','15','50','Unlimited'] },
+    { label:'AI Resume Generations',     vals:['1','5','15','Unlimited'] },
+    { label:'Company Researches',        vals:['2','10','30','Unlimited'] },
+    { label:'AI Chat Messages',          vals:['5','50','Unlimited','Unlimited'] },
+    { label:'Application Tracking',      vals:['1','Unlimited','Unlimited','Unlimited'] },
+    { section:'AI Intelligence' },
+    { label:'Resume fit score',         vals:['✅','✅','✅','✅'] },
+    { label:'Job Match Scoring',         vals:['Basic','Full','Priority','Priority'] },
+    { label:'Skill Gap Analysis',        vals:['❌','✅','✅','✅'] },
+    { label:'Ghost Job Detection',       vals:['❌','❌','✅','✅'] },
+    { label:'Company Intelligence',      vals:['Basic','Full','Full','Advanced'] },
+    { label:'Career Path Insights',      vals:['❌','❌','✅','✅'] },
+    { section:'Productivity' },
+    { label:'Email Notifications',       vals:['❌','✅','✅','✅'] },
+    { label:'Real-time Job Alerts',      vals:['❌','❌','✅','✅'] },
+    { label:'Weekly Career Report',      vals:['❌','❌','✅','✅'] },
+    { label:'Interview Prep',            vals:['❌','❌','✅','✅'] },
+    { label:'STAR Story Generation',     vals:['❌','❌','✅','✅'] },
+    { section:'Support' },
+    { label:'Support Type',              vals:['Email','Email','Email','WhatsApp'] },
+    { label:'Response Time',             vals:['48 hrs','24 hrs','12 hrs','2 hrs'] },
+    { label:'Monthly Consultation',      vals:['❌','❌','❌','✅'] },
+    { label:'Success Manager',           vals:['❌','❌','❌','✅'] },
+  ];
+
+  const FAQS = [
+    { q:'Is my resume data private?', a:'Yes. Your resume is encrypted at rest, never shared with third parties, and never used to train AI models. We process it only to generate your fit scores and optimizations. You can delete your data any time from account settings.' },
+    { q:'Will the AI-rewritten resume actually pass real ATS systems?', a:'Yes — we test every output against the ATS patterns used by Naukri, LinkedIn, Workday, and Greenhouse. No tables, no text boxes, no headers that scanners choke on. Single-column, clean, machine-readable PDF.' },
+    { q:'Can I switch plans anytime?', a:'Yes. Upgrade or downgrade anytime. Upgrades take effect immediately. Downgrades apply at the next billing cycle.' },
+    { q:'Is there a free trial for paid plans?', a:'Our Free plan is a permanent free tier — no time limit. It gives you enough to experience the value. Upgrade when you need more fit scores.' },
+    { q:'How does the 7-day refund work?', a:'Not satisfied within 7 days of upgrading? Email hello@jobscorer.in for a full refund. No questions asked.' },
+    { q:'Do unused searches carry over monthly?', a:'Searches and generations reset each month. Unused credits do not carry over to the next cycle.' },
+    { q:'What payment methods do you accept?', a:'All UPI apps (GPay, PhonePe, Paytm), credit cards, debit cards, and net banking via Razorpay. 256-bit SSL secured.' },
+  ];
+
+  const DARK = '#0f172a';
+  const DARK2 = '#f1f5f9';
+  const DIM = '#64748b';
+  const WHITE = '#ffffff';
+  const EASE = 'cubic-bezier(0.22,0.65,0.28,1)';
+
+  const Check = ({color}) => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0,marginTop:1}}>
+      <path d="M5 13l4 4L19 7" stroke={color||C.success} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+
+  return (
+    <section id="pricing" style={{background:WHITE, fontFamily:INTER}}>
+
+      {/* ① HEADER + CARDS */}
+      <div style={{padding:'96px 0 72px'}}>
+        <div style={{maxWidth:1240, margin:'0 auto', padding:'0 32px'}}>
+          {/* Badge + headline */}
+          <div style={{textAlign:'center', marginBottom:52}}>
+            <span style={{display:'inline-block', padding:'5px 16px', borderRadius:999, background:C.primaryLight, color:C.primary, fontFamily:MONO, fontSize:11, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', marginBottom:16}}>Simple Pricing</span>
+            <h2 style={{fontFamily:INTER, fontSize:'clamp(2rem,4vw,2.75rem)', fontWeight:700, letterSpacing:'-0.03em', color:DARK, marginBottom:14, lineHeight:1.1}}>Choose your JobScorer plan</h2>
+            <p style={{fontSize:16, color:DIM, maxWidth:440, margin:'0 auto 32px', lineHeight:1.65}}>Start free. Upgrade when you're ready.<br/>No hidden fees. Cancel anytime.</p>
+            {/* Toggle */}
+            <div style={{display:'inline-flex', alignItems:'center', gap:12, padding:'8px 8px 8px 20px', background:DARK2, borderRadius:999, border:`1px solid ${C.border}`}}>
+              <span style={{fontSize:14, fontWeight: isYearly?500:700, color: isYearly?DIM:C.primary, transition:'color .2s, font-weight .2s'}}>Monthly</span>
+              <div role="switch" aria-checked={isYearly} tabIndex={0} onClick={()=>setIsYearly(v=>!v)} onKeyDown={e=>e.key===' '&&setIsYearly(v=>!v)}
+                style={{position:'relative', width:44, height:24, borderRadius:999, background:isYearly?C.primary:C.border, cursor:'pointer', transition:`background .2s ${EASE}`, flexShrink:0}}>
+                <div style={{position:'absolute', top:3, left:isYearly?23:3, width:18, height:18, borderRadius:'50%', background:WHITE, boxShadow:'0 1px 4px rgba(0,0,0,.18)', transition:`left .2s ${EASE}`}} />
+              </div>
+              <span style={{fontSize:14, fontWeight: isYearly?700:500, color:isYearly?C.primary:DIM, transition:'color .2s, font-weight .2s'}}>Annual</span>
+              <span style={{padding:'4px 12px', background:'#ecfdf5', color:C.success, border:'1px solid #a7f3d0', borderRadius:999, fontSize:11, fontWeight:700, fontFamily:MONO}}>2 months free</span>
+            </div>
+          </div>
+
+          {/* 4 Cards */}
+          <div className="pricing-cards" style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, alignItems:'stretch'}}>
+            {PLANS.map(plan => (
+              <div key={plan.id} style={{
+                background: plan.hero ? C.primary : WHITE,
+                border: plan.hero ? 'none' : `1px solid ${C.border}`,
+                borderRadius:20,
+                padding:'32px 28px',
+                display:'flex', flexDirection:'column',
+                boxShadow: plan.hero ? '0 20px 60px -12px rgba(19,91,236,0.45)' : '0 2px 8px rgba(15,23,42,0.06)',
+                position:'relative',
+                transform: plan.hero ? 'translateY(-12px) scale(1.02)' : 'none',
+                zIndex: plan.hero ? 2 : 1,
+                transition:`box-shadow .25s ${EASE}, transform .25s ${EASE}, border-color .25s ${EASE}`,
+                cursor:'default',
+              }}
+                onMouseEnter={e=>{
+                  if(plan.hero){
+                    e.currentTarget.style.transform='translateY(-18px) scale(1.03)';
+                    e.currentTarget.style.boxShadow='0 32px 80px -12px rgba(19,91,236,0.60)';
+                  } else {
+                    e.currentTarget.style.transform='translateY(-6px)';
+                    e.currentTarget.style.boxShadow='0 16px 40px -8px rgba(15,23,42,0.16)';
+                    e.currentTarget.style.borderColor=C.primary;
+                  }
+                }}
+                onMouseLeave={e=>{
+                  if(plan.hero){
+                    e.currentTarget.style.transform='translateY(-12px) scale(1.02)';
+                    e.currentTarget.style.boxShadow='0 20px 60px -12px rgba(19,91,236,0.45)';
+                  } else {
+                    e.currentTarget.style.transform='none';
+                    e.currentTarget.style.boxShadow='0 2px 8px rgba(15,23,42,0.06)';
+                    e.currentTarget.style.borderColor=C.border;
+                  }
+                }}
+              >
+                {/* Badge — always reserve height for alignment */}
+                <div style={{marginBottom:14, minHeight:26}}>
+                  {plan.badge && (
+                    <span style={{padding:'3px 12px', borderRadius:999, fontSize:11, fontWeight:700, fontFamily:MONO, letterSpacing:'0.06em',
+                      background: plan.hero ? 'rgba(255,255,255,.15)' : C.primaryLight,
+                      color: plan.hero ? WHITE : C.primary,
+                      border: plan.hero ? '1px solid rgba(255,255,255,.25)' : `1px solid #bdd0fa`,
+                    }}>{plan.badge}</span>
+                  )}
+                </div>
+                <h3 style={{fontFamily:INTER, fontWeight:700, fontSize:24, color:plan.hero?WHITE:DARK, letterSpacing:'-0.02em', marginBottom:4}}>{plan.name}</h3>
+                <p style={{fontSize:13, color:plan.hero?'rgba(255,255,255,.72)':DIM, marginBottom:0, lineHeight:'20px', height:20, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{plan.tagline}</p>
+                {/* Price + savings — fixed height so CTAs align across all cards */}
+                <div style={{height:96, display:'flex', flexDirection:'column', justifyContent:'flex-start', marginBottom:20, marginTop:20}}>
+                  <div style={{display:'flex', alignItems:'baseline', gap:4, marginBottom:6}}>
+                    <span style={{fontFamily:INTER, fontWeight:700, fontSize:48, letterSpacing:'-0.04em', lineHeight:1, fontVariantNumeric:'tabular-nums', color:plan.hero?WHITE:DARK}}>
+                      {isYearly ? plan.yearlyPrice : plan.monthlyPrice}
+                    </span>
+                    {plan.id!=='free' && <span style={{fontSize:14, color:plan.hero?'rgba(255,255,255,.6)':DIM, fontWeight:400}}>{isYearly ? plan.yearlyLabel : plan.monthlyLabel}</span>}
+                  </div>
+                  {isYearly && plan.yearlySaving && (
+                    <p style={{fontSize:12, fontWeight:600, fontFamily:MONO, letterSpacing:'0.03em', margin:'8px 0 0',
+                      color: plan.hero ? 'rgba(255,255,255,0.75)' : C.success,
+                    }}>{plan.yearlySaving}</p>
+                  )}
+                </div>
+                {/* CTA */}
+                <a href={plan.href} style={{
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  height:48, borderRadius:999, marginBottom:28,
+                  background: plan.hero ? WHITE : DARK,
+                  color: plan.hero ? C.primary : WHITE,
+                  fontSize:14, fontWeight:700, fontFamily:INTER, whiteSpace:'nowrap',
+                  textDecoration:'none', transition:`all .2s ${EASE}`,
+                  boxShadow: plan.hero ? '0 2px 8px rgba(0,0,0,.10)' : 'none',
+                }}
+                  onMouseEnter={e=>{e.currentTarget.style.opacity='.88';e.currentTarget.style.transform='translateY(-1px)';}}
+                  onMouseLeave={e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.transform='none';}}
+                >{plan.cta}</a>
+                {/* Divider */}
+                <div style={{height:1, background:plan.hero?'rgba(255,255,255,.18)':C.border, marginBottom:20}} />
+                {/* Features */}
+                <ul style={{display:'flex', flexDirection:'column', gap:10, padding:0, listStyle:'none', flex:1}}>
+                  {plan.features.map((f,fi)=>(
+                    <li key={fi} style={{display:'flex', alignItems:'flex-start', gap:10, fontSize:13, color:plan.hero?'rgba(255,255,255,.85)':C.textSec, lineHeight:1.4}}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{flexShrink:0,marginTop:1}}>
+                        <path d="M5 13l4 4L19 7" stroke={plan.hero?WHITE:C.success} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p style={{textAlign:'center', fontSize:13, color:C.textTer, marginTop:40, fontFamily:INTER}}>No credit card required · Cancel anytime · Built in India 🇮🇳</p>
+        </div>
+      </div>
+
+      {/* ② COMPARISON TABLE */}
+      <div style={{background:C.bg, padding:'80px 0'}}>
+        <div style={{maxWidth:1100, margin:'0 auto', padding:'0 32px'}}>
+          <h3 style={{fontFamily:INTER, fontSize:'clamp(1.5rem,3vw,2rem)', fontWeight:700, letterSpacing:'-0.03em', color:DARK, textAlign:'center', marginBottom:48}}>See everything that's included</h3>
+          <div className="cmp-table-wrap" style={{overflowX:'visible', background:WHITE, borderRadius:18, border:`1px solid ${C.border}`, boxShadow:'0 4px 24px rgba(15,23,42,0.05)', padding:'8px 8px 16px'}}>
+            <table className="cmp-table" style={{width:'100%', borderCollapse:'collapse', fontFamily:INTER}}>
+              <thead>
+                <tr>
+                  <th style={{textAlign:'left', padding:'14px 16px', fontSize:13, fontWeight:700, color:DARK, width:'36%', position:'sticky', top:64, zIndex:5, background:WHITE, borderBottom:`2px solid ${C.border}`}}>Feature</th>
+                  {PLANS.map(p=>(
+                    <th key={p.id} style={{textAlign:'center', padding:'14px 16px', fontSize:13, fontWeight:700, color:p.hero?C.primary:DARK, width:'16%', position:'sticky', top:64, zIndex:5, background:p.hero?'#eef4ff':WHITE, borderBottom:`2px solid ${p.hero?C.primary:C.border}`, borderTopLeftRadius:p.hero?10:0, borderTopRightRadius:p.hero?10:0}}>
+                      {p.name}{p.hero&&<span style={{display:'block', fontSize:10, fontFamily:MONO, color:C.primary, letterSpacing:'0.08em'}}>★ RECOMMENDED</span>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {TABLE_ROWS.map((row, ri) => row.section ? (
+                  <tr key={ri}>
+                    <td style={{padding:'20px 16px 8px', fontSize:11, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', color:C.primary, fontFamily:MONO}}>{row.section}</td>
+                    {PLANS.map((p,pi)=>(
+                      <td key={pi} style={{background:p.hero?'#eef4ff':'transparent'}} />
+                    ))}
+                  </tr>
+                ) : (
+                  <tr key={ri} style={{borderBottom:`1px solid ${C.borderFaint||'#f1f5f9'}`}}>
+                    <td style={{padding:'12px 16px', fontSize:14, color:DIM, background: ri%2===0?'transparent':'rgba(248,250,252,.5)'}}>{row.label}</td>
+                    {row.vals.map((v,vi)=>(
+                      <td key={vi} style={{textAlign:'center', padding:'12px 16px', fontSize:14, fontWeight: (v==='✅'||v==='❌') ? 400 : 500,
+                        color: v==='✅'?C.success : v==='❌'?C.textTer : PLANS[vi].hero?C.primary:DARK,
+                        background: PLANS[vi].hero ? '#eef4ff' : (ri%2===0?'transparent':'rgba(248,250,252,.5)'),
+                      }}>
+                        {v==='✅' ? (
+                          <span style={{display:'inline-flex', alignItems:'center', justifyContent:'center', width:26, height:26, borderRadius:'50%', background:'#dcfce7', border:`1.5px solid #86efac`}}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                              <path d="M5 13l4 4L19 7" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </span>
+                        ) : v==='❌' ? (
+                          <span style={{display:'inline-block', width:14, height:2.5, borderRadius:2, background:'#cbd5e1'}} />
+                        ) : v}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* ③ TRUST BADGES */}
+      <div style={{background:C.bg, padding:'56px 0', borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`}}>
+        <div style={{maxWidth:920, margin:'0 auto', padding:'0 32px', display:'flex', alignItems:'stretch', justifyContent:'center', gap:0, flexWrap:'wrap'}}>
+          {[
+            { icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>, title:'Secure Payments', sub:'Powered by Razorpay · 256-bit SSL' },
+            { icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>, title:'7-Day Money Back', sub:'No questions asked · Full refund' },
+            { icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>, title:'Cancel Anytime', sub:'No lock-ins · Pause instantly' },
+          ].map((b,i)=>(
+            <React.Fragment key={i}>
+              {i>0 && <div className="trust-divider" style={{width:1, alignSelf:'center', height:48, background:C.border}} />}
+              <div style={{flex:'1 1 240px', display:'flex', alignItems:'center', gap:14, padding:'12px 28px', justifyContent:'center'}}>
+                <div style={{width:44, height:44, borderRadius:11, background:C.primaryLight, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>{b.icon}</div>
+                <div>
+                  <div style={{fontFamily:INTER, fontWeight:700, fontSize:14.5, color:DARK, marginBottom:3}}>{b.title}</div>
+                  <div style={{fontSize:12.5, color:DIM, lineHeight:1.4}}>{b.sub}</div>
+                </div>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+      <style>{`@media(max-width:680px){ .trust-divider{ display:none !important; } }`}</style>
+
+      {/* ④ FAQ */}
+      <div style={{background:C.bg, padding:'80px 0'}}>
+        <div style={{maxWidth:800, margin:'0 auto', padding:'0 32px'}}>
+          <h3 style={{fontFamily:INTER, fontSize:'clamp(1.5rem,3vw,2rem)', fontWeight:700, letterSpacing:'-0.03em', color:DARK, textAlign:'center', marginBottom:40}}>Frequently Asked Questions</h3>
+          <div style={{display:'flex', flexDirection:'column', gap:10}}>
+            {FAQS.map((faq,fi)=>(
+              <div key={fi} style={{background:WHITE, borderRadius:12, border:`1px solid ${C.border}`, overflow:'hidden', transition:`box-shadow .2s ${EASE}`}}
+                onMouseEnter={e=>e.currentTarget.style.boxShadow='0 2px 12px rgba(15,23,42,0.08)'}
+                onMouseLeave={e=>e.currentTarget.style.boxShadow='none'}
+              >
+                <button onClick={()=>setFaqOpen(faqOpen===fi?null:fi)} style={{width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'24px 28px', background:'none', border:'none', cursor:'pointer', fontFamily:INTER, fontSize:18.5, fontWeight:600, color:DARK, textAlign:'left', gap:18}}>
+                  {faq.q}
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{flexShrink:0, transition:`transform .25s ${EASE}`, transform:faqOpen===fi?'rotate(180deg)':'none'}}>
+                    <path d="M6 9l6 6 6-6" stroke={C.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                {faqOpen===fi && (
+                  <div style={{padding:'0 28px 24px', fontSize:15.5, color:DIM, lineHeight:1.75}}>{faq.a}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+    </section>
+  );
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────
+function Footer() {
+  const cols = [
+    { t:'Product',       ls:['Browse Jobs','Upload Resume','AI Matching','ATS Intelligence','Resume Optimizer','App Tracker'] },
+    { t:'Company',       ls:['About','Blog','Careers','Contact'] },
+    { t:'Legal',         ls:['Privacy Policy','Terms of Service','Cookie Policy'] },
+  ];
+  return (
+    <footer style={{ background:C.bg, borderTop:`1px solid ${C.border}`, padding:'56px 32px 32px' }}>
+      <div style={{ maxWidth:1200, margin:'0 auto' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1.6fr repeat(3,1fr)', gap:40, marginBottom:40 }}>
+          <div>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+              <div style={{ width:28, height:28, borderRadius:6, background:C.primary, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:800, fontSize:'0.8125rem' }}>J</div>
+              <span style={{ fontFamily:SANS, fontWeight:700, fontSize:'0.9375rem', color:C.text }}>JobScorer</span>
+            </div>
+            <p style={{ fontSize:'0.8125rem', lineHeight:1.7, color:C.textSec, maxWidth:200, marginBottom:16 }}>AI-powered job matching for Indian IT freshers. Score, optimize, track.</p>
+            <p style={{ fontSize:'0.75rem', color:C.textTer, display:'flex', alignItems:'center', gap:5 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.textTer} strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              We never share your resume
+            </p>
+          </div>
+          {cols.map(col => (
+            <div key={col.t}>
+              <div style={{ fontFamily:MONO, fontSize:'0.5625rem', fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', color:C.textTer, marginBottom:14 }}>{col.t}</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+                {col.ls.map(l => <a key={l} href="#" style={{ fontSize:'0.8125rem', color:C.textSec, textDecoration:'none', transition:'color 0.15s' }} onMouseEnter={e=>e.currentTarget.style.color=C.text} onMouseLeave={e=>e.currentTarget.style.color=C.textSec}>{l}</a>)}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:20, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
+          <p style={{ fontSize:'0.75rem', color:C.textTer }}>© 2026 JobScorer. All rights reserved. Built in India 🇮🇳</p>
+          <p style={{ fontFamily:MONO, fontSize:'0.5625rem', letterSpacing:'0.1em', textTransform:'uppercase', color:C.textTer }}>No credit card required · Cancel anytime</p>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+// ─── Features data + receipt router ──────────────────────────────────────
+const FEATS = [
+  { n:'01', label:'AI Match Scoring',     title:'Know your odds before you apply.',         desc:'Two-stage RAG pipeline: fast SQL pre-filter, then GPT-4o scores top candidates with full AI reasoning. Not keyword matching — actual fit, explained.',           proof:['84% accuracy vs. manual shortlisting in internal testing','Match · Gap · Verdict AI reasoning for every job','Scored against your specific resume, not a generic profile'],  r:'match',   side:'right' },
+  { n:'02', label:'ATS Intelligence',     title:'See exactly what the ATS sees.',            desc:'Most rejections happen before a human reads your PDF. We surface keyword density, phrase gaps, and a HIGH / MED / LOW callback prediction — so you fix it first.', proof:['Hits-vs-gaps in a live two-column readout','HIGH / MEDIUM / LOW callback verdict per role','Top keyword gap + strongest bullet — always actionable'],                  r:'ats',     side:'left'  },
+  { n:'03', label:'Resume Optimization',  title:'Before → after rewrites, per JD.',          desc:'Vague bullets get buried. AI rewrites each experience bullet to mirror the job description — adding specificity and keywords ATS systems reward.',                  proof:['Before-and-after bullet diff view for every experience entry','4 ATS-safe PDF export templates','Tailored resume generates in ~30 seconds per job'],               r:'resume',  side:'right' },
+  { n:'04', label:'Application Tracker',  title:'Your entire job hunt in one kanban.',       desc:'Applied, Interview, Offer, Rejected — all in one board. Per-role interview prep checklists generated automatically. Confetti when you land an offer. You earned it.', proof:['4-column kanban: Applied / Interview / Offer / Rejected','Per-role interview prep checklist auto-generated','Application timeline with status history and notes'],          r:'kanban',  side:'left'  },
+  { n:'05', label:'Company Intelligence', title:'Insider prep before the interview.',        desc:'Firecrawl scrapes engineering blogs, job postings, and public data automatically. Get tech stack, culture signals, India salary bands, and hiring signals per match.', proof:['Real-time Firecrawl web research on every scored match','India-specific salary bands in ₹ LPA, not vague ranges','Hiring signals extracted from recent engineering blog posts'],    r:'company', side:'right' },
+  { n:'06', label:'Paste Any Job',        title:'Score any JD in 10 seconds.',              desc:'Found something on Naukri, LinkedIn, Instahyre, or a referral email? Paste the raw JD. Get an instant match score, full reasoning, and an optimization path.',       proof:['Works with any job source — paste raw text, no formatting','Naukri, LinkedIn, Instahyre, Internshala, referrals all work','Score + reasoning + optimized resume path in under 10 s'],     r:'paste',   side:'left'  },
+];
+
+function getReceipt(r) {
+  const m = { match:window.MatchScoreReceipt, ats:window.ATSIntelReceipt, resume:window.ResumeOptReceipt, kanban:window.KanbanReceipt, company:window.CompanyIntelReceipt, paste:window.PasteJobReceipt };
+  const Comp = m[r];
+  return Comp ? <Comp /> : null;
+}
+
+// Variation A: hairline-divided rows, mono step labels ────────────────────
+function FeaturesA() {
+  return (
+    <section style={{ padding:'80px 0', background:C.bg }}>
+      <div style={{ maxWidth:1200, margin:'0 auto', padding:'0 32px' }}>
+        <div style={{ marginBottom:64 }}>
+          <Eyebrow color={C.primary}>What it does</Eyebrow>
+          <h2 style={{ fontFamily:SANS, fontSize:'clamp(1.75rem,3vw,2.5rem)', fontWeight:800, letterSpacing:'-0.03em', color:C.text, lineHeight:1.15, maxWidth:520 }}>Six tools. One focused mission.</h2>
+        </div>
+        {FEATS.map((f,i) => (
+          <div key={f.n} className="feat-row" style={{ display:'flex', flexDirection:f.side==='right'?'row':'row-reverse', gap:64, alignItems:'center', padding:'60px 0', borderBottom:i<FEATS.length-1?`1px solid ${C.border}`:'none' }}>
+            <div style={{ flex:'0 0 auto', width:'46%', display:'flex', justifyContent:'center' }}>{getReceipt(f.r)}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+                <span style={{ fontFamily:MONO, fontWeight:800, fontSize:'0.75rem', color:C.primary }}>{f.n}</span>
+                <div style={{ flex:1, height:1, background:C.border }} />
+                <span style={{ fontFamily:MONO, fontSize:'0.625rem', fontWeight:700, letterSpacing:'0.18em', textTransform:'uppercase', color:C.textTer }}>{f.label}</span>
+              </div>
+              <h3 style={{ fontFamily:SANS, fontSize:'clamp(1.25rem,2.5vw,1.75rem)', fontWeight:800, letterSpacing:'-0.02em', color:C.text, lineHeight:1.2, marginBottom:12 }}>{f.title}</h3>
+              <p style={{ fontSize:'0.9375rem', color:C.textSec, lineHeight:1.75, marginBottom:20 }}>{f.desc}</p>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {f.proof.map((p,j) => (
+                  <div key={j} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.success} strokeWidth="2.5" style={{ flexShrink:0, marginTop:3 }}><path d="M5 12l5 5L20 7"/></svg>
+                    <span style={{ fontSize:'0.875rem', color:C.textSec, lineHeight:1.6 }}>{p}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// Variation B: alternating section bg, pill labels ────────────────────────
+function FeaturesB() {
+  return (
+    <section style={{ padding:'40px 0 0' }}>
+      {FEATS.map((f,i) => (
+        <div key={f.n} style={{ background:i%2===0?C.bg:C.surface, padding:'72px 32px' }}>
+          <div className="feat-row" style={{ maxWidth:1200, margin:'0 auto', display:'flex', flexDirection:f.side==='right'?'row':'row-reverse', gap:72, alignItems:'center' }}>
+            <div style={{ flex:'0 0 auto', width:'46%', display:'flex', justifyContent:'center' }}>{getReceipt(f.r)}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'4px 12px', borderRadius:9999, background:C.primaryLight, color:C.primary, fontSize:'0.6875rem', fontWeight:700, marginBottom:16, fontFamily:MONO, letterSpacing:'0.06em' }}>{f.n} · {f.label}</div>
+              <h3 style={{ fontFamily:SANS, fontSize:'clamp(1.375rem,2.5vw,2rem)', fontWeight:800, letterSpacing:'-0.03em', color:C.text, lineHeight:1.15, marginBottom:14 }}>{f.title}</h3>
+              <p style={{ fontSize:'0.9375rem', color:C.textSec, lineHeight:1.75, marginBottom:24 }}>{f.desc}</p>
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {f.proof.map((p,j) => (
+                  <div key={j} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                    <div style={{ width:18, height:18, borderRadius:5, flexShrink:0, marginTop:2, background:C.successBg, border:`1px solid ${C.successBorder}`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.success} strokeWidth="3"><path d="M5 12l5 5L20 7"/></svg>
+                    </div>
+                    <span style={{ fontSize:'0.875rem', color:C.textSec, lineHeight:1.6 }}>{p}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+// ─── Hero ─────────────────────────────────────────────────────────────────
+function Hero() {
+  return (
+    <section style={{ padding:'128px 24px 64px', background:C.bg, overflow:'hidden' }}>
+      <div style={{ maxWidth:680, margin:'0 auto', textAlign:'center' }}>
+
+        {/* Kicker badge */}
+        <div className="fade-hero fh1" style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'5px 14px', borderRadius:999, background:C.primaryLight, border:`1px solid ${C.primary}22`, marginBottom:24 }}>
+          <div style={{ width:6, height:6, borderRadius:'50%', background:C.success, flexShrink:0 }} />
+          <span style={{ fontFamily:MONO, fontSize:11, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', color:C.primary }}>Built for Indian IT freshers</span>
+        </div>
+
+        {/* Headline */}
+        <h1 className="fade-hero fh2" style={{ fontFamily:SANS, fontSize:'clamp(2.25rem,6vw,3.75rem)', fontWeight:800, letterSpacing:'-0.04em', color:C.text, lineHeight:1.06, marginBottom:20 }}>
+          Land IT jobs in India with a resume tuned to each company you apply to.
+        </h1>
+
+        {/* Subhead */}
+        <p className="fade-hero fh3" style={{ fontSize:'clamp(1rem,2vw,1.125rem)', color:C.textSec, lineHeight:1.7, maxWidth:520, margin:'0 auto 36px' }}>
+          JobScorer matches you to real listings, scores your fit, surfaces your skill gaps, researches the company — then rewrites your resume to that specific role and team.
+        </p>
+
+        {/* Primary CTA — one button only */}
+        <div className="fade-hero fh4">
+          <a href="/signup" style={{
+            display:'inline-flex', alignItems:'center', justifyContent:'center', gap:10,
+            padding:'16px 36px', background:C.primary, color:'white',
+            borderRadius:10, fontSize:16, fontWeight:700, fontFamily:SANS,
+            textDecoration:'none', boxShadow:`0 8px 24px -6px rgba(19,91,236,0.45)`,
+            transition:'all .2s ease',
+          }}
+            onMouseEnter={e=>{e.currentTarget.style.background=C.primaryHover;e.currentTarget.style.transform='translateY(-2px)';}}
+            onMouseLeave={e=>{e.currentTarget.style.background=C.primary;e.currentTarget.style.transform='none';}}
+          >
+            Upload your resume — free
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+          {/* Microlines */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:16, marginTop:10, flexWrap:'wrap' }}>
+            <span style={{ fontSize:13, color:C.textSec, display:'flex', alignItems:'center', gap:5 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.success} strokeWidth="2.2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              We never share your resume
+            </span>
+            <span style={{ fontSize:13, color:C.textTer }}>·</span>
+            <span style={{ fontSize:13, color:C.textSec }}>No credit card required</span>
+          </div>
+          {/* Quiet secondary */}
+          <div style={{ marginTop:16 }}>
+            <a href="#demo" style={{ fontSize:14, color:C.primary, textDecoration:'underline', textUnderlineOffset:3, fontWeight:500, textDecorationColor:`${C.primary}55` }}>
+              See a sample fit score report →
+            </a>
+          </div>
+        </div>
+
+        {/* Trust strip */}
+        <div className="fade-hero fh5" style={{ marginTop:48 }}>
+          <TrustBar />
+        </div>
+      </div>
+
+      {/* 3D Carousel */}
+      <div className="fade-hero fh5" style={{ maxWidth:1400, margin:'56px auto 0', width:'100%' }}>
+        <window.ResumeCarousel3D />
+      </div>
+    </section>
+  );
+}
+// ─── Journey — 7 connected steps (hover-expand horizontal) ───────────────
+function Journey() {
+  const [active, setActive] = React.useState(0);
+  const [isMobile, setIsMobile] = React.useState(false);
+  const EASE = 'cubic-bezier(0.34,1.10,0.64,1)';
+  const railRefs = React.useRef([]);
+  const hoveringRef = React.useRef(false);
+
+  // Single source of truth: which rail card is nearest the viewport center.
+  const recompute = React.useCallback(() => {
+    const mid = window.innerHeight / 2;
+    let best = 0, bestDist = Infinity;
+    railRefs.current.forEach((el, i) => {
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const c = r.top + r.height / 2;
+      const d = Math.abs(c - mid);
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    // Ensure the final step is reachable: once the last card's top crosses the
+    // viewport center, force it active even if its center can't reach mid.
+    const lastEl = railRefs.current[railRefs.current.length - 1];
+    if (lastEl && lastEl.getBoundingClientRect().top <= mid) best = railRefs.current.length - 1;
+    setActive(best);
+  }, []);
+
+  React.useEffect(() => {
+    const mq = window.matchMedia('(max-width:820px)');
+    const u = () => setIsMobile(mq.matches); u();
+    mq.addEventListener('change', u);
+    return () => mq.removeEventListener('change', u);
+  }, []);
+  React.useEffect(() => {
+    if (isMobile) return;
+    let ticking = false;
+    const onScroll = () => {
+      if (hoveringRef.current) return; // hover is a temporary preview override
+      if (!ticking) { ticking = true; requestAnimationFrame(() => { ticking = false; recompute(); }); }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    recompute();
+    return () => { window.removeEventListener('scroll', onScroll); window.removeEventListener('resize', onScroll); };
+  }, [isMobile, recompute]);
+
+  // Mini illustration helpers (match the product feel)
+  const bar = (w, c) => <div style={{ height:5, borderRadius:3, background:c, width:w }} />;
+
+  const ck = (c=C.success) => <svg width="9" height="9" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M5 13l4 4L19 7" stroke={c} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+  const cardSx = { background:'white', borderRadius:9, border:`1px solid ${C.border}`, boxShadow:'0 4px 14px rgba(15,23,42,.08)', width:'100%', maxWidth:'100%', boxSizing:'border-box', overflowWrap:'break-word' };
+  const tag = (t,bg,bd,col) => <span style={{ padding:'2.5px 7px', borderRadius:999, background:bg, border:`1px solid ${bd}`, fontSize:7.5, color:col, fontFamily:MONO, fontWeight:600, whiteSpace:'nowrap' }}>{t}</span>;
+
+  // 01 — Resume being parsed into data chips
+  const illoUpload = (
+    <div style={{ ...cardSx, padding:'13px 15px' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:7, paddingBottom:9, borderBottom:`1px solid ${C.border}`, marginBottom:9 }}>
+        <div style={{ width:18, height:22, borderRadius:3, background:C.primaryLight, border:`1px solid ${C.primary}40`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.4"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+        </div>
+        <span style={{ fontSize:9, fontWeight:700, color:C.text, fontFamily:MONO }}>resume.pdf</span>
+        <span style={{ marginLeft:'auto', fontSize:7.5, color:C.success, fontFamily:MONO, fontWeight:700 }}>PARSING…</span>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+        {[['Skills','React · Node · AWS'],['Experience','1 yr'],['Projects','3'],['Education','B.Tech CSE']].map(([k,v],i)=>(
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:7, padding:'5px 8px', background:'#f8fafc', borderRadius:6, border:`1px solid ${C.border}` }}>
+            {ck()}
+            <span style={{ fontSize:8, color:C.textSec, fontFamily:MONO, fontWeight:600 }}>{k}:</span>
+            <span style={{ fontSize:8, color:C.text, fontWeight:700, marginLeft:'auto' }}>{v}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop:9, textAlign:'center', fontSize:7.5, color:C.primary, fontFamily:MONO, fontWeight:700, letterSpacing:'0.04em' }}>50+ DATA POINTS EXTRACTED</div>
+    </div>
+  );
+
+  // 02 — Job listings with fit-score bars + source tags
+  const illoMatch = (
+    <div style={{ display:'flex', flexDirection:'column', gap:7, width:'100%' }}>
+      {[['Backend Engineer','Naukri','91%',91,C.success,true],['SDE-1 Fullstack','LinkedIn','78%',78,'#d97706',false],['Data Analyst','Instahyre','54%',54,'#94a3b8',false]].map(([r,src,s,pct,c,hot],i)=>(
+        <div key={i} style={{ ...cardSx, padding:'9px 11px', border: hot?`1.5px solid ${C.success}`:`1px solid ${C.border}`, boxShadow: hot?'0 6px 18px rgba(16,185,129,.18)':'0 3px 10px rgba(15,23,42,.06)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+            <span style={{ fontSize:9, color:C.text, fontWeight:700 }}>{r}</span>
+            {tag(src, C.primaryLight, `${C.primary}30`, C.primary)}
+            <span style={{ marginLeft:'auto', fontSize:11, fontWeight:800, color:c, fontFamily:MONO }}>{s}</span>
+          </div>
+          <div style={{ height:4, borderRadius:3, background:'#eef2f7', overflow:'hidden' }}>
+            <div style={{ height:'100%', width:`${pct}%`, background:c, borderRadius:3 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // 03 — Skill Gap Report with ranked impact bars
+  const illoGap = (
+    <div style={{ ...cardSx, padding:'13px 15px' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, paddingBottom:9, borderBottom:`1px solid ${C.border}`, marginBottom:9 }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <span style={{ fontSize:9, fontWeight:700, color:C.text, fontFamily:MONO, letterSpacing:'0.04em' }}>SKILL GAP REPORT</span>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {[['Docker','High',92,'#ef4444'],['System Design','High',85,'#ef4444'],['Kafka','Medium',58,'#d97706']].map(([g,lvl,pct,c],i)=>(
+          <div key={i}>
+            <div style={{ display:'flex', alignItems:'center', marginBottom:3 }}>
+              <span style={{ fontSize:8.5, color:C.text, fontWeight:700 }}>{g}</span>
+              <span style={{ marginLeft:'auto', fontSize:7.5, fontWeight:700, color:c, fontFamily:MONO }}>{lvl} impact</span>
+            </div>
+            <div style={{ height:4, borderRadius:3, background:'#eef2f7', overflow:'hidden' }}>
+              <div style={{ height:'100%', width:`${pct}%`, background:c, borderRadius:3 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // 04 — Razorpay company research card
+  const illoResearch = (
+    <div style={{ ...cardSx, padding:'13px 15px' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:7, paddingBottom:9, borderBottom:`1px solid ${C.border}`, marginBottom:9 }}>
+        <div style={{ width:20, height:20, borderRadius:5, background:'#0f172a', display:'flex', alignItems:'center', justifyContent:'center', color:'white' }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3"/></svg>
+        </div>
+        <div>
+          <div style={{ fontSize:9, fontWeight:700, color:C.text, lineHeight:1.1 }}>Target company</div>
+          <div style={{ fontSize:7, color:C.textSec, fontFamily:MONO }}>Backend Engineer</div>
+        </div>
+        <span style={{ marginLeft:'auto', display:'inline-flex', alignItems:'center', gap:3 }}>{ck()}<span style={{ fontSize:7, color:C.success, fontFamily:MONO, fontWeight:700 }}>RESEARCHED</span></span>
+      </div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:8 }}>
+        {['Fastify','p99 < 80ms','Test culture','Go + Kafka'].map((g,i)=><span key={i} style={{ padding:'2.5px 7px', borderRadius:999, background:C.primaryLight, border:`1px solid ${C.primary}30`, fontSize:7.5, color:C.primary, fontFamily:MONO, fontWeight:600, whiteSpace:'nowrap' }}>{g}</span>)}
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:8, color:C.textSec }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          <span style={{ color:C.text, fontWeight:600 }}>Recent blog:</span> scaling payments infra
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:8, color:C.textSec }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+          <span style={{ color:C.text, fontWeight:600 }}>Values:</span> ownership, bias to ship
+        </div>
+      </div>
+    </div>
+  );
+
+  // 05 — Before → After rewrite
+  const illoRewrite = (
+    <div style={{ display:'flex', flexDirection:'column', gap:7, width:'100%' }}>
+      <div style={{ ...cardSx, padding:'10px 12px', border:'1px solid #fca5a5' }}>
+        <div style={{ fontSize:7, fontWeight:700, color:'#991b1b', fontFamily:MONO, marginBottom:5, letterSpacing:'0.06em' }}>BEFORE</div>
+        <div style={{ fontSize:8.5, color:'#7f1d1d', lineHeight:1.5 }}>Built backend APIs for a web app</div>
+      </div>
+      <div style={{ display:'flex', justifyContent:'center' }}>
+        <div style={{ width:22, height:22, borderRadius:'50%', background:C.primary, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 3px 10px rgba(19,91,236,.4)` }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+        </div>
+      </div>
+      <div style={{ ...cardSx, padding:'10px 12px', border:`1.5px solid ${C.primary}`, boxShadow:`0 6px 18px rgba(19,91,236,.16)` }}>
+        <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:5 }}>{ck(C.primary)}<span style={{ fontSize:7, fontWeight:700, color:C.primary, fontFamily:MONO, letterSpacing:'0.06em' }}>AFTER — TUNED TO RAZORPAY</span></div>
+        <div style={{ fontSize:8.5, color:C.text, lineHeight:1.5, fontWeight:500 }}>Built <b style={{color:C.primary}}>Fastify</b> APIs handling <b style={{color:C.primary}}>p99 &lt; 80ms</b>, mirroring Razorpay's stack</div>
+      </div>
+    </div>
+  );
+
+  // 06 — ATS-safe PDF with checklist
+  const illoPdf = (
+    <div style={{ ...cardSx, padding:'13px 15px', position:'relative' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:9 }}>
+        <div style={{ width:18, height:22, borderRadius:3, background:'#f8fafc', border:`1px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.textSec} strokeWidth="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+        </div>
+        <span style={{ fontSize:9, fontWeight:700, color:C.text, fontFamily:MONO }}>resume_final.pdf</span>
+        <span style={{ marginLeft:'auto', display:'inline-flex', alignItems:'center', gap:3, padding:'2.5px 8px', borderRadius:999, background:'#ecfdf5', border:'1px solid #a7f3d0' }}>
+          {ck()}<span style={{ fontSize:7.5, fontWeight:700, color:C.success, fontFamily:MONO }}>ATS-SAFE</span>
+        </span>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+        {['No tables','No text boxes','Single-column layout','Passes TCS · Razorpay · Swiggy'].map((t,i)=>(
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:7, padding:'5px 8px', background:'#f8fafc', borderRadius:6, border:`1px solid ${C.border}` }}>
+            {ck()}<span style={{ fontSize:8, color:C.text, fontWeight:600 }}>{t}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // 07 — Personalised learning plan with progress rings
+  const illoLearn = (
+    <div style={{ ...cardSx, padding:'13px 15px' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, paddingBottom:9, borderBottom:`1px solid ${C.border}`, marginBottom:9 }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3"/></svg>
+        <span style={{ fontSize:9, fontWeight:700, color:C.text, fontFamily:MONO, letterSpacing:'0.04em' }}>YOUR LEARNING PLAN</span>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+        {[['Docker','2 wks',72],['System Design','3 wks',40],['Kafka','1 wk',15]].map(([t,wk,pct],i)=>{
+          const r=7, circ=2*Math.PI*r;
+          return (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:9, padding:'6px 9px', background:'#f8fafc', borderRadius:7, border:`1px solid ${C.border}` }}>
+              <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink:0 }}>
+                <circle cx="9" cy="9" r={r} fill="none" stroke="#e2e8f0" strokeWidth="2.5"/>
+                <circle cx="9" cy="9" r={r} fill="none" stroke={C.primary} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${circ*pct/100} ${circ}`} transform="rotate(-90 9 9)"/>
+              </svg>
+              <span style={{ fontSize:8.5, color:C.text, fontWeight:700 }}>{t}</span>
+              <span style={{ marginLeft:'auto', fontSize:7.5, color:C.textSec, fontFamily:MONO, fontWeight:600 }}>{wk}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ marginTop:9, textAlign:'center', fontSize:7.5, color:C.primary, fontFamily:MONO, fontWeight:700, letterSpacing:'0.04em' }}>CALIBRATED TO THIS ROLE</div>
+    </div>
+  );
+
+  const STEPS = [
+    {
+      n:'01', title:'Upload your resume',
+      desc:'Drop your PDF. We extract 50+ data points — skills, experience depth, project impact, education signals — in seconds.',
+      illo: illoUpload,
+      icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3"/></svg>,
+      highlight:false,
+    },
+    {
+      n:'02', title:'Match to real job listings',
+      desc:'We scan thousands of live roles on Naukri, LinkedIn, and Instahyre. Each match shows your fit score — a clear number that tells you if it\'s worth applying.',
+      illo: illoMatch,
+      icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
+      highlight:false,
+    },
+    {
+      n:'03', title:'See exactly where you fall short',
+      desc:'Your skill gap report shows the specific keywords, tools, and experience levels you\'re missing — ranked by how much they\'ll affect your chances.',
+      illo: illoGap,
+      icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>,
+      highlight:false,
+    },
+    {
+      n:'04', title:'We research the company — not just the JD',
+      desc:'Before touching your resume, we study the target company: their live tech stack, recent engineering blog posts, team structure, what they value in candidates, and how their ATS is configured.',
+      illo: illoResearch,
+      icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+      highlight:true,
+    },
+    {
+      n:'05', title:'Your resume, rewritten for that company',
+      desc:'Using the company research, we rewrite your bullets to speak their language — matching their stack, mirroring their values, hitting the keywords their ATS looks for.',
+      illo: illoRewrite,
+      icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+      highlight:false,
+    },
+    {
+      n:'06', title:'Download an ATS-safe PDF',
+      desc:'Export a clean, ATS-tested PDF. No tables, text boxes, or headers scanners choke on. Passes systems at TCS, Razorpay, and Swiggy.',
+      illo: illoPdf,
+      icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+      highlight:false,
+    },
+    {
+      n:'07', title:'Get your personalised learning plan',
+      desc:'For every gap found, a focused plan: courses, projects, and timelines to close them — calibrated to this role and company.',
+      illo: illoLearn,
+      icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3"/></svg>,
+      highlight:false,
+    },
+  ];
+
+  return (
+    <section id="how" style={{ background:'linear-gradient(160deg, #1d4ed8 0%, #0ea5e9 100%)', padding:'88px 0 80px' }}>
+      <div style={{ textAlign:'center', marginBottom:48, padding:'0 24px' }}>
+        <h2 style={{ fontFamily:SANS, fontSize:'clamp(1.875rem,4vw,2.875rem)', fontWeight:800, letterSpacing:'-0.035em', color:'white', lineHeight:1.08, marginBottom:12 }}>
+          How JobScorer works
+        </h2>
+        <p style={{ fontSize:17, color:'rgba(255,255,255,0.92)', maxWidth:440, margin:'0 auto', lineHeight:1.6 }}>
+          A complete loop from upload to offer-ready — not a collection of disconnected tools.
+        </p>
+      </div>
+
+      <div className="sn-wrap" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:56, maxWidth:1140, margin:'0 auto', padding:'0 40px', alignItems:'start' }}>
+
+        {/* LEFT rail */}
+        <div className="sn-rail" style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          {STEPS.map((step,i) => {
+            const isActive = isMobile || active === i;
+            return (
+              <div key={step.n}
+                ref={el => railRefs.current[i] = el}
+                data-idx={i}
+                onClick={() => { hoveringRef.current = false; setActive(i); }}
+                onMouseEnter={() => { if (!isMobile) { hoveringRef.current = true; setActive(i); } }}
+                onMouseLeave={() => { if (!isMobile) { hoveringRef.current = false; recompute(); } }}
+                style={{
+                  cursor:'pointer', position:'relative',
+                  borderRadius:16, padding:'20px 22px',
+                  background: isActive ? 'white' : 'rgba(255,255,255,0.07)',
+                  border: isActive ? `2px solid ${step.highlight ? C.primary : 'transparent'}` : '2px solid rgba(255,255,255,0.12)',
+                  opacity: isActive ? 1 : 0.62,
+                  boxShadow: isActive && !isMobile ? '0 18px 44px -14px rgba(15,23,42,.36)' : 'none',
+                  transition:'all .35s ease',
+                }}
+              >
+                {/* accent bar (desktop active) */}
+                {isActive && !isMobile && (
+                  <div style={{ position:'absolute', left:-2, top:16, bottom:16, width:4, borderRadius:4, background: step.highlight ? C.primary : '#0ea5e9' }} />
+                )}
+                <div style={{ display:'flex', alignItems:'baseline', gap:12 }}>
+                  <span style={{ fontFamily:MONO, fontSize: isActive ? 22 : 17, fontWeight:800, lineHeight:1, color: isActive ? C.primary : 'rgba(255,255,255,0.9)', transition:'all .3s' }}>{step.n}</span>
+                  <h3 style={{ fontFamily:SANS, fontWeight:700, fontSize: isActive ? 18 : 16, color: isActive ? C.text : 'white', lineHeight:1.3, margin:0, transition:'all .3s' }}>{step.title}</h3>
+                </div>
+
+                {/* Mobile-only inline visual */}
+                <div className="sn-mobile-illo" style={{ display:'none', margin:'14px 0 4px', minHeight:130, background:'#f8fafc', borderRadius:12, border:`1px solid ${C.border}`, padding:'18px', alignItems:'center', justifyContent:'center' }}>
+                  {step.illo}
+                </div>
+
+                <p style={{ fontSize:13.5, color: isActive ? C.textSec : 'rgba(255,255,255,0.82)', lineHeight:1.6, margin:'8px 0 0', transition:'all .3s' }}>{step.desc}</p>
+
+                {step.highlight && isActive && (
+                  <div style={{ marginTop:12, display:'inline-flex', alignItems:'center', gap:6, padding:'5px 12px', borderRadius:999, background:C.primaryLight, border:`1px solid ${C.primary}40` }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill={C.primary}/></svg>
+                    <span style={{ fontSize:11, fontWeight:700, color:C.primary, fontFamily:MONO, letterSpacing:'0.08em' }}>OUR DIFFERENTIATOR</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {/* Bottom spacer — gives step 07 room to scroll to viewport center and keeps the
+              sticky panel pinned/centered until 07 has been active, then releases. Desktop only. */}
+          <div className="sn-rail-spacer" style={{ height:'42vh', flexShrink:0 }} aria-hidden="true" />
+        </div>
+
+        {/* RIGHT sticky visual — full viewport-height so the card stays centered through every step */}
+        <div className="sn-visual" style={{ position:'sticky', top:64, height:'calc(100vh - 64px)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', alignSelf:'start' }}>
+          <div style={{ background:'rgba(255,255,255,0.12)', borderRadius:24, border:'1px solid rgba(255,255,255,0.22)', height:440, width:'100%', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', boxShadow:'0 30px 70px -22px rgba(15,23,42,.42)', position:'relative', padding:'28px 34px', boxSizing:'border-box' }}>
+            {/* number watermark */}
+            <span style={{ position:'absolute', top:18, right:26, fontFamily:MONO, fontSize:88, fontWeight:800, color:'rgba(255,255,255,0.14)', lineHeight:1, userSelect:'none', zIndex:0 }}>{STEPS[active].n}</span>
+            <div key={active} style={{ transform:'scale(1.26)', transformOrigin:'center', width:'74%', maxWidth:'74%', display:'flex', justifyContent:'center', animation:'snFade .18s ease', position:'relative', zIndex:1 }}>
+              {STEPS[active].illo}
+            </div>
+          </div>
+          {/* label + progress */}
+          <div style={{ textAlign:'center', marginTop:20 }}>
+            <span style={{ fontFamily:MONO, fontSize:12, fontWeight:700, letterSpacing:'0.12em', color:'rgba(255,255,255,0.85)' }}>STEP {STEPS[active].n} / 07</span>
+          </div>
+          <div style={{ display:'flex', gap:7, justifyContent:'center', marginTop:12 }}>
+            {STEPS.map((_,i)=>(
+              <button key={i} onClick={()=>{ hoveringRef.current = false; const el = railRefs.current[i]; if(el) window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - window.innerHeight/2 + 80, behavior:'smooth' }); setActive(i); }}
+                aria-label={`Go to step ${i+1}`}
+                style={{ width: active===i?28:8, height:8, borderRadius:4, border:'none', padding:0, cursor:'pointer', background: active===i?'white':'rgba(255,255,255,0.4)', transition:'all .3s' }} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <p style={{ textAlign:'center', marginTop:48, fontSize:14, color:'rgba(255,255,255,0.90)', fontFamily:MONO, letterSpacing:'0.05em', padding:'0 24px' }}>
+        Here's your personalised plan to close every gap — built for this role, this company.
+      </p>
+    </section>
+  );
+}
+// ─── Company Research Centrepiece ─────────────────────────────────────────
+function CompanyResearch() {
+  const BEFORE = [
+    'Built REST APIs using Node.js and Express',
+    'Worked on payment integration features',
+    'Wrote unit tests to improve code coverage',
+    'Collaborated with cross-functional teams',
+  ];
+  const AFTER = [
+    'Designed and shipped 3 REST APIs on Node.js + Fastify, handling 40k req/s with p99 < 80ms — matching the company\'s scale and latency bar',
+    'Integrated the company\'s own payment SDK in a side project, validating webhooks and handling edge cases in refund flows',
+    'Raised test coverage from 54% to 88% using Jest + Supertest — aligned with the company\'s engineering culture of high-confidence deploys',
+    'Led sprint planning across BE, FE, and QA — mirrors the company\'s cross-pod ownership model',
+  ];
+  const RESEARCH = ['Fastify over Express', 'p99 latency obsession', 'High test-coverage culture', 'Cross-pod ownership model', 'Own SDK dogfooding'];
+
+  return (
+    <section style={{ background:'white', padding:'96px 24px', borderTop:`1px solid ${C.border}` }}>
+      <div style={{ maxWidth:1100, margin:'0 auto' }}>
+        {/* Header */}
+        <div style={{ textAlign:'center', marginBottom:56 }}>
+          {/* Example label */}
+          <div style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'4px 12px', borderRadius:999, background:'#f1f5f9', border:`1px solid ${C.border}`, marginBottom:12 }}>
+            <span style={{ fontFamily:MONO, fontSize:10, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:C.textSec }}>Illustrative Example</span>
+          </div>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'5px 14px', borderRadius:999, background:C.primaryLight, border:`1px solid ${C.primary}22`, marginBottom:16, marginLeft:8 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" fill={C.primary}/></svg>
+            <span style={{ fontFamily:MONO, fontSize:11, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', color:C.primary }}>What makes us different</span>
+          </div>
+          <h2 style={{ fontFamily:SANS, fontSize:'clamp(1.75rem,3.5vw,2.5rem)', fontWeight:800, letterSpacing:'-0.03em', color:C.text, lineHeight:1.1, marginBottom:14, maxWidth:640, margin:'0 auto 14px' }}>
+            Most tools rewrite to the job description.<br />We rewrite to the company.
+          </h2>
+          <p style={{ fontSize:16, color:C.textSec, maxWidth:520, margin:'0 auto', lineHeight:1.65 }}>
+            Before touching your resume, we research the target company — their tech stack, engineering culture, team structure, and ATS configuration. Here's what that looks like for a real fast-growing fintech application.
+          </p>
+        </div>
+
+        {/* Company research card */}
+        <div style={{ background:C.bg, borderRadius:16, border:`1px solid ${C.border}`, padding:'24px', marginBottom:32 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16 }}>
+            <div style={{ width:36, height:36, borderRadius:8, background:'#0f172a', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:800, fontSize:14 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3"/><path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01"/></svg>
+            </div>
+            <div>
+              <div style={{ fontWeight:700, fontSize:14, color:C.text }}>Fast-growing fintech — Backend Engineer</div>
+              <div style={{ fontSize:12, color:C.textSec }}>Research completed in 12 seconds</div>
+            </div>
+            <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, padding:'4px 12px', borderRadius:999, background:'#ecfdf5', border:'1px solid #a7f3d0' }}>
+              <div style={{ width:6, height:6, borderRadius:'50%', background:C.success }} />
+              <span style={{ fontSize:11, fontWeight:700, color:C.success, fontFamily:MONO }}>Research complete</span>
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {RESEARCH.map((r,i) => (
+              <span key={i} style={{ padding:'4px 12px', borderRadius:999, background:C.primaryLight, border:`1px solid ${C.primary}30`, fontSize:12, color:C.primary, fontFamily:MONO, fontWeight:600 }}>{r}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Before / After */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24 }} className="ba-grid">
+          {/* Before */}
+          <div style={{ background:C.bg, borderRadius:16, border:`1px solid #fca5a5`, padding:'24px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:20 }}>
+              <div style={{ width:24, height:24, borderRadius:6, background:'#fee2e2', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round"/></svg>
+              </div>
+              <span style={{ fontWeight:700, fontSize:14, color:'#991b1b' }}>Before — Generic JD rewrite</span>
+            </div>
+            {BEFORE.map((b,i) => (
+              <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start', padding:'10px 0', borderBottom: i<BEFORE.length-1?`1px solid ${C.border}`:'none' }}>
+                <div style={{ width:16, height:16, borderRadius:'50%', background:'#fee2e2', border:'1px solid #fca5a5', flexShrink:0, marginTop:1 }} />
+                <p style={{ fontSize:13.5, color:C.textSec, lineHeight:1.5, margin:0 }}>{b}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* After */}
+          <div style={{ background:'white', borderRadius:16, border:`1px solid #135bec40`, padding:'24px', boxShadow:`0 8px 32px -8px rgba(19,91,236,0.12)` }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:20 }}>
+              <div style={{ width:24, height:24, borderRadius:6, background:C.primaryLight, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke={C.primary} strokeWidth="2.2" strokeLinecap="round"/></svg>
+              </div>
+              <span style={{ fontWeight:700, fontSize:14, color:C.primary }}>After — Tuned to the company</span>
+            </div>
+            {AFTER.map((a,i) => (
+              <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start', padding:'10px 0', borderBottom: i<AFTER.length-1?`1px solid ${C.border}`:'none' }}>
+                <div style={{ width:16, height:16, borderRadius:'50%', background:C.primaryLight, border:`1px solid #bdd0fa`, flexShrink:0, marginTop:1 }} />
+                <p style={{ fontSize:13.5, color:C.text, lineHeight:1.55, margin:0 }}>{a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ATS / privacy reassurance */}
+        <div style={{ display:'flex', gap:24, marginTop:32, justifyContent:'center', flexWrap:'wrap' }}>
+          {[
+            { icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.success} strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>, text:'ATS-tested output — passes Naukri, LinkedIn, and Workday scanners' },
+            { icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>, text:'Your resume is never shared, sold, or used to train models' },
+          ].map((r,i) => (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:C.textSec }}>
+              {r.icon} {r.text}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CTA Banner ───────────────────────────────────────────────────────────
+function CTABanner() {
+  return (
+    <section style={{ padding:'88px 24px', background:C.primary, textAlign:'center' }}>
+      <div style={{ maxWidth:580, margin:'0 auto' }}>
+        <h2 style={{ fontFamily:SANS, fontSize:'clamp(1.875rem,4vw,2.75rem)', fontWeight:800, letterSpacing:'-0.035em', color:'white', lineHeight:1.1, marginBottom:16 }}>
+          Ready to find jobs you'll actually get?
+        </h2>
+        <p style={{ fontSize:16, color:'rgba(255,255,255,0.92)', marginBottom:32, lineHeight:1.65 }}>
+          Join thousands of IT freshers who apply smarter with their fit score.
+        </p>
+        <a href="/signup" style={{
+          display:'inline-flex', alignItems:'center', justifyContent:'center', gap:10,
+          padding:'16px 36px', background:'white', color:C.primary,
+          borderRadius:10, fontSize:16, fontWeight:700, fontFamily:SANS,
+          textDecoration:'none', boxShadow:'0 8px 24px rgba(0,0,0,.18)',
+          transition:'all .2s ease',
+        }}
+          onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.opacity='.92';}}
+          onMouseLeave={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.opacity='1';}}
+        >
+          Upload your resume — free
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+        <div style={{ marginTop:12, fontSize:13, color:'rgba(255,255,255,0.90)', display:'flex', alignItems:'center', justifyContent:'center', gap:12, flexWrap:'wrap' }}>
+          <span>No credit card required</span><span>·</span>
+          <span>We never share your resume</span><span>·</span>
+          <span>Cancel anytime</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "featureStyle": "A",
+  "showIndia": true
+}/*EDITMODE-END*/;
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  return (
+    <>
+      <Nav />
+      <main style={{ paddingTop:64 }}>
+        <Hero />
+        <Journey />
+        <CompanyResearch />
+        <Testimonials />
+        <PricingTeaser />
+        <CTABanner />
+        <Footer />
+      </main>
+
+      <TweaksPanel>
+        <TweakSection label="Sections" />
+        <TweakToggle
+          label="For Indian Freshers section"
+          value={t.showIndia}
+          onChange={v => setTweak('showIndia', v)}
+        />
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

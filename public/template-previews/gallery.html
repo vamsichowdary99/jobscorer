@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JobScorer — Resume Template Previews</title>
+  <style>
+    :root {
+      --primary: #135bec;
+      --primary-light: #e8f0fe;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --bg: #f8fafc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(160deg, #ffffff 0%, #f0f7ff 100%);
+      border-bottom: 1px solid var(--line);
+      padding: 48px 24px 40px;
+      text-align: center;
+    }
+    .brand {
+      display: inline-flex; align-items: center; gap: 10px;
+      margin-bottom: 18px;
+    }
+    .brand .logo {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: var(--primary); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 18px;
+    }
+    .brand .name { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 5px 13px; border-radius: 999px;
+      background: var(--primary-light); color: var(--primary);
+      font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+      margin-bottom: 16px;
+    }
+    .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+    h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -0.03em; }
+    .sub { color: var(--muted); font-size: 1.0625rem; margin-top: 10px; max-width: 560px; margin-inline: auto; }
+    .count { color: var(--primary); font-weight: 700; }
+
+    /* ── Grid ── */
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 44px 24px 72px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 28px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      display: flex; flex-direction: column;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 18px 44px rgba(19, 91, 236, 0.14);
+      border-color: #c7d8f8;
+    }
+    .shot {
+      display: block;
+      background: var(--bg);
+      padding: 16px 16px 0;
+    }
+    .shot img {
+      width: 100%; height: auto; display: block;
+      border: 1px solid var(--line);
+      border-radius: 6px 6px 0 0;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    }
+    .meta { padding: 16px 18px 20px; }
+    .meta-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .meta h3 { font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; }
+    .meta .file { font-size: 11px; color: #94a3b8; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    .meta .tagline { color: var(--muted); font-size: 0.875rem; margin-top: 3px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .tag {
+      font-size: 11px; font-weight: 500;
+      padding: 3px 9px; border-radius: 5px;
+      background: var(--primary-light); color: var(--primary);
+    }
+    footer { text-align: center; color: var(--muted); font-size: 13px; padding: 0 24px 48px; }
+    footer code {
+      background: #eef2f7; padding: 2px 7px; border-radius: 5px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">R</div>
+      <div class="name">JobScorer</div>
+    </div>
+    <div class="eyebrow"><span class="dot"></span>RESUME TEMPLATES</div>
+    <h1>Your resume, 8 ways</h1>
+    <p class="sub">
+      <span class="count">8</span> live templates rendered straight from the app's PDF engine,
+      filled with sample data. Click any preview to open it full-size.
+    </p>
+  </header>
+
+  <div class="wrap">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <footer>
+    Generated from <code>resuscore/public/template-previews/</code> &middot; the same renderers used for resume downloads.
+  </footer>
+
+  <script>
+    const TEMPLATES = [
+      { id: 'classic',       name: 'Classic',       tagline: 'Timeless professional',   tags: ['Serif', 'ATS ✓', 'Traditional'] },
+      { id: 'rezi',          name: 'Rezi',          tagline: 'Serif elegance',          tags: ['Serif', 'Bold skills', 'ATS ✓'] },
+      { id: 'rezi-standard', name: 'Rezi Standard', tagline: 'Clean & minimal',         tags: ['Sans-serif', 'Thin rules', 'ATS ✓'] },
+      { id: 'london',        name: 'London',        tagline: 'Editorial italic',        tags: ['Serif', 'Extending lines', 'ATS ✓'] },
+      { id: 'stitch',        name: 'Stitch',        tagline: 'Modern traditional',      tags: ['Serif', 'ATS ✓', 'Clean'] },
+      { id: 'harvard',       name: 'Harvard',       tagline: 'HBS-style academic',      tags: ['Serif', 'ATS ✓', 'Classic'] },
+      { id: 'sb2nov',        name: 'sb2nov',        tagline: 'LaTeX academic',          tags: ['Serif', 'ATS ✓', 'Open bullets'] },
+      { id: 'open-resume',   name: 'Open Resume',   tagline: 'Modern sky-blue accent',  tags: ['Sans-serif', 'ATS ✓', 'Accent bar'] },
+    ];
+
+    const grid = document.getElementById('grid');
+    grid.innerHTML = TEMPLATES.map(t => `
+      <div class="card">
+        <a class="shot" href="./${t.id}.png" target="_blank" rel="noopener">
+          <img src="./${t.id}.png" alt="${t.name} resume template preview" loading="lazy" />
+        </a>
+        <div class="meta">
+          <div class="meta-top">
+            <h3>${t.name}</h3>
+            <span class="file">${t.id}.png</span>
+          </div>
+          <div class="tagline">${t.tagline}</div>
+          <div class="tags">${t.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}</div>
+        </div>
+      </div>
+    `).join('');
+  </script>
+</body>
+</html>

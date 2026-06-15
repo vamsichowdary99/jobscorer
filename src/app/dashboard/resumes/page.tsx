@@ -861,6 +861,785 @@ function ClassicSectionHeader({ title }: { title: string }) {
     )
 }
 
+// ── Cobalt Resume Preview (HTML) ──────────────────────────
+// Single-column, navy-blue accent (#06296b), all-black text. Mirrors
+// CobaltPdfDocument.tsx (the carousel "aarav-sharma" design).
+const COBALT_ACCENT = '#06296b'
+const COBALT_INK = '#111111'
+
+function CobaltSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{
+            fontSize: '10.5pt',
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: COBALT_ACCENT,
+            borderBottom: `1.2px solid ${COBALT_ACCENT}`,
+            paddingBottom: '2pt',
+            marginTop: '7pt',
+            marginBottom: '4pt',
+        }}>
+            {title}
+        </div>
+    )
+}
+
+function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+
+    const contactParts = [
+        profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
+    ].filter(Boolean)
+
+    const roleSubtitle = experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+
+    const skillRows = [
+        { label: 'Languages', value: skills.languages },
+        { label: 'Frameworks', value: skills.frameworks },
+        { label: 'Tools & Cloud', value: skills.tools },
+        { label: 'Core Concepts', value: skills.soft },
+    ].filter(r => r.value && r.value.trim())
+
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+
+    return (
+        <div style={{
+            fontFamily: "'Roboto', 'Helvetica Neue', Arial, sans-serif",
+            fontSize: '10pt',
+            lineHeight: 1.4,
+            color: COBALT_INK,
+            padding: '32pt 44pt',
+            minHeight: '100%',
+            background: '#fff',
+        }}>
+            {/* Header (left-aligned) */}
+            <div style={{ marginBottom: '4pt' }}>
+                <div style={{ fontSize: '20pt', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', lineHeight: 1.05, color: COBALT_INK }}>
+                    {profile.name || 'Your Name'}
+                </div>
+                {roleSubtitle && (
+                    <div style={{ fontSize: '11pt', fontWeight: 700, color: COBALT_ACCENT, marginTop: '3pt' }}>
+                        {roleSubtitle}
+                    </div>
+                )}
+                {contactParts.length > 0 && (
+                    <div style={{ fontSize: '9.5pt', color: COBALT_INK, marginTop: '5pt' }}>
+                        {contactParts.join('  |  ')}
+                    </div>
+                )}
+            </div>
+
+            {/* Summary */}
+            {summary && (
+                <section>
+                    <CobaltSectionHeader title="Professional Summary" />
+                    <div style={{ fontSize: '10pt', lineHeight: 1.35, color: COBALT_INK }}>
+                        <BoldRender text={summary} />
+                    </div>
+                </section>
+            )}
+
+            {/* Skills */}
+            {skillRows.length > 0 && (
+                <section>
+                    <CobaltSectionHeader title="Skills" />
+                    {skillRows.map((row, i) => (
+                        <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt' }}>
+                            <span style={{ fontWeight: 700, width: '92pt', flexShrink: 0 }}>{row.label}:</span>
+                            <span style={{ flex: 1 }}>{row.value}</span>
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            {/* Experience */}
+            {experience.length > 0 && (
+                <section>
+                    <CobaltSectionHeader title="Experience" />
+                    {experience.map((exp, i) => {
+                        const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
+                        return (
+                            <div key={i} style={{ marginBottom: '7pt' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
+                                    <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                                </div>
+                                {companyLine && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{companyLine}</div>}
+                                {exp.bullets.filter(b => b.trim()).length > 0 && (
+                                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                        {exp.bullets.filter(b => b.trim()).map((b, j) => (
+                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}><BoldRender text={b} /></li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )
+                    })}
+                </section>
+            )}
+
+            {/* Projects */}
+            {projects.length > 0 && (
+                <section>
+                    <CobaltSectionHeader title="Projects" />
+                    {projects.map((proj, i) => (
+                        <div key={i} style={{ marginBottom: '6pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>
+                                    {proj.name}{proj.tech ? <span style={{ fontWeight: 400 }}> | <span style={{ fontStyle: 'italic' }}>{proj.tech}</span></span> : ''}
+                                </span>
+                                <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{proj.date}</span>
+                            </div>
+                            {proj.bullets.filter(b => b.trim()).length > 0 && (
+                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                    {proj.bullets.filter(b => b.trim()).map((b, j) => (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}><BoldRender text={b} /></li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            {/* Education (degree-first) */}
+            {education.length > 0 && (
+                <section>
+                    <CobaltSectionHeader title="Education" />
+                    {education.map((edu, i) => (
+                        <div key={i} style={{ marginBottom: '5pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700 }}>{edu.degree || edu.school || 'Degree'}</span>
+                                <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{edu.date}</span>
+                            </div>
+                            {(edu.school || edu.gpa) && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span>{edu.school}</span>
+                                    {edu.gpa && <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{edu.gpa}</span>}
+                                </div>
+                            )}
+                            {edu.coursework && (
+                                <div style={{ fontSize: '9.5pt', marginTop: '1.5pt' }}>
+                                    <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            {/* Certifications */}
+            {certifications.filter(c => c.trim()).length > 0 && (
+                <section>
+                    <CobaltSectionHeader title="Certifications" />
+                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                        {certifications.filter(c => c.trim()).map((cert, i) => (
+                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{cert}</li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            {/* Achievements */}
+            {achievements.filter(a => a.trim()).length > 0 && (
+                <section>
+                    <CobaltSectionHeader title="Achievements" />
+                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                        {achievements.filter(a => a.trim()).map((ach, i) => (
+                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{ach}</li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            {/* Leadership */}
+            {leadership.length > 0 && (
+                <section>
+                    <CobaltSectionHeader title="Leadership" />
+                    {leadership.map((lead, i) => (
+                        <div key={i} style={{ marginBottom: '5pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                                <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{lead.date}</span>
+                            </div>
+                            {lead.role && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{lead.role}</div>}
+                            {lead.bullets.filter(b => b.trim()).length > 0 && (
+                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                    {lead.bullets.filter(b => b.trim()).map((b, j) => (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{b}</li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    ))}
+                </section>
+            )}
+        </div>
+    )
+}
+
+// ── Onyx Resume Preview (HTML) ────────────────────────────
+// Minimalist Open Sans, monochrome black, one navy divider rule under the
+// header, rule-less wide-tracked section headers. Mirrors OnyxPdfDocument.tsx
+// (the rohan-mehta carousel design).
+const ONYX_INK = '#111111'
+const ONYX_RULE = '#224a85'
+
+function OnyxSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{
+            fontSize: '10pt',
+            fontWeight: 700,
+            letterSpacing: '2px',
+            textTransform: 'uppercase',
+            color: ONYX_INK,
+            marginTop: '11pt',
+            marginBottom: '5pt',
+        }}>
+            {title}
+        </div>
+    )
+}
+
+function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+
+    const contactParts = [
+        profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
+    ].filter(Boolean)
+
+    const roleSubtitle = experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+
+    const skillRows = [
+        { label: 'Languages', value: skills.languages },
+        { label: 'Frameworks', value: skills.frameworks },
+        { label: 'Tools & Platforms', value: skills.tools },
+        { label: 'Core Concepts', value: skills.soft },
+    ].filter(r => r.value && r.value.trim())
+
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+
+    return (
+        <div style={{
+            fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif",
+            fontSize: '10pt',
+            lineHeight: 1.4,
+            color: ONYX_INK,
+            padding: '36pt 46pt',
+            minHeight: '100%',
+            background: '#fff',
+        }}>
+            {/* Header */}
+            <div>
+                <div style={{ fontSize: '23pt', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', lineHeight: 1.04, color: ONYX_INK }}>
+                    {profile.name || 'Your Name'}
+                </div>
+                {roleSubtitle && (
+                    <div style={{ fontSize: '11.5pt', color: ONYX_INK, marginTop: '3pt' }}>{roleSubtitle}</div>
+                )}
+                <div style={{ borderBottom: `1.2px solid ${ONYX_RULE}`, margin: '6pt 0' }} />
+                {contactParts.length > 0 && (
+                    <div style={{ fontSize: '9pt', color: ONYX_INK }}>{contactParts.join('  |  ')}</div>
+                )}
+            </div>
+
+            {/* Summary */}
+            {summary && (
+                <section>
+                    <OnyxSectionHeader title="Summary" />
+                    <div style={{ fontSize: '10pt', lineHeight: 1.4, color: ONYX_INK }}><BoldRender text={summary} /></div>
+                </section>
+            )}
+
+            {/* Skills */}
+            {skillRows.length > 0 && (
+                <section>
+                    <OnyxSectionHeader title="Technical Skills" />
+                    {skillRows.map((row, i) => (
+                        <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt' }}>
+                            <span style={{ fontWeight: 700, width: '104pt', flexShrink: 0 }}>{row.label}:</span>
+                            <span style={{ flex: 1 }}>{row.value}</span>
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            {/* Experience */}
+            {experience.length > 0 && (
+                <section>
+                    <OnyxSectionHeader title="Experience" />
+                    {experience.map((exp, i) => {
+                        const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
+                        return (
+                            <div key={i} style={{ marginBottom: '7pt' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
+                                    <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                                </div>
+                                {companyLine && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{companyLine}</div>}
+                                {exp.bullets.filter(b => b.trim()).length > 0 && (
+                                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                        {exp.bullets.filter(b => b.trim()).map((b, j) => (
+                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}><BoldRender text={b} /></li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )
+                    })}
+                </section>
+            )}
+
+            {/* Projects (tech italic on the right) */}
+            {projects.length > 0 && (
+                <section>
+                    <OnyxSectionHeader title="Projects" />
+                    {projects.map((proj, i) => (
+                        <div key={i} style={{ marginBottom: '6pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
+                                {(proj.tech || proj.date) && (
+                                    <span style={{ fontSize: '9.5pt', color: ONYX_INK, fontStyle: proj.tech ? 'italic' : 'normal' }}>{proj.tech || proj.date}</span>
+                                )}
+                            </div>
+                            {proj.bullets.filter(b => b.trim()).length > 0 && (
+                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                    {proj.bullets.filter(b => b.trim()).map((b, j) => (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}><BoldRender text={b} /></li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            {/* Education (degree-first) */}
+            {education.length > 0 && (
+                <section>
+                    <OnyxSectionHeader title="Education" />
+                    {education.map((edu, i) => (
+                        <div key={i} style={{ marginBottom: '5pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700 }}>{edu.degree || edu.school || 'Degree'}</span>
+                                <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{edu.date}</span>
+                            </div>
+                            {(edu.school || edu.gpa) && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span style={{ fontStyle: 'italic' }}>{edu.school}</span>
+                                    {edu.gpa && <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{edu.gpa}</span>}
+                                </div>
+                            )}
+                            {edu.coursework && (
+                                <div style={{ fontSize: '9.5pt', marginTop: '1.5pt' }}>
+                                    <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            {/* Certifications */}
+            {certifications.filter(c => c.trim()).length > 0 && (
+                <section>
+                    <OnyxSectionHeader title="Certifications" />
+                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                        {certifications.filter(c => c.trim()).map((cert, i) => (
+                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{cert}</li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            {/* Achievements */}
+            {achievements.filter(a => a.trim()).length > 0 && (
+                <section>
+                    <OnyxSectionHeader title="Achievements" />
+                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                        {achievements.filter(a => a.trim()).map((ach, i) => (
+                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{ach}</li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            {/* Leadership */}
+            {leadership.length > 0 && (
+                <section>
+                    <OnyxSectionHeader title="Leadership" />
+                    {leadership.map((lead, i) => (
+                        <div key={i} style={{ marginBottom: '5pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                                <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{lead.date}</span>
+                            </div>
+                            {lead.role && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{lead.role}</div>}
+                            {lead.bullets.filter(b => b.trim()).length > 0 && (
+                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                    {lead.bullets.filter(b => b.trim()).map((b, j) => (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{b}</li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    ))}
+                </section>
+            )}
+        </div>
+    )
+}
+
+// ── Jade Resume Preview (HTML) ────────────────────────────
+// Two-column Open Sans (left: identity/contact/skills/education, right:
+// summary/experience/projects). Two inks: teal #026857 + black. Section
+// headers are teal with a thin full-column-width teal underline rule.
+// Mirrors JadePdfDocument.tsx (the priya-nair carousel design).
+const JADE_ACCENT = '#026857'
+const JADE_INK = '#1a1a1a'
+
+function JadeSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{
+            fontSize: '10pt',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase',
+            color: JADE_ACCENT,
+            paddingBottom: '2.5pt',
+            marginBottom: '4pt',
+            borderBottom: `1px solid ${JADE_ACCENT}`,
+        }}>
+            {title}
+        </div>
+    )
+}
+
+function JadeResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+
+    const roleSubtitle = experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+    const splitItems = (csv: string) => (csv || '').split(/[,•\n]/).map(s => s.trim()).filter(Boolean)
+
+    const contactRows = [
+        { label: 'Email', value: profile.email },
+        { label: 'Phone', value: profile.phone },
+        { label: 'Location', value: profile.location },
+        { label: 'LinkedIn', value: profile.linkedin },
+        { label: 'GitHub', value: profile.github },
+        { label: 'Portfolio', value: profile.portfolio },
+    ].filter(c => c.value && c.value.trim())
+
+    const skillGroups = [
+        { label: 'Languages', value: skills.languages },
+        { label: 'Libraries & Frameworks', value: skills.frameworks },
+        { label: 'Tools', value: skills.tools },
+        { label: 'Core Concepts', value: skills.soft },
+    ].map(g => ({ label: g.label, items: splitItems(g.value) })).filter(g => g.items.length > 0)
+
+    const bullets = (items: string[], size = '9.7pt', mb = '1.5pt', lh = 1.25) => (
+        <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
+            {items.filter(b => b.trim()).map((b, j) => (
+                <li key={j} style={{ marginBottom: mb, fontSize: size, lineHeight: lh }}><BoldRender text={b} /></li>
+            ))}
+        </ul>
+    )
+
+    return (
+        <div style={{
+            fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif",
+            fontSize: '10pt',
+            lineHeight: 1.4,
+            color: JADE_INK,
+            padding: '34pt 40pt',
+            minHeight: '100%',
+            background: '#fff',
+        }}>
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '24pt' }}>
+                {/* LEFT COLUMN */}
+                <div style={{ width: '178pt', flexShrink: 0 }}>
+                    <div style={{ fontSize: '21pt', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: JADE_ACCENT, lineHeight: 1.04 }}>
+                        {profile.name || 'Your Name'}
+                    </div>
+                    {roleSubtitle && (
+                        <div style={{ fontSize: '10.5pt', fontWeight: 700, color: JADE_INK, marginTop: '3pt' }}>{roleSubtitle}</div>
+                    )}
+
+                    {contactRows.length > 0 && (
+                        <div style={{ marginTop: '8pt' }}>
+                            {contactRows.map((c, i) => (
+                                <div key={i} style={{ fontSize: '8.5pt', marginBottom: '2.5pt', lineHeight: 1.25 }}>
+                                    <span style={{ fontWeight: 700 }}>{c.label}: </span>{c.value}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {skillGroups.length > 0 && (
+                        <section style={{ marginTop: '9pt' }}>
+                            <JadeSectionHeader title="Skills" />
+                            {skillGroups.map((g, i) => (
+                                <div key={i} style={{ marginBottom: '2pt' }}>
+                                    <div style={{ fontWeight: 700, fontSize: '9.5pt', marginTop: i === 0 ? 0 : '1.5pt', marginBottom: '1pt' }}>{g.label}</div>
+                                    {bullets(g.items, '9.3pt', '1pt', 1.22)}
+                                </div>
+                            ))}
+                        </section>
+                    )}
+
+                    {education.length > 0 && (
+                        <section style={{ marginTop: '11pt' }}>
+                            <JadeSectionHeader title="Education" />
+                            {education.map((edu, i) => (
+                                <div key={i} style={{ marginBottom: '5pt' }}>
+                                    <div style={{ fontWeight: 700, fontSize: '10pt', lineHeight: 1.2 }}>{edu.degree || edu.school || 'Degree'}</div>
+                                    {edu.school && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{edu.school}</div>}
+                                    {(edu.date || edu.gpa) && (
+                                        <div style={{ fontSize: '9pt', marginTop: '0.5pt' }}>{[edu.date, edu.gpa].filter(Boolean).join('  |  ')}</div>
+                                    )}
+                                    {edu.coursework && (
+                                        <div style={{ fontSize: '8.7pt', marginTop: '1.5pt', lineHeight: 1.25 }}>
+                                            <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </section>
+                    )}
+
+                    {certifications.filter(c => c.trim()).length > 0 && (
+                        <section style={{ marginTop: '11pt' }}>
+                            <JadeSectionHeader title="Certifications" />
+                            {bullets(certifications, '9.3pt', '1pt', 1.22)}
+                        </section>
+                    )}
+
+                    {achievements.filter(a => a.trim()).length > 0 && (
+                        <section style={{ marginTop: '11pt' }}>
+                            <JadeSectionHeader title="Achievements" />
+                            {bullets(achievements, '9.3pt', '1pt', 1.22)}
+                        </section>
+                    )}
+                </div>
+
+                {/* RIGHT COLUMN */}
+                <div style={{ flex: 1 }}>
+                    {summary && (
+                        <section>
+                            <JadeSectionHeader title="Summary" />
+                            <div style={{ fontSize: '10pt', lineHeight: 1.4, color: JADE_INK }}><BoldRender text={summary} /></div>
+                        </section>
+                    )}
+
+                    {experience.length > 0 && (
+                        <section style={{ marginTop: summary ? '11pt' : 0 }}>
+                            <JadeSectionHeader title="Experience" />
+                            {experience.map((exp, i) => {
+                                const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
+                                return (
+                                    <div key={i} style={{ marginBottom: '7pt' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                            <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
+                                            <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt' }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                                        </div>
+                                        {companyLine && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{companyLine}</div>}
+                                        {exp.bullets.filter(b => b.trim()).length > 0 && bullets(exp.bullets)}
+                                    </div>
+                                )
+                            })}
+                        </section>
+                    )}
+
+                    {projects.length > 0 && (
+                        <section style={{ marginTop: '11pt' }}>
+                            <JadeSectionHeader title="Projects" />
+                            {projects.map((proj, i) => (
+                                <div key={i} style={{ marginBottom: '6pt' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
+                                        {(proj.tech || proj.date) && (
+                                            <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt', fontStyle: proj.tech ? 'italic' : 'normal' }}>{proj.tech || proj.date}</span>
+                                        )}
+                                    </div>
+                                    {proj.bullets.filter(b => b.trim()).length > 0 && bullets(proj.bullets)}
+                                </div>
+                            ))}
+                        </section>
+                    )}
+
+                    {leadership.length > 0 && (
+                        <section style={{ marginTop: '11pt' }}>
+                            <JadeSectionHeader title="Leadership" />
+                            {leadership.map((lead, i) => (
+                                <div key={i} style={{ marginBottom: '6pt' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                        <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                                        <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt' }}>{lead.date}</span>
+                                    </div>
+                                    {lead.role && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{lead.role}</div>}
+                                    {lead.bullets.filter(b => b.trim()).length > 0 && bullets(lead.bullets)}
+                                </div>
+                            ))}
+                        </section>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ── Lapis Resume Preview (HTML) ───────────────────────────
+// Modern single-column indigo. Section headers = thin divider rule + vertical
+// indigo bar + indigo uppercase label; skills as a wrapping cloud of outlined
+// pills; indigo-italic company/tech line. Mirrors LapisPdfDocument.tsx
+// (the ananya-reddy carousel design).
+const LAPIS_ACCENT = '#1a1670'
+const LAPIS_INK = '#1f2024'
+
+function LapisSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{ marginTop: '10pt', marginBottom: '4pt' }}>
+            <div style={{ borderTop: '1px solid #e4e4ee', marginBottom: '5pt' }} />
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ width: 3, height: 12, background: LAPIS_ACCENT, marginRight: 6, flexShrink: 0 }} />
+                <span style={{ fontWeight: 700, fontSize: '11pt', letterSpacing: '0.5px', textTransform: 'uppercase', color: LAPIS_ACCENT }}>{title}</span>
+            </div>
+        </div>
+    )
+}
+
+function LapisResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+
+    const contactParts = [profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
+    const roleSubtitle = experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+    const splitItems = (csv: string) => (csv || '').split(/,(?![^(]*\))|[•\n]/).map(s => s.trim()).filter(Boolean)
+    const skillPills = [...splitItems(skills.languages), ...splitItems(skills.frameworks), ...splitItems(skills.tools), ...splitItems(skills.soft)]
+
+    const bullets = (items: string[]) => (
+        <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
+            {items.filter(b => b.trim()).map((b, j) => (
+                <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.3 }}><BoldRender text={b} /></li>
+            ))}
+        </ul>
+    )
+    const companyLine = (t: string) => <div style={{ fontStyle: 'italic', fontSize: '10pt', color: LAPIS_ACCENT, marginTop: '0.5pt' }}>{t}</div>
+
+    return (
+        <div style={{ fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif", fontSize: '10pt', lineHeight: 1.4, color: LAPIS_INK, padding: '36pt 42pt', minHeight: '100%', background: '#fff' }}>
+            {/* Header */}
+            <div>
+                <div style={{ fontSize: '22pt', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: LAPIS_ACCENT, lineHeight: 1.05 }}>{profile.name || 'Your Name'}</div>
+                {roleSubtitle && <div style={{ fontSize: '11.5pt', fontWeight: 700, color: LAPIS_ACCENT, marginTop: '2pt' }}>{roleSubtitle}</div>}
+                {contactParts.length > 0 && <div style={{ fontSize: '9pt', color: LAPIS_INK, marginTop: '5pt' }}>{contactParts.join('   |   ')}</div>}
+            </div>
+
+            {summary && (
+                <section>
+                    <LapisSectionHeader title="Summary" />
+                    <div style={{ fontSize: '10pt', lineHeight: 1.4, color: LAPIS_INK }}><BoldRender text={summary} /></div>
+                </section>
+            )}
+
+            {skillPills.length > 0 && (
+                <section>
+                    <LapisSectionHeader title="Skills" />
+                    <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '3pt' }}>
+                        {skillPills.map((s, i) => (
+                            <span key={i} style={{ border: '0.8px solid #cdcdde', borderRadius: 4, padding: '2pt 6pt', marginRight: '5pt', marginBottom: '5pt', fontSize: '9pt', color: LAPIS_INK, whiteSpace: 'nowrap' }}>{s}</span>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {experience.length > 0 && (
+                <section>
+                    <LapisSectionHeader title="Work Experience" />
+                    {experience.map((exp, i) => {
+                        const cl = [exp.company, exp.location].filter(Boolean).join(', ')
+                        return (
+                            <div key={i} style={{ marginBottom: '6pt' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
+                                    <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                                </div>
+                                {cl && companyLine(cl)}
+                                {exp.bullets.filter(b => b.trim()).length > 0 && bullets(exp.bullets)}
+                            </div>
+                        )
+                    })}
+                </section>
+            )}
+
+            {projects.length > 0 && (
+                <section>
+                    <LapisSectionHeader title="Projects" />
+                    {projects.map((proj, i) => (
+                        <div key={i} style={{ marginBottom: '5pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
+                                {proj.date && <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{proj.date}</span>}
+                            </div>
+                            {proj.tech && companyLine(proj.tech)}
+                            {proj.bullets.filter(b => b.trim()).length > 0 && bullets(proj.bullets)}
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            {education.length > 0 && (
+                <section>
+                    <LapisSectionHeader title="Education" />
+                    {education.map((edu, i) => (
+                        <div key={i} style={{ marginBottom: '5pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700 }}>{edu.degree || edu.school || 'Degree'}</span>
+                                <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{edu.date}</span>
+                            </div>
+                            {(edu.school || edu.gpa) && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span style={{ fontStyle: 'italic', color: LAPIS_ACCENT }}>{edu.school}</span>
+                                    {edu.gpa && <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{edu.gpa}</span>}
+                                </div>
+                            )}
+                            {edu.coursework && (
+                                <div style={{ fontSize: '9.5pt', marginTop: '1.5pt' }}>
+                                    <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </section>
+            )}
+
+            {certifications.filter(c => c.trim()).length > 0 && (
+                <section><LapisSectionHeader title="Certifications" />{bullets(certifications)}</section>
+            )}
+            {achievements.filter(a => a.trim()).length > 0 && (
+                <section><LapisSectionHeader title="Achievements" />{bullets(achievements)}</section>
+            )}
+            {leadership.length > 0 && (
+                <section>
+                    <LapisSectionHeader title="Leadership" />
+                    {leadership.map((lead, i) => (
+                        <div key={i} style={{ marginBottom: '5pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                                <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{lead.date}</span>
+                            </div>
+                            {lead.role && companyLine(lead.role)}
+                            {lead.bullets.filter(b => b.trim()).length > 0 && bullets(lead.bullets)}
+                        </div>
+                    ))}
+                </section>
+            )}
+        </div>
+    )
+}
+
 // ── Rezi Resume Preview (HTML) ────────────────────────────
 function ReziResumePreview({ state }: { state: ResumeEditorState }) {
     const { profile, summary, education, experience, projects, skills, certifications, achievements } = state
@@ -2130,12 +2909,24 @@ const TEMPLATE_LABELS: Record<string, string> = {
     harvard: 'Harvard',
     sb2nov: 'sb2nov',
     'open-resume': 'Open Resume',
+    cobalt: 'Cobalt',
+    onyx: 'Onyx',
+    jade: 'Jade',
+    lapis: 'Lapis',
 }
 
 async function loadPdfRenderer(templateId: string) {
     const [renderer, pdfDoc] = await Promise.all([
         import('@react-pdf/renderer'),
-        templateId === 'rezi'
+        templateId === 'lapis'
+            ? import('@/components/ResumeRenderer/LapisPdfDocument')
+            : templateId === 'jade'
+            ? import('@/components/ResumeRenderer/JadePdfDocument')
+            : templateId === 'onyx'
+            ? import('@/components/ResumeRenderer/OnyxPdfDocument')
+            : templateId === 'cobalt'
+            ? import('@/components/ResumeRenderer/CobaltPdfDocument')
+            : templateId === 'rezi'
             ? import('@/components/ResumeRenderer/ReziPdfDocument')
             : templateId === 'rezi-standard'
             ? import('@/components/ResumeRenderer/ReziStandardPdfDocument')
@@ -2155,9 +2946,8 @@ async function loadPdfRenderer(templateId: string) {
 }
 
 // ── Download PDF ─────────────────────────────────────────────
-function DownloadPdf({ state, templateId }: { state: ResumeEditorState; templateId: string }) {
+function DownloadPdf({ state, templateId, companyName }: { state: ResumeEditorState; templateId: string; companyName?: string | null }) {
     const [loading, setLoading] = useState(false)
-    const templateLabel = TEMPLATE_LABELS[templateId] ?? 'Classic'
 
     async function handleDownload() {
         setLoading(true)
@@ -2168,7 +2958,9 @@ function DownloadPdf({ state, templateId }: { state: ResumeEditorState; template
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
-            a.download = `${(state.profile.name || 'Resume').replace(/\s+/g, '_')}_${templateLabel}_Resume.pdf`
+            const safeName = (state.profile.name || 'Resume').replace(/[^\w\s-]/g, '').replace(/\s+/g, '_')
+            const safeCompany = companyName ? companyName.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_') : ''
+            a.download = safeCompany ? `${safeCompany}_-_${safeName}_Resume.pdf` : `${safeName}_Resume.pdf`
             a.click()
             URL.revokeObjectURL(url)
         } catch (err) {
@@ -2196,7 +2988,7 @@ function DownloadPdf({ state, templateId }: { state: ResumeEditorState; template
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
             </svg>
-            {loading ? 'Generating...' : `Download PDF (${templateLabel})`}
+            {loading ? 'Generating...' : 'Download PDF'}
         </button>
     )
 }
@@ -2208,6 +3000,12 @@ function ResumeChangeLog({ entry, rawData, rawScore, rawJob }: {
     rawScore?: number
     rawJob?: { title?: string; company?: string; location?: string } | null
 }) {
+    // Hooks must run before any early return (rules-of-hooks). These accordion
+    // open-states don't depend on `data`, so hoisting them is behaviour-neutral.
+    const [openExp, setOpenExp] = useState<number | null>(0)
+    const [openProj, setOpenProj] = useState<number | null>(null)
+    const [openBA, setOpenBA] = useState<number | null>(0)
+
     const data = entry?.optimized_data ?? rawData
     if (!data) return null
     const score = entry?.keyword_alignment_score ?? data.keyword_alignment_score ?? rawScore ?? 0
@@ -2222,9 +3020,6 @@ function ResumeChangeLog({ entry, rawData, rawScore, rawJob }: {
     const beforeAfter: BeforeAfterRole[] = (data as any).before_after_experience ?? []
     const skillsDelta: SkillsDelta | undefined = (data as any).skills_delta
     const actionPlan: CareerActionPlan | undefined = (data as any).career_action_plan
-    const [openExp, setOpenExp] = useState<number | null>(0)
-    const [openProj, setOpenProj] = useState<number | null>(null)
-    const [openBA, setOpenBA] = useState<number | null>(0)
 
     const callbackRaw = (ats?.predicted_callback ?? '').toLowerCase()
     const isHigh = callbackRaw.startsWith('high')
@@ -3258,6 +4053,10 @@ function MeridianPreviewPanel({
 }) {
     const renderPreview = () => {
         switch (templateId) {
+            case 'cobalt': return <CobaltResumePreview state={state} />
+            case 'onyx': return <OnyxResumePreview state={state} />
+            case 'jade': return <JadeResumePreview state={state} />
+            case 'lapis': return <LapisResumePreview state={state} />
             case 'rezi': return <ReziResumePreview state={state} />
             case 'rezi-standard': return <ReziStandardResumePreview state={state} />
             case 'london': return <LondonResumePreview state={state} />
@@ -3751,7 +4550,7 @@ export default function ResumesPage() {
             } else {
                 // Fall back to localStorage draft
                 try {
-                    const raw = localStorage.getItem('resuscore-resume-draft')
+                    const raw = localStorage.getItem('jobscorer-resume-draft')
                     if (raw) {
                         const { optimizedData, originalResume } = JSON.parse(raw) as { optimizedData: OptimizedResumeData; originalResume: ParsedResume | null }
                         setEditorState(mapToEditorState(optimizedData, originalResume))
@@ -3760,7 +4559,7 @@ export default function ResumesPage() {
                 } catch { /* use empty state */ }
             }
 
-            const savedTemplate = localStorage.getItem('resuscore-template')
+            const savedTemplate = localStorage.getItem('jobscorer-template')
             if (savedTemplate && TEMPLATE_LABELS[savedTemplate]) setTemplateId(savedTemplate)
             setLoaded(true)
         }
@@ -3801,7 +4600,7 @@ export default function ResumesPage() {
 
     const handleTemplateSelect = useCallback((id: TemplateId) => {
         setTemplateId(id)
-        localStorage.setItem('resuscore-template', id)
+        localStorage.setItem('jobscorer-template', id)
         setShowTemplatePicker(false)
     }, [])
 
@@ -3878,20 +4677,7 @@ export default function ResumesPage() {
                 height: 50, background: M.white, borderBottom: `1px solid ${M.border}`,
                 display: 'flex', alignItems: 'center', padding: '0 22px', gap: 14, flexShrink: 0,
             }}>
-                {/* Brand */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{
-                        width: 26, height: 26, borderRadius: 7, background: M.accent,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.8125rem', fontWeight: 800, color: '#fff', fontFamily: M.fontHeading,
-                    }}>R</div>
-                    <span style={{
-                        fontSize: '0.9375rem', fontWeight: 700, color: M.text,
-                        fontFamily: M.fontHeading, letterSpacing: '-0.015em',
-                    }}>ResuScore</span>
-                </div>
-                <div style={{ width: 1, height: 18, background: M.border }} />
-
+                {/* Studio title (brand sits in the global nav above) */}
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2">
                     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                     <path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/>
@@ -3938,7 +4724,7 @@ export default function ResumesPage() {
                 )}
 
                 <div style={{ width: 1, height: 18, background: M.border }} />
-                <DownloadPdf state={editorState} templateId={templateId} />
+                <DownloadPdf state={editorState} templateId={templateId} companyName={meridianJob?.company ?? null} />
             </div>
 
             {/* ── Studio body ── */}
@@ -4033,7 +4819,7 @@ export default function ResumesPage() {
                     templateId={templateId}
                     onTemplateChange={(t) => {
                         setTemplateId(t)
-                        localStorage.setItem('resuscore-template', t)
+                        localStorage.setItem('jobscorer-template', t)
                     }}
                     onMoreTemplates={() => setShowTemplatePicker(true)}
                     downloadButton={null}

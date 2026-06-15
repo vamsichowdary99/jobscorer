@@ -42,3 +42,11 @@ next-env.d.ts
 
 # local-only smoke-test scripts (may contain test creds)
 /scripts/
+
+# dev/brainstorm artefacts — not source code
+.superpowers/
+.dev.log
+response.txt
+rendercv/
+new_n8n.json
+*.html.bak

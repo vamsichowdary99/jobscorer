@@ -500,12 +500,9 @@ async function getCachedScore(userId: string, sessionResumeId: string | null, jo
     return JSON.stringify({ error: 'No resume found. Upload a resume first.' });
   }
 
-  const cached = await safeRedis(async (r) => r.get(KEY.score(resumeId, jobId)));
-  if (cached) {
-    const value = typeof cached === 'string' ? JSON.parse(cached) : cached;
-    return JSON.stringify({ source: 'redis', resume_id: resumeId, job_id: jobId, score: value });
-  }
-
+  // NOTE: the Redis score:* key is only a PRESENCE marker (value is the integer 1),
+  // not a stored score — so we must NOT return it as the score. Always read the real
+  // score from user_job_matches below. (M1)
   const { data: match, error } = await supabase
     .from('user_job_matches')
     .select('relevance_score, matched_skills, missing_skills, ai_reasoning, jobs:job_id (title, company)')

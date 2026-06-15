@@ -32,6 +32,9 @@ function limiters() {
     score: makeLimiter(30, 60, 'rl:score'),
     company: makeLimiter(20, 60, 'rl:company'),
     optimize: makeLimiter(20, 300, 'rl:optimize'),
+    // Build Plan Generator hits OpenAI + GitHub (paid/rate-limited) per call.
+    // Same window as optimize since it's the same pre-generation flow.
+    'build-plan': makeLimiter(20, 300, 'rl:build-plan'),
     // Resume upload triggers n8n + Claude PDF parse (~10s, paid). Tighter
     // window than 'ingest' since a single user has no legitimate reason to
     // upload >10 resumes in 5 minutes.
@@ -39,11 +42,16 @@ function limiters() {
     // Chat hits OpenAI (paid) per message; 20/min per user blocks abuse while
     // staying well above normal interactive use.
     chat: makeLimiter(20, 60, 'rl:chat'),
+    // Learning-path generation triggers n8n + OpenAI (paid) per call — same
+    // window as optimize since it's an equivalent pre-generation flow.
+    learning: makeLimiter(20, 300, 'rl:learning'),
+    // Gap detection runs a cheaper analysis; cap to block hammering the DB/LLM.
+    'gap-detection': makeLimiter(30, 60, 'rl:gap-detection'),
   };
   return _limiters;
 }
 
-export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume' | 'chat';
+export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume' | 'chat' | 'build-plan' | 'learning' | 'gap-detection';
 
 /**
  * Check the limiter for a user. Returns null if the request is allowed

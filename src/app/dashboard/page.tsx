@@ -181,7 +181,7 @@ export default function DashboardHomePage() {
                         display: 'grid', placeItems: 'center', fontSize: 38, margin: '0 auto 20px',
                     }}>📄</div>
                     <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginBottom: 8, letterSpacing: '-0.02em' }}>
-                        Welcome to ResuScore, {user?.email?.split('@')[0] ?? 'there'} 🎉
+                        Welcome to JobScorer, {user?.email?.split('@')[0] ?? 'there'} 🎉
                     </h1>
                     <p style={{ fontSize: 14, color: '#475569', marginBottom: 24, maxWidth: 420, margin: '0 auto 24px' }}>
                         Upload your resume in 30 seconds to start finding matches tailored to your profile.

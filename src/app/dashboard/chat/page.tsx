@@ -298,7 +298,7 @@ function BetaPill() {
             boxShadow: '0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.04)',
         }}>
             <Avatar size={24} />
-            <span style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--rs-ink-2)' }}>ResuScore AI</span>
+            <span style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--rs-ink-2)' }}>JobScorer AI</span>
             <span style={{
                 fontSize: '.625rem', fontWeight: 700, letterSpacing: '.06em',
                 padding: '2px 6px', borderRadius: 4,
@@ -563,7 +563,7 @@ function exportJobsCSV(jobs: JobMatchData[]) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `resuscore-matches-${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `jobscorer-matches-${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -1597,6 +1597,11 @@ export default function AIChatPage() {
             signal,
         })
         if (!res.ok) {
+            // 402 = chat quota exhausted → fire the global upgrade toast.
+            const { handleQuota } = await import('@/lib/quota')
+            if (await handleQuota(res)) {
+                throw new Error("You've used all your AI chat messages on this plan for the month. Upgrade for more.")
+            }
             // Server still returns JSON for auth/validation failures pre-stream.
             const body = await res.json().catch(() => ({}))
             throw new Error(body?.error || `HTTP ${res.status}`)
@@ -1914,7 +1919,7 @@ export default function AIChatPage() {
                             fontSize: '.6875rem', color: 'var(--rs-muted-2)',
                             marginTop: 24, letterSpacing: '-.005em', textAlign: 'center',
                         }}>
-                            ResuScore AI can use your resume, scored matches, and company research.
+                            JobScorer AI can use your resume, scored matches, and company research.
                         </div>
 
                         {error && <ErrorBar text={error} onClose={() => setError(null)} />}
@@ -2041,7 +2046,7 @@ export default function AIChatPage() {
                                 }}>
                                     {pendingPick
                                         ? 'Pick a resume above to continue.'
-                                        : 'ResuScore AI can use your resume, scored matches, and company research.'}
+                                        : 'JobScorer AI can use your resume, scored matches, and company research.'}
                                 </div>
 
                                 {error && <ErrorBar text={error} onClose={() => setError(null)} />}

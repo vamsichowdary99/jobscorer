@@ -7,8 +7,8 @@ export default function PrivacyPolicyPage() {
   return (
     <LegalPageLayout title="Privacy Policy" lastUpdated="[DATE]">
       <p style={{ marginBottom: 24 }}>
-        This Privacy Policy explains how <strong>[COMPANY LEGAL NAME]</strong> (&quot;ResuScore&quot;,
-        &quot;we&quot;) collects, uses, shares, and protects your personal data when you use ResuScore.
+        This Privacy Policy explains how <strong>[COMPANY LEGAL NAME]</strong> (&quot;JobScorer&quot;,
+        &quot;we&quot;) collects, uses, shares, and protects your personal data when you use JobScorer.
         We process personal data as a Data Fiduciary under India&apos;s Digital Personal Data Protection
         Act, 2023 and the DPDP Rules, 2025.
       </p>
@@ -31,7 +31,7 @@ export default function PrivacyPolicyPage() {
         <p>
           Our database, authentication, and file storage are hosted on Supabase in the European Union
           (eu-north-1). To provide AI features (resume scoring, optimization, chat), relevant data is
-          sent to OpenAI (United States). Your use of ResuScore involves processing and storage of your
+          sent to OpenAI (United States). Your use of JobScorer involves processing and storage of your
           personal data outside India, as permitted under the DPDP Act.
         </p>
       </LegalSection>
@@ -60,7 +60,7 @@ export default function PrivacyPolicyPage() {
       <LegalSection heading="6. Your rights as a Data Principal">
         <p>Under the DPDP Act you have the right to: access a summary of your data, correct or update it,
         request erasure, nominate another person to exercise your rights, and raise a grievance. You can
-        exercise access (download your data) and erasure directly in Settings, or contact us below.</p>
+        delete your account directly in Settings, and to request a copy of your data simply contact us below.</p>
       </LegalSection>
 
       <LegalSection heading="7. Consent and withdrawal">
@@ -70,7 +70,7 @@ export default function PrivacyPolicyPage() {
       </LegalSection>
 
       <LegalSection heading="8. Children">
-        <p>ResuScore is intended for users aged 18 and above. We do not knowingly process the personal
+        <p>JobScorer is intended for users aged 18 and above. We do not knowingly process the personal
         data of children.</p>
       </LegalSection>
 

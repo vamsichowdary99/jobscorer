@@ -146,7 +146,7 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
     {items
       .filter((b) => b.trim())
       .map((b, i) => (
-        <View key={i} style={{ flexDirection: "row", marginBottom: "2pt" }}>
+        <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "2pt" }}>
           <Text
             style={{
               width: "8pt",
@@ -209,7 +209,7 @@ const LondonPdfDocument: React.FC<LondonPdfDocumentProps> = ({ state }) => {
   const hasSkills = !!(skills.languages || skills.tools || skills.frameworks || skills.soft);
 
   return (
-    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="ResuScore">
+    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="JobScorer">
       <Page
         size={[PAGE_W, PAGE_H]}
         style={{

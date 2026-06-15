@@ -6,7 +6,7 @@ export const SITE_URL = (
   'https://resuscore.app'
 ).replace(/\/$/, '');
 
-export const SITE_NAME = 'ResuScore';
+export const SITE_NAME = 'JobScorer';
 export const SITE_TAGLINE = 'AI-Powered Job Matching & Resume Optimization';
 export const SITE_DESCRIPTION =
   'Upload your resume, discover jobs, and get AI-scored matches with optimization recommendations. Stop searching, start matching.';

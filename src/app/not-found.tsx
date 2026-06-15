@@ -27,15 +27,20 @@ export default function NotFound() {
       >
         <span
           style={{
-            width: 36, height: 36, borderRadius: 9, background: '#135bec',
-            display: 'grid', placeItems: 'center', color: '#fff',
-            fontWeight: 800, fontSize: 16, boxShadow: '0 1px 3px rgba(19,91,236,0.22)',
+            position: 'relative',
+            width: 36, height: 36, borderRadius: 9,
+            background: 'linear-gradient(135deg, #135bec 0%, #2563eb 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 3px 8px -1px rgba(19,91,236,0.34)', flexShrink: 0,
           }}
         >
-          R
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 18 L9 12 L13 15 L20 6" />
+            <path d="M15 6 L20 6 L20 11" />
+          </svg>
         </span>
-        <span style={{ fontWeight: 700, fontSize: 18, color: '#0f172a', letterSpacing: '-0.02em' }}>
-          ResuScore
+        <span style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '-0.025em' }}>
+          <span style={{ color: '#0f172a' }}>Job</span><span style={{ color: '#135bec' }}>Scorer</span>
         </span>
       </Link>
 

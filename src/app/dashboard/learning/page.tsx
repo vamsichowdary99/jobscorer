@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState, useCallback, type SVGProps, type ReactElement } from 'react'
+import { Suspense, useEffect, useMemo, useState, useCallback, useRef, type SVGProps, type ReactElement } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
@@ -1363,6 +1363,28 @@ export default function LearningPageWrapper() {
     )
 }
 
+/* Find the path matching the ?skill= the user clicked in the Build Plan ("Learn it").
+   Fuzzy because build-plan skill names are short ("CI/CD") while path skill_names are
+   the full gap phrase ("GIT and CI/CD tools"). Returns null on no match (so the caller
+   can generate that skill on demand). */
+function findPathForSkill(list: LearningPath[], skill: string | null): LearningPath | null {
+    if (!list.length || !skill) return null
+    const want = skill.trim().toLowerCase()
+    const exact = list.find(p => (p.skill_name || '').toLowerCase() === want)
+    if (exact) return exact
+    const sub = list.find(p => {
+        const sn = (p.skill_name || '').toLowerCase()
+        return sn.includes(want) || want.includes(sn)
+    })
+    if (sub) return sub
+    const tokens = want.split(/[^a-z0-9]+/).filter(t => t.length > 2)
+    const tok = list.find(p => {
+        const sn = (p.skill_name || '').toLowerCase()
+        return tokens.some(t => sn.includes(t))
+    })
+    return tok ?? null
+}
+
 /* ─── Main Page ──────────────────────────────────────────────── */
 function LearningPage() {
     useStyles()
@@ -1370,6 +1392,7 @@ function LearningPage() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const jobId = searchParams.get('jobId')
+    const skillParam = searchParams.get('skill')  // skill the user clicked "Learn it" on (Build Plan)
 
     const [job, setJob] = useState<Job | null>(null)
     const [paths, setPaths] = useState<LearningPath[]>([])
@@ -1379,6 +1402,9 @@ function LearningPage() {
     const [error, setError] = useState<string | null>(null)
     const [activeId, setActiveId] = useState<string | null>(null)
     const [summaries, setSummaries] = useState<LearningPathSummary[]>([])
+    // Guards on-demand generation so it fires at most once per (job, skill) — prevents a
+    // duplicate paid generation when the load effect runs twice (auth hydration / re-render).
+    const genTriggeredRef = useRef<string | null>(null)
 
     const { progress, toggle } = useProgress(jobId)
 
@@ -1402,9 +1428,14 @@ function LearningPage() {
             return
         }
 
+        // Wait for auth to hydrate — running loadData with an empty user_id causes 406s
+        // and a spurious empty-user generation. The effect re-runs once the user loads.
+        if (!user?.id) { setPhase('loading'); return }
+
         const { data: jobData } = await supabase
             .from('jobs').select('*').eq('id', jobId).single()
-        if (jobData) setJob(jobData as unknown as Job)
+        const jobObj = jobData ? (jobData as unknown as Job) : null
+        if (jobObj) setJob(jobObj)
 
         const existing = await fetchLearningPaths(user?.id ?? '', jobId)
 
@@ -1417,17 +1448,80 @@ function LearningPage() {
             .limit(1)
             .single() as { data: { missing_skills?: unknown[]; gaps?: unknown[] } | null; error: unknown }
 
-        if (matchData?.missing_skills && Array.isArray(matchData.missing_skills)) {
-            setMissingSkills(matchData.missing_skills as string[])
+        const mMissing = (matchData?.missing_skills && Array.isArray(matchData.missing_skills))
+            ? matchData.missing_skills as string[] : []
+        const mGaps = (matchData?.gaps && Array.isArray(matchData.gaps) && matchData.gaps.length > 0)
+            ? matchData.gaps as import('@/lib/types').JobGap[] : null
+        setMissingSkills(mMissing)
+        if (mGaps) setGaps(mGaps)
+
+        // Generate a learning path for ONE clicked skill on demand (used by "Learn it").
+        const generateForSkill = async (skill: string) => {
+            setPhase('generating')
+            try {
+                let company_research = null
+                if (jobObj?.company) {
+                    const { data: cr } = await supabase
+                        .from('company_research')
+                        .select('overview, tech_stack, culture, industry')
+                        .ilike('company_name', `%${jobObj.company}%`)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .single()
+                    if (cr) company_research = cr
+                }
+                // Prefer the real scoring gap (keeps severity/adjacency) when the clicked skill maps to one.
+                const w = skill.toLowerCase()
+                const matchedGap = (mGaps || []).find(g => {
+                    const gs = String(g?.skill || '').toLowerCase()
+                    return gs === w || gs.includes(w) || w.includes(gs)
+                })
+                await triggerLearningPathGeneration({
+                    userId: user?.id ?? '',
+                    jobId,
+                    resumeId: getPrimaryResumeId() ?? undefined,
+                    missingSkills: [skill],
+                    gaps: matchedGap ? [matchedGap] : undefined,
+                    jobTitle: jobObj?.title ?? 'Software Engineer',
+                    companyName: jobObj?.company ?? 'the company',
+                    company_research,
+                })
+                const fresh = await fetchLearningPaths(user?.id ?? '', jobId)
+                setPaths(fresh)
+                const m = findPathForSkill(fresh, skill)
+                setActiveId((m ?? fresh[0])?.id ?? null)
+                setPhase(fresh.length > 0 ? 'done' : 'idle')
+            } catch (e) {
+                setError(e instanceof Error ? e.message : 'Generation failed')
+                setPhase('error')
+            }
         }
-        if (matchData?.gaps && Array.isArray(matchData.gaps) && matchData.gaps.length > 0) {
-            setGaps(matchData.gaps as import('@/lib/types').JobGap[])
+
+        // "Learn it" deep-link: open the clicked skill's path — and if it doesn't exist
+        // yet, generate just that one skill on demand instead of showing the wrong card.
+        if (skillParam) {
+            const matched = findPathForSkill(existing, skillParam)
+            if (matched) {
+                setPaths(existing)
+                setActiveId(matched.id)
+                setPhase('done')
+                return
+            }
+            setPaths(existing)
+            const genKey = `${jobId}::${skillParam}`
+            if (genTriggeredRef.current !== genKey) {
+                genTriggeredRef.current = genKey
+                await generateForSkill(skillParam)
+            } else {
+                setPhase('generating')
+            }
+            return
         }
 
         setPaths(existing)
         if (existing.length > 0) setActiveId(existing[0].id)
         setPhase(existing.length > 0 ? 'done' : 'idle')
-    }, [jobId, user?.id])
+    }, [jobId, user?.id, skillParam])
 
     useEffect(() => { loadData() }, [loadData])
 
@@ -1458,7 +1552,7 @@ function LearningPage() {
             })
             const fresh = await fetchLearningPaths(user?.id ?? '', jobId)
             setPaths(fresh)
-            if (fresh.length > 0) setActiveId(fresh[0].id)
+            if (fresh.length > 0) setActiveId((findPathForSkill(fresh, skillParam) ?? fresh[0]).id)
             setPhase('done')
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Generation failed')

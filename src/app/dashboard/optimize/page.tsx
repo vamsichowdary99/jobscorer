@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { fetchResumes, fetchResumeById, getPrimaryResumeId, triggerResumeOptimization, fetchOptimizedResume, fetchOptimizedResumesByResume, RateLimitError } from '@/lib/api'
+import { fetchResumes, fetchResumeById, getPrimaryResumeId, triggerResumeOptimization, triggerBuildPlan, fetchOptimizedResume, fetchOptimizedResumesByResume, RateLimitError } from '@/lib/api'
 import { getScoreColor } from '@/lib/types'
-import type { Job, UserJobMatch, OptimizedResumeData, ParsedResume, AtsFeedback, BeforeAfterRole, SkillsDelta, CareerActionPlan } from '@/lib/types'
+import type { Job, UserJobMatch, OptimizedResumeData, ParsedResume, AtsFeedback, BeforeAfterRole, SkillsDelta, CareerActionPlan, BuildPlan, AcceptedRecommendation } from '@/lib/types'
 import { mapToOpenResumeSchema } from '@/lib/resumeMapper'
 import type { OpenResume } from '@/lib/resumeMapper'
+import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
 import TemplatePickerModal, { type TemplateId } from '@/components/TemplatePickerModal'
-import GapFormWizard, { type GapData } from '@/components/GapFormWizard'
+import BuildPlanModal from '@/components/BuildPlanModal'
 import { useAuth } from '@/components/providers/AuthProvider'
 
 type FullMatch = UserJobMatch & { job: Job }
@@ -2149,9 +2150,12 @@ function OptimizePageInner() {
     const [elapsed, setElapsed] = useState(0)
     const timerRef = useRef<NodeJS.Timeout | null>(null)
     const [showTemplatePicker, setShowTemplatePicker] = useState(false)
-    const [showGapForm, setShowGapForm] = useState(false)
-    const [gapSections, setGapSections] = useState<string[]>([])
-    const [pendingGapData, setPendingGapData] = useState<GapData | null>(null)
+    const [pendingGapData, setPendingGapData] = useState<Record<string, unknown> | null>(null)
+    // Build Plan modal (recommendations shown before resume creation)
+    const [showBuildPlan, setShowBuildPlan] = useState(false)
+    const [buildPlan, setBuildPlan] = useState<BuildPlan | null>(null)
+    const [buildPlanLoading, setBuildPlanLoading] = useState(false)
+    const [buildPlanError, setBuildPlanError] = useState<string | null>(null)
     const autoTriggeredRef = useRef(false)
 
     // Load all user resumes on mount, default to primary resume
@@ -2225,7 +2229,7 @@ function OptimizePageInner() {
         if (loadingOptimized) return
         const already = optimizedList.find(it => it.job_id === autoJobId)
         if (already) return // handleSelectJob will pick it up via the other effect
-        if (phase !== 'idle' || optimizedData || showGapForm) return
+        if (phase !== 'idle' || optimizedData) return
         // No cached version — we need a job object to generate. Fetch it.
         autoTriggeredRef.current = true
         import('@/lib/api').then(({ fetchJobById }) => {
@@ -2234,7 +2238,7 @@ function OptimizePageInner() {
                 setSelected({ id: autoJobId, job: { id: job.id, title: job.title ?? null, company: job.company ?? null, location: job.location ?? null } })
             })
         })
-    }, [autoJobId, selectedResumeId, loadingOptimized, optimizedList, phase, optimizedData, showGapForm])
+    }, [autoJobId, selectedResumeId, loadingOptimized, optimizedList, phase, optimizedData])
 
     // Open template picker — user picks template then navigates to resumes
     const handleGenerateResume = useCallback(() => {
@@ -2244,8 +2248,8 @@ function OptimizePageInner() {
 
     const handleTemplateSelect = useCallback((templateId: TemplateId) => {
         if (!optimizedData) return
-        localStorage.setItem('resuscore-resume-draft', JSON.stringify({ optimizedData, originalResume }))
-        localStorage.setItem('resuscore-template', templateId)
+        localStorage.setItem('jobscorer-resume-draft', JSON.stringify({ optimizedData, originalResume }))
+        localStorage.setItem('jobscorer-template', templateId)
         setShowTemplatePicker(false)
         router.push('/dashboard/resumes')
     }, [optimizedData, originalResume, router])
@@ -2271,7 +2275,6 @@ function OptimizePageInner() {
         setCached(true)
         setPhase('done')
         setError(null)
-        setShowGapForm(false)
         setPendingGapData(null)
     }, [])
 
@@ -2282,8 +2285,11 @@ function OptimizePageInner() {
             .catch(() => {})
     }, [user?.id, selectedResumeId])
 
-    const handleGenerateWithGapData = useCallback(async (gapData: GapData | null) => {
+    // Shared optimizer runner — invoked by the Build Plan modal (Confirm / Skip all).
+    // Accepted items are folded into the resume; passing any forces a cache-bypassing re-run.
+    const runOptimizer = useCallback(async (accepted: AcceptedRecommendation[]) => {
         if (!selected || !resumeId) return
+        setShowBuildPlan(false)
         setPhase('loading')
         setError(null)
         setCached(false)
@@ -2292,7 +2298,9 @@ function OptimizePageInner() {
                 user_id: user?.id ?? '',
                 resume_id: resumeId,
                 job_id: selected.job.id,
-                gap_data: gapData as Record<string, any> | null,
+                gap_data: pendingGapData as Record<string, any> | null,
+                accepted_recommendations: accepted.length > 0 ? accepted : undefined,
+                force_refresh: accepted.length > 0,
             })
             if (result.success && result.optimized_data) {
                 setOptimizedData(result.optimized_data as OptimizedResumeData)
@@ -2310,36 +2318,71 @@ function OptimizePageInner() {
             }
             setPhase('error')
         }
-    }, [selected, resumeId, user?.id, refreshOptimizedList])
+    }, [selected, resumeId, pendingGapData, user?.id, refreshOptimizedList])
 
-    // Handle gap form completion — save gap data and trigger generation
-    const handleGapFormComplete = useCallback((gapData: GapData) => {
-        setPendingGapData(gapData)
-        setShowGapForm(false)
-        handleGenerateWithGapData(gapData)
-    }, [handleGenerateWithGapData])
+    // Open the Build Plan modal: run gap detection first (unless already done),
+    // then trigger Workflow 1 and show recommendations BEFORE resume creation.
+    const openBuildPlan = useCallback(async () => {
+        if (!selected || !resumeId) return
+
+        // Gap form removed — users add missing certifications/achievements from the
+        // Resumes section instead. Go straight to the Build Plan recommendations.
+
+        // Show the modal in loading state and trigger Workflow 1.
+        setShowBuildPlan(true)
+        setBuildPlan(null)
+        setBuildPlanError(null)
+        setBuildPlanLoading(true)
+        try {
+            // Best-effort match enrichment — the workflow also reads these from Supabase.
+            let gaps: import('@/lib/types').JobGap[] | null = null
+            let matched: string[] | undefined
+            let missing: string[] | undefined
+            if (user?.id) {
+                const supabase = createBrowserSupabase()
+                const { data } = await supabase
+                    .from('user_job_matches')
+                    .select('matched_skills, missing_skills, gaps')
+                    .eq('user_id', user.id)
+                    .eq('job_id', selected.job.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                const row = data as { matched_skills: string[] | null; missing_skills: string[] | null; gaps: import('@/lib/types').JobGap[] | null } | null
+                gaps = row?.gaps ?? null
+                matched = row?.matched_skills ?? undefined
+                missing = row?.missing_skills ?? undefined
+            }
+            const result = await triggerBuildPlan({
+                resume_id: resumeId,
+                job_id: selected.job.id,
+                gaps,
+                matched_skills: matched,
+                missing_skills: missing,
+                job_title: selected.job.title ?? undefined,
+                company_name: selected.job.company ?? undefined,
+            })
+            if (result.success) {
+                setBuildPlan(result.build_plan ?? { certifications: [], projects: [], learning_links: [], generated_at: '' })
+            } else {
+                setBuildPlanError('Could not generate recommendations.')
+            }
+        } catch (err: any) {
+            if (err instanceof RateLimitError) {
+                setBuildPlanError(`Slow down — try again in ${err.retryAfterSec}s.`)
+            } else {
+                setBuildPlanError(err?.message || 'Could not generate recommendations.')
+            }
+        } finally {
+            setBuildPlanLoading(false)
+        }
+    }, [selected, resumeId, pendingGapData, user?.id])
 
     // Generate optimization
     const handleGenerate = useCallback(async (forceRefresh = false) => {
         if (!selected || !resumeId) return
 
-        // If no gap data collected yet and not a force refresh, run gap detection first
-        if (!forceRefresh && !pendingGapData && user?.id) {
-            try {
-                const res = await fetch(`/api/gap-detection?resume_id=${resumeId}`)
-                if (res.ok) {
-                    const { toAsk } = await res.json()
-                    if (Array.isArray(toAsk) && toAsk.length > 0) {
-                        setGapSections(toAsk)
-                        setShowGapForm(true)
-                        return
-                    }
-                }
-            } catch {
-                // If gap detection fails, proceed without it
-            }
-        }
-
+        // Gap form removed — proceed straight to optimization.
         setPhase('loading')
         setError(null)
         setCached(false)
@@ -2379,13 +2422,17 @@ function OptimizePageInner() {
                 />
             )}
 
-            {/* Gap Form Wizard */}
-            {showGapForm && resumeId && (
-                <GapFormWizard
-                    resumeId={resumeId}
-                    sectionsToAsk={gapSections}
-                    onComplete={handleGapFormComplete}
-                    onClose={() => setShowGapForm(false)}
+
+            {/* Build Plan Modal — recommendations shown before resume creation */}
+            {showBuildPlan && selected && (
+                <BuildPlanModal
+                    buildPlan={buildPlan}
+                    loading={buildPlanLoading}
+                    error={buildPlanError}
+                    jobId={selected.job.id}
+                    onConfirm={runOptimizer}
+                    onSkipAll={() => runOptimizer([])}
+                    onClose={() => setShowBuildPlan(false)}
                 />
             )}
             {/* Header */}
@@ -2567,7 +2614,7 @@ function OptimizePageInner() {
                                 {selected.job.location}
                             </p>
                             <button
-                                onClick={() => handleGenerate()}
+                                onClick={() => openBuildPlan()}
                                 disabled={!resumeId}
                                 style={{
                                     display: 'inline-flex', alignItems: 'center', gap: 10,
@@ -2627,7 +2674,7 @@ function OptimizePageInner() {
                                 {error || 'Something went wrong. Please try again.'}
                             </p>
                             <button
-                                onClick={() => handleGenerate()}
+                                onClick={() => openBuildPlan()}
                                 style={{
                                     padding: '10px 24px', borderRadius: T.radiusSm,
                                     background: T.primary, color: 'white',
@@ -2673,6 +2720,25 @@ function OptimizePageInner() {
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <button
+                                        onClick={() => openBuildPlan()}
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 7,
+                                            padding: '10px 18px', borderRadius: T.radiusSm,
+                                            border: `1.5px solid ${T.border}`,
+                                            background: T.surface, color: T.textSecondary,
+                                            fontWeight: 600, fontSize: '0.8125rem',
+                                            fontFamily: "'DM Sans', sans-serif",
+                                            cursor: 'pointer', transition: 'all 0.15s ease',
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.borderColor = T.primary; e.currentTarget.style.color = T.primary; e.currentTarget.style.background = T.primaryGlow }}
+                                        onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.textSecondary; e.currentTarget.style.background = T.surface }}
+                                    >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
+                                        </svg>
+                                        Refine with Build Plan
+                                    </button>
                                     <button
                                         onClick={() => handleGenerate(true)}
                                         style={{

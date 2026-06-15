@@ -55,7 +55,9 @@ export async function matchAndPromote(args: {
 
     const supabase = createServiceClient(SUPABASE_URL, SERVICE_KEY)
 
-    const { data, error } = await supabase.rpc('match_pool_jobs', {
+    // `as any`: match_pool_jobs RPC isn't declared in the Database type
+    // (same convention as match_jobs in lib/rag/search.ts).
+    const { data, error } = await supabase.rpc('match_pool_jobs' as any, {
         p_role: args.role,
         p_location: args.location,
         p_experience_level: args.experience_level || 'entry_level',

@@ -161,6 +161,33 @@ function timeAgo(d: string) {
 }
 function pad(n: number) { return String(n).padStart(2, '0') }
 
+// Estimate total years of experience from work-history date ranges. The resume
+// parser frequently omits total_years_experience (or returns 0), which made the
+// hero stat read "00 Experience" even for candidates with real history. We fall
+// back to summing the durations of each role here.
+function estimateYearsFromWork(work: { start: string; end: string }[]): number {
+    if (!work?.length) return 0
+    const toMs = (s: string): number | null => {
+        if (!s) return null
+        if (/present|current|now|ongoing/i.test(s)) return Date.now()
+        const ym = s.match(/(\d{4})/)            // any 4-digit year
+        if (!ym) return null
+        const year = Number(ym[1])
+        if (year < 1950 || year > 2100) return null
+        const mm = s.match(/\b(0?[1-9]|1[0-2])[\/\-]/) // leading month e.g. "04/2024"
+        const monthIdx = mm ? Number(mm[1]) - 1 : 0
+        return new Date(year, monthIdx, 1).getTime()
+    }
+    let totalMs = 0
+    for (const w of work) {
+        const start = toMs(w.start)
+        const end = toMs(w.end) ?? Date.now()
+        if (start != null && end > start) totalMs += end - start
+    }
+    if (totalMs <= 0) return 0
+    return Math.round(totalMs / (365.25 * 24 * 60 * 60 * 1000))
+}
+
 // ── all styles outside component ────────────────────────────────────────────
 const S: Record<string, React.CSSProperties> = {
     root:        { display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', overflow: 'hidden', fontFamily: "'Inter',sans-serif", background: '#f8fafc' },
@@ -813,6 +840,14 @@ export default function UploadPage() {
         if (typeof sd === 'string') { try { sd = JSON.parse(sd) } catch { return null } }
         const d = sd as Record<string, unknown>
         const pi = (d.personal_info as Record<string, string>) || {}
+        const work = ((d.work_experience || d.work_history || []) as Record<string, unknown>[]).map(e => ({
+            position: (e.title || e.position || '') as string,
+            company:  (e.company || '') as string,
+            start:    (e.start_date || '') as string,
+            end:      (e.end_date || 'Present') as string,
+            desc:     Array.isArray(e.responsibilities) ? (e.responsibilities as string[]).join('\n') : ((e.description || '') as string),
+        }))
+        const parsedYears = d.total_years_experience as number
         return {
             name:      pi.full_name || (d.name as string) || 'Unknown',
             email:     pi.email || (d.email as string) || '',
@@ -822,13 +857,7 @@ export default function UploadPage() {
             portfolio: pi.portfolio || pi.website || '',
             summary:   (d.professional_summary as string) || (d.summary as string) || '',
             role:     pi.title || (d.title as string) || (d.professional_title as string) || '',
-            work: ((d.work_experience || d.work_history || []) as Record<string, unknown>[]).map(e => ({
-                position: (e.title || e.position || '') as string,
-                company:  (e.company || '') as string,
-                start:    (e.start_date || '') as string,
-                end:      (e.end_date || 'Present') as string,
-                desc:     Array.isArray(e.responsibilities) ? (e.responsibilities as string[]).join('\n') : ((e.description || '') as string),
-            })),
+            work,
             education: ((d.education || []) as Record<string, string>[]).map(e => ({
                 institution: e.institution || '', degree: e.degree || '',
                 field: e.field_of_study || e.field || '', grad: e.graduation_date || '', gpa: e.gpa || '',
@@ -836,7 +865,7 @@ export default function UploadPage() {
             skills:   [...new Set([...((d.skills as Record<string, string[]>)?.technical || []), ...((d.skills as Record<string, string[]>)?.tools || []), ...((d.technical_skills as string[]) || [])])] as string[],
             projects: ((d.projects || []) as Record<string, string>[]).map(p => ({ name: p.name || '', desc: p.description || '' })),
             certs:    ((d.certifications || []) as Record<string, string>[]).map(c => ({ name: c.name || '', issuer: c.issuer || '', date: c.date || '' })),
-            years:    (d.total_years_experience as number) || 0,
+            years:    (typeof parsedYears === 'number' && parsedYears > 0) ? Math.round(parsedYears) : estimateYearsFromWork(work),
         }
     }, [])
 
@@ -857,14 +886,26 @@ export default function UploadPage() {
     }), [preview, savedLinks])
     const hasAnyLink = !!(displayLinks.linkedin || displayLinks.github || displayLinks.portfolio || displayLinks.other)
 
+    // Resume-strength heuristic on a 0–100 scale so it matches the dashboard's
+    // /100 resume score and the 0–100 match scores — one scale across the app.
+    // (Previously a 350–999 "credit-score" style number, which read like a
+    // different metric next to the dashboard's 75/100.)
     const sc = useMemo(() => {
-        if (!preview) return 350
+        if (!preview) return 35
         const allCerts = preview.certs.length + savedCerts.length
         const allProjs = preview.projects.length + savedProjects.length
-        return Math.min(999, 350 + Math.min(preview.years * 28, 140) + Math.min(preview.skills.length * 5, 140) + Math.min(allProjs * 22, 110) + Math.min(allCerts * 28, 110) + (preview.summary ? 50 : 0) + (displayLinks.linkedin ? 50 : 0))
+        return Math.round(Math.min(100,
+            35
+            + Math.min(preview.years * 3, 15)
+            + Math.min(preview.skills.length * 0.5, 15)
+            + Math.min(allProjs * 2.2, 11)
+            + Math.min(allCerts * 2.8, 11)
+            + (preview.summary ? 5 : 0)
+            + (displayLinks.linkedin ? 5 : 0)
+        ))
     }, [preview, savedCerts, savedProjects, displayLinks])
 
-    const pct  = (sc / 999 * 100).toFixed(1)
+    const pct = String(sc)
     const atLimit = resumes.length >= MAX_RESUMES
 
     const missing = useMemo(() => {
@@ -1030,7 +1071,7 @@ export default function UploadPage() {
                                                 <div style={S.ringInner} />
                                                 <div style={S.ringText}>
                                                     <span style={S.ringNum}>{sc}</span>
-                                                    <span style={S.ringLabel}>Resuscore</span>
+                                                    <span style={S.ringLabel}>JobScorer</span>
                                                 </div>
                                             </div>
                                         </div>

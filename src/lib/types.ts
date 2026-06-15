@@ -31,6 +31,11 @@ export interface Database {
                 Insert: Omit<OptimizedResume, 'id' | 'created_at' | 'updated_at'>
                 Update: Partial<Omit<OptimizedResume, 'id'>>
             }
+            resume_build_recommendations: {
+                Row: ResumeBuildRecommendation
+                Insert: Omit<ResumeBuildRecommendation, 'id' | 'created_at' | 'updated_at'>
+                Update: Partial<Omit<ResumeBuildRecommendation, 'id'>>
+            }
             company_research: {
                 Row: CompanyResearch
                 Insert: Omit<CompanyResearch, 'id' | 'created_at'>
@@ -214,6 +219,10 @@ export interface Job {
         spam_title?: boolean
         _composite_score?: number
     } | null
+    // Job-level application status (open/closed/expired/unknown). NOTE: distinct
+    // from the kanban tracker's `ApplicationStatus` in api.ts — this is whether
+    // the listing itself still accepts applications.
+    application_status?: import('./jobs/applicationStatus').JobApplicationStatus | null
 }
 
 export interface ResumeAiAnalysis {
@@ -518,4 +527,78 @@ export interface OptimizedResume {
     optimized_data: OptimizedResumeData
     keyword_alignment_score: number | null
     optimization_notes: string[] | null
+}
+
+// ── Build Plan (recommendation popup before resume creation) ──────────────
+// Generated fresh by the "Build Plan Generator" n8n workflow (does NOT reuse
+// career_action_plan). Each item carries a gap-derived impact_pct and the gap
+// skills it addresses, so the UI can show an honest "+X% interview chances".
+
+// A real public GitHub repo surfaced as build inspiration for a project idea.
+export interface BuildRecoExampleRepo {
+    name: string
+    full_name: string
+    html_url: string
+    stars: number
+    description: string | null
+}
+
+export interface BuildRecoCertification {
+    id: string
+    name: string
+    provider: string
+    reason: string
+    effort: string
+    addresses_gaps: string[]
+    severity_addressed: 'hard_blocker' | 'nice_to_have'
+    impact_pct: number
+    learning_skill?: string // drives the "Learn it" deep-link
+}
+
+export interface BuildRecoProject {
+    id: string
+    name: string
+    description: string
+    tech: string[]
+    addresses_gaps: string[]
+    severity_addressed: 'hard_blocker' | 'nice_to_have'
+    impact_pct: number
+    example_repos: BuildRecoExampleRepo[]
+    learning_skill?: string
+}
+
+export interface BuildRecoLearningLink {
+    id: string
+    skill: string
+    why: string
+    severity: 'hard_blocker' | 'nice_to_have'
+    impact_pct: number
+}
+
+export interface BuildPlan {
+    certifications: BuildRecoCertification[]
+    projects: BuildRecoProject[]
+    learning_links: BuildRecoLearningLink[]
+    generated_at: string
+}
+
+// An item the user accepted in the modal, passed inline into the optimizer.
+// framing_hint enforces honest "in progress / planned" wording on the resume.
+export interface AcceptedRecommendation {
+    type: 'certification' | 'project'
+    name: string
+    tech?: string[]
+    framing_hint: string
+}
+
+// Row in resume_build_recommendations (caches a generated BuildPlan).
+export interface ResumeBuildRecommendation {
+    id: string
+    user_id: string
+    resume_id: string
+    job_id: string
+    recommendations: BuildPlan
+    gap_snapshot: JobGap[] | null
+    created_at: string
+    updated_at: string
 }

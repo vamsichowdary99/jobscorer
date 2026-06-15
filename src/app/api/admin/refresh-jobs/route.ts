@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { redis } from '@/lib/redis'
 import { KEY } from '@/lib/redis-keys'
+import { isValidAdminToken } from '@/lib/adminAuth'
 
 /**
  * POST /api/admin/refresh-jobs
@@ -11,9 +12,7 @@ import { KEY } from '@/lib/redis-keys'
  * Auth: header `X-Admin-Token: <SUPABASE_SERVICE_ROLE_KEY>`.
  */
 export async function POST(req: NextRequest) {
-    const token = req.headers.get('x-admin-token') || ''
-    const expected = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    if (!expected || token !== expected) {
+    if (!isValidAdminToken(req)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

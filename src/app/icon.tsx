@@ -13,15 +13,14 @@ export default function Icon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#135bec',
+          background: 'linear-gradient(135deg, #135bec 0%, #2563eb 100%)',
           borderRadius: 7,
-          color: '#fff',
-          fontSize: 20,
-          fontWeight: 800,
-          fontFamily: 'sans-serif',
         }}
       >
-        R
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 18 L9 12 L13 15 L20 6" />
+          <path d="M15 6 L20 6 L20 11" />
+        </svg>
       </div>
     ),
     { ...size },

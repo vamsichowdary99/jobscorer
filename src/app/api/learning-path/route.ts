@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { logEstimatedUsage } from '@/lib/usage'
+import { checkQuota } from '@/lib/plan'
+import { requireUserLimit } from '@/lib/rate-limit'
 
 // GET /api/learning-path?job_id=yyy   → detail view (per-skill rows for one job)
 // GET /api/learning-path?summary=1    → history index (one entry per job)
@@ -149,6 +152,10 @@ export async function POST(request: NextRequest) {
     }
     const user_id = user.id
 
+    // Paid n8n + OpenAI work per call — throttle per user. (M3)
+    const limited = await requireUserLimit(user_id, 'learning')
+    if (limited) return limited
+
     const webhookUrl = process.env.N8N_LEARNING_PATH_WEBHOOK_URL
     if (!webhookUrl) {
         return NextResponse.json({ error: 'N8N_LEARNING_PATH_WEBHOOK_URL not configured' }, { status: 500 })
@@ -164,6 +171,9 @@ export async function POST(request: NextRequest) {
     if (!job_id || (!hasGaps && !hasMissing)) {
         return NextResponse.json({ error: 'Missing required fields: job_id, and one of gaps[] or missing_skills[]' }, { status: 400 })
     }
+
+    const overQuota = await checkQuota(user_id, 'learning_path')
+    if (overQuota) return overQuota
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 120000)
@@ -192,6 +202,8 @@ export async function POST(request: NextRequest) {
         }
 
         const data = await response.json()
+        // Learning-path generation ran the n8n AI workflow — log its cost.
+        void logEstimatedUsage({ userId: user_id, feature: 'learning_path' })
         return NextResponse.json(data)
     } catch (err) {
         clearTimeout(timeout)

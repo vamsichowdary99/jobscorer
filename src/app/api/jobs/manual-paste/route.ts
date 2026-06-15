@@ -26,6 +26,11 @@ type Payload = {
     experience_level?: string
 }
 
+/** Coerce an unknown field to a string without throwing on non-string input. */
+function str(v: unknown): string {
+    return typeof v === 'string' ? v : ''
+}
+
 /** djb2 — produces a stable short hash for the source_id slug. */
 function hashSlug(s: string): string {
     let h = 5381
@@ -73,9 +78,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const title = (body.title ?? '').trim().slice(0, 200)
-    const company = (body.company ?? '').trim().slice(0, 200)
-    const description = (body.description ?? '').trim()
+    // Type-safe extraction — a non-string field must not crash .trim(). (M7)
+    const title = str(body.title).trim().slice(0, 200)
+    const company = str(body.company).trim().slice(0, 200)
+    const description = str(body.description).trim()
     if (!company) return NextResponse.json({ error: 'Company is required' }, { status: 400 })
     if (!description) return NextResponse.json({ error: 'Job description is required' }, { status: 400 })
 
@@ -123,9 +129,13 @@ export async function POST(req: NextRequest) {
         description: boundedDescription,
         posted_date: new Date().toISOString(),
     }
-    if (body.location?.trim()) row.location = body.location.trim().slice(0, 200)
-    if (body.source_url?.trim()) row.source_url = body.source_url.trim().slice(0, 500)
-    if (body.experience_level?.trim()) row.experience_level = body.experience_level.trim().slice(0, 50)
+    const location = str(body.location).trim().slice(0, 200)
+    if (location) row.location = location
+    // Only accept http(s) URLs — reject javascript:/data: and arbitrary text. (M7)
+    const sourceUrl = str(body.source_url).trim().slice(0, 500)
+    if (/^https?:\/\//i.test(sourceUrl)) row.source_url = sourceUrl
+    const expLevel = str(body.experience_level).trim().slice(0, 50)
+    if (expLevel) row.experience_level = expLevel
 
     try {
         const insertRes = await admin

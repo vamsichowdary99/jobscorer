@@ -23,26 +23,43 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Detect whether a Supabase auth cookie was actually sent. If it was, we
-  // give the session the benefit of the doubt on transient getUser() failures
-  // (network blip, in-flight refresh-token rotation) — the alternative was
-  // bouncing the user to /login mid-session whenever Supabase took >1s.
+  // Detect any Supabase auth cookie — covers both unchunked
+  // (sb-[ref]-auth-token) and chunked (sb-[ref]-auth-token.0, .1 …) variants.
+  // Chunked cookies appear when the JWT payload is large, which is common with
+  // Google OAuth sessions. The old endsWith('-auth-token') check missed them,
+  // so the transient-error guard below never activated for those users and any
+  // getUser() hiccup during a long API call sent them back to /login.
   const hasAuthCookie = request.cookies
     .getAll()
-    .some((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'))
+    .some((c) => c.name.startsWith('sb-') && c.name.includes('-auth-token'))
+
+  // Returns true only for server-confirmed "refresh token is gone" — i.e. the
+  // user genuinely needs to log in again (token rotated on another device,
+  // explicit sign-out, account deleted). Everything else is transient.
+  function isGenuineExpiry(msg: string, status?: number): boolean {
+    return (
+      msg.includes('refresh_token_not_found') ||
+      msg.includes('Invalid Refresh Token') ||
+      msg.includes('Refresh Token Not Found') ||
+      status === 400
+    )
+  }
 
   let user = null
   let transientError = false
   try {
     const { data, error } = await supabase.auth.getUser()
     user = data.user
-    // Network/refresh errors leave user=null but set `error`. Distinguish them
-    // from a clean "no session at all" so we don't kick users out on hiccups.
     if (!user && error && hasAuthCookie) {
-      transientError = true
+      const msg = error.message ?? ''
+      const status = (error as { status?: number }).status
+      if (!isGenuineExpiry(msg, status)) transientError = true
     }
-  } catch {
-    if (hasAuthCookie) transientError = true
+  } catch (err) {
+    if (hasAuthCookie) {
+      const msg = err instanceof Error ? err.message : ''
+      if (!isGenuineExpiry(msg)) transientError = true
+    }
   }
 
   // Only /dashboard (UI) and /api (data) require a session. Everything else —
@@ -50,6 +67,15 @@ export async function updateSession(request: NextRequest) {
   // a mistyped path renders the 404 page instead of bouncing to /login.
   const { pathname } = request.nextUrl
   const isProtected = pathname.startsWith('/dashboard') || pathname.startsWith('/api/')
+
+  // Already-authenticated users shouldn't see the auth pages — send them to the app. (L3)
+  if (user && (pathname === '/login' || pathname === '/signup')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    const redirectResponse = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach((c) => redirectResponse.cookies.set({ ...c }))
+    return redirectResponse
+  }
 
   // If Supabase failed transiently but the user clearly has a session cookie,
   // let the request through. The client-side Supabase will pick up the real

@@ -6,6 +6,8 @@ import { requireUserLimit } from '@/lib/rate-limit'
 import { findBestJobMatches } from '@/lib/rag/search'
 import { getResumeYearsOfExperience } from '@/lib/rag/resume-years'
 import { enqueue } from '@/lib/queue'
+import { logEstimatedUsage } from '@/lib/usage'
+import { checkQuota } from '@/lib/plan'
 
 // Allow scoring to take up to 2 minutes
 export const maxDuration = 120
@@ -20,6 +22,12 @@ const GATE_SIMILARITY_THRESHOLD = 0.15
 // stale postings waste tokens and frustrate the candidate when they apply
 // to filled roles. 14 days fits the Indian fresher market's churn rate.
 const RAG_MAX_POSTED_DAYS_OLD = 14
+
+// Max job_ids per queued scoring call. The n8n scorer loops ~8s/job, and the
+// Queue Processor aborts a dispatch after its timeout (170s). 10 jobs ≈ 80s
+// leaves comfortable headroom so batches finish on the first attempt instead of
+// timing out and retrying (which produced duplicate "zombie" executions).
+const SCORE_BATCH_SIZE = 10
 
 /**
  * Scoring proxy with per-(resume_id, job_id) Redis cache.
@@ -183,6 +191,11 @@ export async function POST(req: NextRequest) {
             .eq('user_id', user.id)
             .eq('resume_id', resumeId)
             .in('job_id', redisMissing)
+            // Only treat a row as "already scored" if it actually has a score.
+            // A half-written row (relevance_score still NULL from a failed/partial
+            // n8n result) must NOT be cached as scored — that would suppress
+            // re-scoring it for 24h. (H7)
+            .not('relevance_score', 'is', null)
         if (existingErr) {
             console.warn('[/api/score] user_job_matches lookup failed:', existingErr.message)
             missingJobIds.push(...redisMissing)
@@ -226,6 +239,11 @@ export async function POST(req: NextRequest) {
         })
     }
 
+    // Fresh scoring work exists → count one scoring run against the monthly quota
+    // (a run scores a whole batch, so it's 1 unit regardless of job count).
+    const scoreQuota = await checkQuota(user.id, 'score')
+    if (scoreQuota) return scoreQuota
+
     // Queue mode (default): enqueue + return immediately. The Queue Processor
     // n8n workflow picks up pending rows, dispatches to /webhook/anti-gravity/score
     // and writes the result back into job_queue.result. Frontend polls
@@ -233,19 +251,40 @@ export async function POST(req: NextRequest) {
     const queueMode = process.env.N8N_QUEUE_MODE !== 'disabled'
     if (queueMode) {
         try {
-            const { job_id, queue_position } = await enqueue(user.id, 'score', {
-                user_id: user.id,
-                resume_id: resumeId,
-                job_ids: missingJobIds,
-                experience_level: experienceLevel,
-                mode,
-                rag_shortlist_size: ragShortlistSize ?? null,
-            })
+            // Split into batches so no single n8n scoring call exceeds the Queue
+            // Processor's dispatch timeout. The scorer loops ~8s/job sequentially;
+            // a 25-job batch took ~150s and blew past the old 110s timeout, which
+            // then retried 3x — spawning zombie executions that re-scored the same
+            // jobs and wasted GPT tokens. Capping at SCORE_BATCH_SIZE keeps each
+            // call comfortably under the timeout so jobs complete on the first try.
+            const batches: string[][] = []
+            for (let i = 0; i < missingJobIds.length; i += SCORE_BATCH_SIZE) {
+                batches.push(missingJobIds.slice(i, i + SCORE_BATCH_SIZE))
+            }
+            const enqueued: { job_id: string; queue_position: number }[] = []
+            for (const batch of batches) {
+                enqueued.push(await enqueue(user.id, 'score', {
+                    user_id: user.id,
+                    resume_id: resumeId,
+                    job_ids: batch,
+                    experience_level: experienceLevel,
+                    mode,
+                    rag_shortlist_size: ragShortlistSize ?? null,
+                }))
+            }
+            // Estimated scoring cost = one per-job estimate × jobs dispatched.
+            // Cache hits cost nothing, so only the freshly-sent jobs are logged.
+            void logEstimatedUsage({ userId: user.id, feature: 'score', units: missingJobIds.length })
             return NextResponse.json({
                 success: true,
                 queued: true,
-                queue_job_id: job_id,
-                queue_position,
+                // First batch's id drives the foreground queue poll; the matches
+                // page also polls fetchMatches every 8s, so later batches surface
+                // as their rows land regardless of which id is polled.
+                queue_job_id: enqueued[0]?.job_id ?? null,
+                queue_job_ids: enqueued.map(e => e.job_id),
+                queue_batches: batches.length,
+                queue_position: enqueued[0]?.queue_position ?? null,
                 mode,
                 cache_hits: cacheHits,
                 sent_to_n8n: missingJobIds.length,
@@ -271,23 +310,30 @@ export async function POST(req: NextRequest) {
 
     const n8nBody = { ...body, job_ids: missingJobIds }
 
+    // Bound the outbound call — n8n workflows can hang for minutes. (M10)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000)
     let response: Response
     try {
         response = await fetch(webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(n8nBody),
+            signal: controller.signal,
         })
     } catch (err) {
-        console.error('Scoring proxy fetch error:', err)
-        const msg = err instanceof Error ? err.message : 'Unknown error'
-        return NextResponse.json({ success: false, error: msg }, { status: 502 })
+        console.error('[/api/score] scoring proxy fetch error:', err)
+        return NextResponse.json({ success: false, error: 'Scoring service unavailable' }, { status: 502 })
+    } finally {
+        clearTimeout(timeout)
     }
 
     if (!response.ok) {
         const errorText = await response.text()
+        // Log full upstream detail server-side; return a generic message. (M9)
+        console.error('[/api/score] n8n scoring error:', response.status, errorText)
         return NextResponse.json(
-            { success: false, error: `n8n error: ${errorText}` },
+            { success: false, error: 'Scoring service failed' },
             { status: response.status }
         )
     }
@@ -327,6 +373,8 @@ export async function POST(req: NextRequest) {
             await pipe.exec()
             return true
         })
+        // Direct (non-queue) fallback path: log estimated cost for the jobs n8n scored.
+        void logEstimatedUsage({ userId: user.id, feature: 'score', units: missingJobIds.length })
     }
 
     // Surface mismatch so callers can detect silent n8n failures

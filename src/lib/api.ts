@@ -1,7 +1,7 @@
 import { createClient } from './supabase/client'
 
 const supabase = createClient()
-import type { Job, Resume, UserJobMatch, CompanyResearch, AiAnalysis, OptimizedResumeData, LearningPath } from './types'
+import type { Job, Resume, UserJobMatch, CompanyResearch, AiAnalysis, OptimizedResumeData, LearningPath, BuildPlan, AcceptedRecommendation, JobGap } from './types'
 
 // ── Rate limiting ────────────────────────────────────────────
 
@@ -34,6 +34,13 @@ async function safeJson<T = unknown>(res: Response, opLabel: string): Promise<T>
 
 /** Throws RateLimitError if `res` is 429. Returns res unchanged otherwise. */
 async function check429(res: Response): Promise<Response> {
+    // 402 = plan quota exhausted → fire the global upgrade prompt, then let the
+    // caller's normal !res.ok handling return a clean failure.
+    if (res.status === 402) {
+        const { handleQuota } = await import('@/lib/quota')
+        await handleQuota(res)
+        return res
+    }
     if (res.status !== 429) return res
     const retryHeader = res.headers.get('retry-after')
     let retryAfterSec = retryHeader ? parseInt(retryHeader, 10) : 0
@@ -47,19 +54,34 @@ async function check429(res: Response): Promise<Response> {
     throw new RateLimitError(retryAfterSec, serverMsg)
 }
 
+/**
+ * Build a clean, user-facing Error from a non-OK Response. Prefers the server's
+ * JSON `error` message (our API routes return professional copy, including
+ * quota/upgrade text) and NEVER surfaces the raw response body as a JSON blob.
+ * Use in every `if (!res.ok)` branch instead of throwing `${await res.text()}`.
+ */
+async function cleanError(res: Response, fallback: string): Promise<Error> {
+    let serverMsg: string | undefined
+    try {
+        const text = await res.text()
+        if (text.trim()) {
+            const body = JSON.parse(text) as { error?: string }
+            if (typeof body?.error === 'string' && body.error.trim()) serverMsg = body.error
+        }
+    } catch { /* non-JSON or empty body — fall back */ }
+    return new Error(serverMsg || fallback)
+}
+
 // ── Job Queries ──────────────────────────────────────────────
 
 export async function fetchJobs(limit = 20, offset = 0): Promise<Job[]> {
-    console.log('[fetchJobs] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
-    console.log('[fetchJobs] Anon Key present:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
     const { data, error } = await supabase
         .from('jobs')
         .select('*')
+        .neq('application_status', 'closed')
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
 
-    console.log('[fetchJobs] error:', error)
-    console.log('[fetchJobs] data count:', data?.length)
     if (error) throw new Error(`Failed to fetch jobs: ${error.message}`)
     return data ?? []
 }
@@ -96,6 +118,22 @@ export async function fetchJobById(id: string): Promise<Job | null> {
     return data
 }
 
+/**
+ * Crowdsourced job-status report. The user clicked Apply and tells us whether
+ * the listing is still open. Returns the job's resulting application_status
+ * (e.g. 'closed' once the report threshold trips), or null on failure.
+ */
+export async function reportJobStatus(jobId: string, status: 'open' | 'closed'): Promise<string | null> {
+    const res = await fetch(`/api/jobs/${jobId}/report-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return (data?.application_status as string) ?? null
+}
+
 // Location alias expansion: some jobs store locations as "TS, IN" (state, country code)
 // instead of "Hyderabad, Telangana, India". We run parallel queries for all patterns.
 const LOCATION_EXPANSIONS: Record<string, string[]> = {
@@ -125,6 +163,7 @@ export async function searchJobs(query: string, filters?: {
         let q = supabase
             .from('jobs')
             .select('*')
+            .neq('application_status', 'closed')
             .order('posted_date', { ascending: false })
             .order('created_at', { ascending: false })
             .limit(200)
@@ -286,6 +325,36 @@ export async function fetchMatches(userId: string): Promise<(UserJobMatch & { jo
     return (data ?? []) as unknown as (UserJobMatch & { job: Job })[]
 }
 
+/**
+ * Count this user's scoring jobs that are still in flight (queued or running).
+ * Used by the matches page as a polling backstop: Supabase Realtime is the
+ * primary refresh signal, but if an event is dropped/missed the page would sit
+ * empty forever. While this returns > 0 we keep polling fetchMatches; once it
+ * hits 0 the run is finished (done/failed) and polling stops. Statuses seen in
+ * job_queue are 'pending' | 'done' | 'failed'; anything not terminal counts as
+ * active so a transient 'processing' would also keep us polling.
+ *
+ * Staleness cutoff (H8): if the n8n Queue Processor stalls, a row can sit
+ * 'pending' indefinitely and the page would poll forever. We only count rows
+ * newer than STALE_AFTER_MS as active — beyond that we assume the run is dead
+ * and stop polling (the DB-side reaper fails such rows within ~1h anyway).
+ */
+const QUEUE_STALE_AFTER_MS = 10 * 60 * 1000 // 10 min — generous for a scoring run
+
+export async function countActiveScoreJobs(userId: string): Promise<number> {
+    const cutoff = new Date(Date.now() - QUEUE_STALE_AFTER_MS).toISOString()
+    const { count, error } = await supabase
+        .from('job_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('workflow_type', 'score')
+        .not('status', 'in', '("done","failed")')
+        .gte('created_at', cutoff)
+
+    if (error) throw new Error(`Failed to check scoring queue: ${error.message}`)
+    return count ?? 0
+}
+
 // ── Webhook Triggers ─────────────────────────────────────────
 
 /**
@@ -337,16 +406,8 @@ export async function createManualJob(
         clearTimeout(timer)
     }
     if (!res.ok) {
-        // Surface server error body verbatim. Common cases: 401 (not signed in),
-        // 400 (validation), 500 (Supabase insert failed).
-        let detail = ''
-        try {
-            const body = await res.json()
-            detail = body?.error ?? JSON.stringify(body)
-        } catch {
-            detail = await res.text().catch(() => '')
-        }
-        throw new Error(`Save failed (${res.status}): ${detail || 'no details'}`)
+        // Common cases: 401 (not signed in), 400 (validation), 500 (insert failed).
+        throw await cleanError(res, 'Could not save the job. Please try again.')
     }
     return safeJson(res, 'Manual job paste')
 }
@@ -399,8 +460,26 @@ export async function triggerResumeUpload(
     })
 
     if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`Upload failed (${res.status}): ${text || res.statusText}`)
+        // Parse the JSON error body and surface a clean, human message — never
+        // dump the raw `{"success":false,...}` blob at the user.
+        let body: {
+            error?: string; upgrade?: boolean; feature?: string
+            plan?: string; quota?: number; used?: number
+        } | null = null
+        try { body = JSON.parse(await res.text()) } catch { /* non-JSON response */ }
+
+        // Quota / plan-limit case (402): present a polished upgrade message.
+        if (res.status === 402 || body?.upgrade) {
+            const quota = body?.quota ?? 1
+            const noun = quota === 1 ? 'resume' : 'resumes'
+            const nextPlan = body?.plan === 'pro' ? 'Max' : 'Pro'
+            throw new Error(
+                `You've reached your ${body?.plan ?? 'free'} plan limit of ${quota} ${noun}. ` +
+                `Upgrade to ${nextPlan} to upload more, or delete an existing resume to free a slot.`
+            )
+        }
+        // Any other error: prefer the server's friendly message, else a generic one.
+        throw new Error(body?.error || 'Upload failed. Please try again.')
     }
 
     // n8n's webhook sometimes returns 200 with an empty body when an internal
@@ -454,8 +533,7 @@ export async function triggerScoring(payload: {
     await check429(res)
 
     if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`Scoring failed (${res.status}): ${text}`)
+        throw await cleanError(res, 'Scoring failed. Please try again.')
     }
 
     return safeJson(res, 'AI scoring')
@@ -506,8 +584,7 @@ export async function triggerCompanyResearch(payload: {
     await check429(res)
 
     if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`Company research failed (${res.status}): ${text}`)
+        throw await cleanError(res, 'Company research failed. Please try again.')
     }
 
     return safeJson(res, 'Company research')
@@ -587,6 +664,8 @@ export async function syncPrimaryResumeIdFromDb(userId: string | null): Promise<
 
 export async function triggerResumeOptimization(payload: {
     user_id: string; resume_id: string; job_id: string; force_refresh?: boolean; gap_data?: Record<string, any> | null
+    /** Items the user accepted in the Build Plan modal — folded into the resume with honest "in progress" framing. */
+    accepted_recommendations?: AcceptedRecommendation[]
 }): Promise<{ success: boolean; cached?: boolean; optimized_data?: any; keyword_alignment_score?: number; optimization_notes?: string[] }> {
     const res = await fetch('/api/optimize-resume', {
         method: 'POST',
@@ -595,8 +674,7 @@ export async function triggerResumeOptimization(payload: {
     })
     await check429(res)
     if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`Optimization failed (${res.status}): ${text}`)
+        throw await cleanError(res, 'Resume optimization failed. Please try again.')
     }
     return safeJson(res, 'Resume optimization')
 }
@@ -663,6 +741,43 @@ export async function fetchOptimizedResumesByResume(userId: string, resumeId: st
         ...r,
         job: jobMap[r.job_id] ?? { id: r.job_id, title: null, company: null, location: null },
     }))
+}
+
+// ── Build Plan (recommendation popup) ────────────────────────
+
+/**
+ * Trigger the "Build Plan Generator" n8n workflow (cert + project + learning
+ * recommendations grounded with real GitHub repos). Returns a cached BuildPlan
+ * when one exists for (resume_id, job_id) unless force_refresh is set.
+ */
+export async function triggerBuildPlan(payload: {
+    resume_id: string
+    job_id: string
+    force_refresh?: boolean
+    gaps?: JobGap[] | null
+    matched_skills?: string[]
+    missing_skills?: string[]
+    job_title?: string
+    company_name?: string
+}): Promise<{ success: boolean; cached?: boolean; build_plan?: BuildPlan | null }> {
+    const res = await fetch('/api/build-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    await check429(res)
+    if (!res.ok) {
+        throw await cleanError(res, 'Build plan generation failed. Please try again.')
+    }
+    return safeJson(res, 'Build plan generation')
+}
+
+/** Read a cached BuildPlan for (resume_id, job_id) without triggering generation. */
+export async function fetchBuildPlan(resumeId: string, jobId: string): Promise<BuildPlan | null> {
+    const res = await fetch(`/api/build-plan?resume_id=${encodeURIComponent(resumeId)}&job_id=${encodeURIComponent(jobId)}`)
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.build_plan ?? null
 }
 
 // ── Learning Paths ───────────────────────────────────────────
@@ -738,9 +853,9 @@ export async function triggerLearningPathGeneration(payload: {
             company_research: payload.company_research ?? undefined,
         }),
     })
+    await check429(res)
     if (!res.ok) {
-        const text = await res.text()
-        throw new Error(`Learning path generation failed (${res.status}): ${text}`)
+        throw await cleanError(res, 'Learning path generation failed. Please try again.')
     }
     return safeJson(res, 'Learning path generation')
 }
@@ -1161,6 +1276,15 @@ export async function createApplication(payload: {
         .single()
     if (error) {
         console.warn('[createApplication] failed:', error.message)
+        // Free-plan application cap (enforced by the enforce_application_cap DB trigger).
+        if (error.message?.includes('APPLICATION_LIMIT')) {
+            const { showUpgradePrompt } = await import('@/lib/quota')
+            showUpgradePrompt({
+                feature: 'applications',
+                plan: 'free',
+                message: 'Free plan tracks up to 3 applications. Upgrade to Pro for unlimited tracking.',
+            })
+        }
         return null
     }
     return data as unknown as Application
@@ -1175,7 +1299,7 @@ export async function updateApplicationStatus(
     // Read current history so we can append (Supabase has no native jsonb_append).
     const { data: current, error: readErr } = await supabase
         .from('applications' as any)
-        .select('status_history')
+        .select('status_history, interview_at')
         .eq('id', applicationId)
         .single()
     if (readErr) {
@@ -1190,7 +1314,8 @@ export async function updateApplicationStatus(
         status: newStatus,
         status_history: history,
     }
-    if (newStatus === 'interview') patch.interview_at = patch.interview_at ?? now
+    // Only stamp interview_at the first time — preserve the original on re-transition. (M5)
+    if (newStatus === 'interview' && !(current as any)?.interview_at) patch.interview_at = now
     if (newStatus === 'offer') patch.offer_at = now
     if (newStatus === 'rejected' || newStatus === 'withdrawn' || newStatus === 'offer') patch.decided_at = now
     if (extra?.rejection_reason !== undefined) patch.rejection_reason = extra.rejection_reason
@@ -1355,10 +1480,13 @@ export async function fetchDashboardStats(
     // Synthesize an activity timeline by unioning timestamped rows from the 3 tables.
     // Wave 3 will replace this with a real `user_events` table once it lands.
     const events: DashboardActivityEvent[] = []
+    // Count ALL matches scored this week, then take the newest for the timestamp.
+    // (Previously this sliced to 2 before counting, so the activity line always
+    // read "Scored 2 matches" even when dozens were scored — a visible mismatch
+    // against the AI Matches stat tile.)
     const recentMatches = matches
         .filter(m => m.created_at >= weekAgo)
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
-        .slice(0, 2)
     if (recentMatches.length > 0) {
         events.push({
             kind: 'match',

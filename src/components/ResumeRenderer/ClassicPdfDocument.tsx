@@ -72,7 +72,7 @@ interface ResumeEditorState {
 // Font registered centrally in ./fonts.ts.
 
 const FONT = "Roboto";
-const FONT_SIZE = "10.5pt";
+const FONT_SIZE = "10pt";
 const PAGE_W = 612;
 const PAGE_H = 792;
 const MARGIN_H = "48pt";
@@ -130,9 +130,9 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
     {items
       .filter((b) => b.trim())
       .map((b, i) => (
-        <View key={i} style={{ flexDirection: "row", marginBottom: "1.5pt" }}>
+        <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "1.5pt" }}>
           <Text style={{ width: "12pt", fontSize: "10pt" }}>{"\u2022"}</Text>
-          <BoldText style={{ flex: 1, fontSize: "10pt", lineHeight: 1.35 }}>
+          <BoldText style={{ flex: 1, fontSize: "10pt", lineHeight: 1.3 }}>
             {b}
           </BoldText>
         </View>
@@ -175,7 +175,7 @@ const ClassicPdfDocument: React.FC<ClassicPdfDocumentProps> = ({ state }) => {
   const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft;
 
   return (
-    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="ResuScore">
+    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="JobScorer">
       <Page
         size={[PAGE_W, PAGE_H]}
         style={{

@@ -52,7 +52,7 @@ export async function GET() {
     return new NextResponse(JSON.stringify(out, null, 2), {
         headers: {
             'Content-Type': 'application/json',
-            'Content-Disposition': `attachment; filename="resuscore-data-${uid}.json"`,
+            'Content-Disposition': `attachment; filename="jobscorer-data-${uid}.json"`,
         },
     })
 }

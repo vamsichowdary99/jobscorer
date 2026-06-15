@@ -31,6 +31,27 @@ interface JobMatch {
     } | null
 }
 
+// Map a research-history row into the sidebar's JobMatch shape. Shared by the
+// initial load and the post-completion refresh so they can't drift apart.
+function historyRowToJobMatch(r: {
+    analysis_id: string; job_id: string | null; match_score: number | null
+    resume_id: string | null; job_title: string | null; company_name: string; job_location: string | null
+}): JobMatch {
+    return {
+        id: r.analysis_id,
+        job_id: r.job_id ?? r.analysis_id,
+        relevance_score: r.match_score ?? 0,
+        recommendation: null,
+        resume_id: r.resume_id ?? null,
+        job: {
+            title: r.job_title ?? 'Job',
+            company: r.company_name,
+            location: r.job_location,
+            experience_level: null,
+        },
+    }
+}
+
 /* ── Animated score counter ── */
 function AnimatedScore({ value }: { value: number }) {
     const [display, setDisplay] = useState(0)
@@ -1109,6 +1130,9 @@ function CompanyIntelPage() {
     const [selectedResumeId, setSelectedResumeId] = useState<string | null>(null)
     const [primaryResumeId, setPrimaryResumeId] = useState<string | null>(null)
     const [researchCounts, setResearchCounts] = useState<Record<string, number>>({})
+    // Tracks job ids we've already refreshed the sidebar for after a research
+    // landed, so the refresh fires at most once per job (no refetch loop).
+    const refreshedHistoryFor = useRef<Set<string>>(new Set())
 
     /* ── Load resumes + counts + pick default resume ── */
     useEffect(() => {
@@ -1154,20 +1178,7 @@ function CompanyIntelPage() {
             // Map ResearchHistoryItem → JobMatch shape so the existing sidebar
             // render code stays untouched. Company name surfaces in the
             // "company" slot; the AI match score (when present) drives the score ring.
-            const mapped: JobMatch[] = rows.map(r => ({
-                id: r.analysis_id,
-                job_id: r.job_id ?? r.analysis_id,
-                relevance_score: r.match_score ?? 0,
-                recommendation: null,
-                resume_id: r.resume_id ?? null,
-                job: {
-                    title: r.job_title ?? 'Job',
-                    company: r.company_name,
-                    location: r.job_location,
-                    experience_level: null,
-                },
-            }))
-            setMatches(mapped)
+            setMatches(rows.map(historyRowToJobMatch))
             setMatchesLoading(false)
         })
         return () => { cancelled = true }
@@ -1317,6 +1328,25 @@ function CompanyIntelPage() {
         if (!user?.id) return
         removePending(selectedJobId, user.id)
     }, [research, selectedJobId, user?.id])
+
+    /* ── When a research completes for a company not yet in the sidebar history
+       list, refresh that list once so the newly-researched company appears
+       without a manual page reload. The history list is otherwise only fetched
+       on resume change, so freshly-completed researches looked like they were
+       "not recording" even though the DB row exists. Guarded by a ref so it
+       fires at most once per job id (avoids any refetch loop). ── */
+    useEffect(() => {
+        if (!research || !user?.id || !selectedResumeId || !selectedJobId) return
+        if (matches.some(m => m.job_id === selectedJobId)) return
+        if (refreshedHistoryFor.current.has(selectedJobId)) return
+        refreshedHistoryFor.current.add(selectedJobId)
+        let cancelled = false
+        fetchResearchHistory(user.id, selectedResumeId).then(rows => {
+            if (cancelled) return
+            setMatches(rows.map(historyRowToJobMatch))
+        })
+        return () => { cancelled = true }
+    }, [research, selectedJobId, user?.id, selectedResumeId, matches])
 
     /* ── Always honor sessionStorage cache the moment a jobId is known.
        Otherwise a freshly-completed Optimize click (which wrote the cache

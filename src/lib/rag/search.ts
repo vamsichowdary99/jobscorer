@@ -88,13 +88,19 @@ export async function findBestJobMatches(
         }
     }
 
-    // 2. Re-fetch the embedding (might have just been written)
+    // 2. Re-fetch the embedding (might have just been written). Use maybeSingle:
+    //    on a transaction-visibility/replication race the row may not be readable
+    //    yet — return [] instead of throwing a 500 on the whole /api/score. (M2)
     const { data: row, error: rowErr } = await sb
         .from('resume_embeddings' as any)
         .select('embedding')
         .eq('resume_id', resumeId)
-        .single();
+        .maybeSingle();
     if (rowErr) throw new Error(`findBestJobMatches: re-fetch failed: ${rowErr.message}`);
+    if (!row) {
+        console.warn(`[rag/search] embedding not yet visible for resume ${resumeId}`);
+        return [];
+    }
 
     const embedding = (row as { embedding: string }).embedding;
     if (!embedding) return [];

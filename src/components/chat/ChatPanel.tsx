@@ -271,6 +271,17 @@ export default function ChatPanel() {
     }
   }, [isOpen, pendingPick]);
 
+  // ChatPanel is mounted once in the layout and survives client-side navigation.
+  // Without this, logging out and back in (or switching accounts) on the same
+  // tab leaves the previous user's conversation and session resume visible.
+  useEffect(() => {
+    setMessages([]);
+    setError(null);
+    setSessionResumeId(null);
+    setPendingPick(null);
+    setInput('');
+  }, [user?.id]);
+
   function resumeLabel(r: Resume): string {
     let v: unknown = r.structured_data;
     if (typeof v === 'string') { try { v = JSON.parse(v); } catch { v = null; } }
@@ -296,9 +307,42 @@ export default function ChatPanel() {
         resumeId: rid,
       }),
     });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
-    return data.reply as string;
+    // /api/chat streams newline-delimited JSON on success; it only returns a
+    // plain JSON body (e.g. { error: 'Unauthorized' }) for pre-stream failures.
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({} as { error?: string }));
+      throw new Error(body?.error || `HTTP ${res.status}`);
+    }
+    if (!res.body) throw new Error('Streaming not supported in this environment.');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let assembled = '';
+    try {
+      for (; ;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          if (!line) continue;
+          let evt: { type?: string; delta?: string; error?: string };
+          try {
+            evt = JSON.parse(line);
+          } catch {
+            continue; // skip partial/non-JSON lines
+          }
+          if (evt.type === 'text_delta' && typeof evt.delta === 'string') assembled += evt.delta;
+          else if (evt.type === 'error') throw new Error(evt.error || 'Assistant error');
+        }
+      }
+    } finally {
+      try { reader.releaseLock(); } catch { /* ignore */ }
+    }
+    return assembled;
   }
 
   async function sendMessage(text: string) {
@@ -504,14 +548,20 @@ export default function ChatPanel() {
             background: '#ffffff', flexShrink: 0,
           }}>
             <div style={{
-              width: 32, height: 32, borderRadius: '50%', background: '#135bec',
+              width: 32, height: 32, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #135bec 0%, #2563eb 100%)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 14, color: '#fff', flexShrink: 0,
+              flexShrink: 0,
               boxShadow: '0 2px 8px rgba(19,91,236,0.3)',
-            }}>✦</div>
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 18 L9 12 L13 15 L20 6" />
+                <path d="M15 6 L20 6 L20 11" />
+              </svg>
+            </div>
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
-                ResuScore AI
+                JobScorer AI
               </p>
               <p style={{ fontSize: '0.7rem', color: isLoading ? '#135bec' : '#10b981', display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
                 <span style={{

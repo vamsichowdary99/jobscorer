@@ -1,4 +1,4 @@
-# Design System: ResuScore
+# Design System: JobScorer
 **Stitch Project ID:** 17197979516716226787
 
 ## 1. Visual Theme & Atmosphere

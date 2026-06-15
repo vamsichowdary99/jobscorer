@@ -113,9 +113,19 @@ const navLinks = [
     },
 ]
 
+// Active-nav matcher. The Dashboard home must match exactly (otherwise it would
+// stay highlighted on every /dashboard/* page), but every other section also
+// matches its sub-routes (e.g. /dashboard/resumes/123 highlights "Resumes").
+// Pure exact matching left section sub-pages with no nav item lit at all.
+function isNavActive(pathname: string | null, href: string): boolean {
+    if (!pathname) return false
+    if (href === '/dashboard') return pathname === '/dashboard'
+    return pathname === href || pathname.startsWith(href + '/')
+}
+
 export default function Navbar() {
     const [mobileOpen, setMobileOpen] = useState(false)
-    const { user, signOut } = useAuth()
+    const { user, loading, signOut } = useAuth()
     const pathname = usePathname()
 
     const isDashboard = pathname?.startsWith('/dashboard')
@@ -383,17 +393,22 @@ export default function Navbar() {
             `}</style>
 
             <nav className="rs-nav">
-                {/* Logo */}
+                {/* Logo — JobScorer brand mark (matches landing page) */}
                 <Link href="/" className="rs-logo">
-                    <div className="rs-logo-mark">R</div>
-                    <span className="rs-logo-text">ResuScore</span>
+                    <div style={{ position: 'relative', width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg, #135bec 0%, #2563eb 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 8px -1px rgba(19,91,236,0.33)', flexShrink: 0 }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 18 L9 12 L13 15 L20 6" />
+                            <path d="M15 6 L20 6 L20 11" />
+                        </svg>
+                    </div>
+                    <span className="rs-logo-text"><span style={{ color: '#0f172a' }}>Job</span><span style={{ color: '#135bec' }}>Scorer</span></span>
                 </Link>
 
                 {/* Centre: individual nav items (Antler-style) */}
                 <div className="rs-nav-center">
                     {isDashboard ? (
                         navLinks.map((link) => {
-                            const active = pathname === link.href
+                            const active = isNavActive(pathname, link.href)
                             return (
                                 <Link
                                     key={link.href}
@@ -415,7 +430,14 @@ export default function Navbar() {
 
                 {/* Right: auth */}
                 <div className="rs-nav-right">
-                    {user ? (
+                    {loading ? (
+                        // Auth resolves async on mount; render a neutral placeholder
+                        // instead of the logged-out CTAs to avoid a Login/Sign Up flash.
+                        <div
+                            aria-hidden
+                            style={{ width: 30, height: 30, borderRadius: 99, background: '#f1f5f9' }}
+                        />
+                    ) : user ? (
                         <>
                             <Link href="/dashboard/settings" className="rs-user" title="Settings">
                                 <div className="rs-user-avatar">
@@ -460,7 +482,7 @@ export default function Navbar() {
                         { href: '/browse', label: 'Browse Jobs', icon: null },
                         { href: '/login', label: 'Login', icon: null },
                     ]).map((link) => {
-                        const active = pathname === link.href
+                        const active = isNavActive(pathname, link.href)
                         return (
                             <Link
                                 key={link.href}

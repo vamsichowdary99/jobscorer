@@ -126,7 +126,7 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
     {items
       .filter((b) => b.trim())
       .map((b, i) => (
-        <View key={i} style={{ flexDirection: "row", marginBottom: "3pt" }}>
+        <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "3pt" }}>
           <Text style={{ width: "10pt", fontSize: "10pt", color: "#333" }}>{"\u2022"}</Text>
           <BoldText style={{ flex: 1, fontSize: "9.5pt", lineHeight: 1.4, color: "#111" }}>
             {b}
@@ -198,7 +198,7 @@ const ReziPdfDocument: React.FC<ReziPdfDocumentProps> = ({ state }) => {
   ].filter((row) => Boolean(row.value));
 
   return (
-    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="ResuScore">
+    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="JobScorer">
       <Page
         size={[PAGE_W, PAGE_H]}
         style={{

@@ -127,7 +127,7 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
     {items
       .filter((b) => b.trim())
       .map((b, i) => (
-        <View key={i} style={{ flexDirection: "row", marginBottom: "2pt" }}>
+        <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "2pt" }}>
           <Text style={{ width: "12pt", fontSize: "10pt" }}>{"•"}</Text>
           <BoldText style={{ flex: 1, fontSize: "10pt", lineHeight: 1.4 }}>{b}</BoldText>
         </View>
@@ -181,7 +181,7 @@ const HarvardPdfDocument: React.FC<HarvardPdfDocumentProps> = ({ state }) => {
   const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft;
 
   return (
-    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="ResuScore">
+    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="JobScorer">
       <Page
         size={[PAGE_W, PAGE_H]}
         style={{

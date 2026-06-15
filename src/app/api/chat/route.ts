@@ -5,12 +5,16 @@ import { executeTool } from '@/lib/chat/tools';
 import type { ChatRequest } from '@/lib/chat/types';
 import { createClient } from '@/lib/supabase/server';
 import { requireUserLimit } from '@/lib/rate-limit';
+import { logUsage } from '@/lib/usage';
+import { checkQuota } from '@/lib/plan';
+
+const CHAT_MODEL = 'gpt-4.1-mini';
 
 function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
-const SYSTEM_PROMPT = `You are a career assistant for ResuScore, a job matching platform. You help users find the right jobs and improve their chances of getting hired.
+const SYSTEM_PROMPT = `You are a career assistant for JobScorer, a job matching platform. You help users find the right jobs and improve their chances of getting hired.
 
 You have access to the user's resume, job scores, company research, and skill gaps via tools. Always respond with specific data from tools, not generic advice. Keep responses concise and actionable.
 
@@ -70,6 +74,9 @@ export async function POST(req: NextRequest) {
   const limited = await requireUserLimit(user.id, 'chat');
   if (limited) return limited;
 
+  const overQuota = await checkQuota(user.id, 'chat');
+  if (overQuota) return overQuota;
+
   let body: ChatRequest;
   try {
     body = await req.json();
@@ -119,13 +126,17 @@ export async function POST(req: NextRequest) {
         // streaming the final text.
         let iterations = 0;
         let assistantMessage: OpenAI.ChatCompletionMessage | null = null;
+        // Accumulate token usage across every model call in the tool loop so we
+        // log the true cost of the whole turn (see logUsage call below).
+        let promptTokens = 0;
+        let completionTokens = 0;
 
         while (iterations < 5) {
           if (abortSignal.aborted) throw new Error('aborted');
 
           const response = await openai.chat.completions.create(
             {
-              model: 'gpt-4.1-mini',
+              model: CHAT_MODEL,
               messages,
               tools: chatTools,
               tool_choice: 'auto',
@@ -133,7 +144,11 @@ export async function POST(req: NextRequest) {
             },
             { signal: abortSignal },
           );
-          assistantMessage = response.choices[0].message;
+          promptTokens += response.usage?.prompt_tokens ?? 0;
+          completionTokens += response.usage?.completion_tokens ?? 0;
+          const choice = response.choices[0];
+          if (!choice) throw new Error('No completion choice returned from model'); // (L7)
+          assistantMessage = choice.message;
 
           if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
             break;
@@ -170,6 +185,16 @@ export async function POST(req: NextRequest) {
             });
           }
         }
+
+        // Record the turn's true token cost (all loop iterations). Fire-and-forget
+        // so logging never blocks or breaks the response stream.
+        void logUsage({
+          userId,
+          feature: 'chat',
+          model: CHAT_MODEL,
+          promptTokens,
+          completionTokens,
+        });
 
         // We now have a final assistantMessage with content + no further tool calls.
         // It's already been generated (and billed) by the tool-loop. Fake-stream it

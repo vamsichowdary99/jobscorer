@@ -473,7 +473,7 @@ const PdfDocument: React.FC<PdfDocumentProps> = ({ resume }) => {
     <Document
       title={`${profile.name} Resume`}
       author={profile.name}
-      producer="ResuScore"
+      producer="JobScorer"
     >
       <Page
         size={[PAGE_WIDTH, PAGE_HEIGHT]}

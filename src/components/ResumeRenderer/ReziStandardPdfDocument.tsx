@@ -130,7 +130,7 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
     {items
       .filter((b) => b.trim())
       .map((b, i) => (
-        <View key={i} style={{ flexDirection: "row", marginBottom: "1.5pt" }}>
+        <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "1.5pt" }}>
           {/* Bullet marker */}
           <Text style={{ width: "12pt", fontSize: "9.5pt", color: "#aaa" }}>{"\u2022"}</Text>
           <BoldText style={{ flex: 1, fontSize: "9.5pt", color: "#333", lineHeight: 1.35 }}>
@@ -184,7 +184,7 @@ const ReziStandardPdfDocument: React.FC<ReziStandardPdfDocumentProps> = ({ state
   const hasSkills = !!(skills.languages || skills.tools || skills.frameworks || skills.soft);
 
   return (
-    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="ResuScore">
+    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="JobScorer">
       <Page
         size={[PAGE_W, PAGE_H]}
         style={{

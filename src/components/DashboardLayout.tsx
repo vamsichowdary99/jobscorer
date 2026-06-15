@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { Suspense } from 'react'
 import PendingResearchToaster from './PendingResearchToaster'
+import UpgradeToast from './billing/UpgradeToast'
 
 /* Pages that manage their own full-height layout (no padding) */
 const FULL_BLEED_PAGES = [
@@ -47,6 +48,9 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
             <Suspense fallback={null}>
                 <PendingResearchToaster />
             </Suspense>
+
+            {/* Global upgrade prompt — fires on any 402 quota block or stored-cap hit. */}
+            <UpgradeToast />
         </main>
     )
 }

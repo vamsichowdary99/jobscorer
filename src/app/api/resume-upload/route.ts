@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { delPattern } from '@/lib/redis'
 import { KEY } from '@/lib/redis-keys'
 import { requireUserLimit } from '@/lib/rate-limit'
+import { checkStoredLimit } from '@/lib/plan'
 export const maxDuration = 60; // Set timeout to 60 seconds
 
 /**
@@ -20,6 +21,10 @@ export async function POST(request: NextRequest) {
     const limited = await requireUserLimit(user.id, 'resume')
     if (limited) return limited
 
+    // Stored-resource cap: Free 1 / Pro 5 / Max 20 résumés. Delete one to free a slot.
+    const capped = await checkStoredLimit(user.id, 'resumes')
+    if (capped) return capped
+
     const webhookUrl = process.env.N8N_RESUME_WEBHOOK_URL
     if (!webhookUrl) {
         console.error('[resume-upload] N8N_RESUME_WEBHOOK_URL not configured')
@@ -36,6 +41,32 @@ export async function POST(request: NextRequest) {
     } catch {
         return NextResponse.json(
             { success: false, error: 'Invalid JSON body' },
+            { status: 400 }
+        )
+    }
+
+    // Server-side file validation (H5). The client sends { file: <base64>, filename }.
+    // Client-side caps are a UX hint only — enforce type + size here on the trust
+    // boundary the app controls. Limits match the product contract: PDF/DOCX, ≤10MB.
+    const MAX_BYTES = 10 * 1024 * 1024
+    const ALLOWED_EXT = ['.pdf', '.docx']
+    const fileB64 = typeof body.file === 'string' ? body.file : ''
+    const filename = typeof body.filename === 'string' ? body.filename : ''
+    const lowerName = filename.toLowerCase()
+    if (!fileB64 || !filename || !ALLOWED_EXT.some((ext) => lowerName.endsWith(ext))) {
+        return NextResponse.json(
+            { success: false, error: 'A PDF or DOCX file is required' },
+            { status: 400 }
+        )
+    }
+    // Estimate decoded size from base64 length (defensively strip a data: prefix
+    // if one is ever present). ~4 base64 chars encode 3 bytes.
+    const b64 = fileB64.includes(',') ? fileB64.slice(fileB64.indexOf(',') + 1) : fileB64
+    const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0
+    const approxBytes = Math.floor((b64.length * 3) / 4) - padding
+    if (approxBytes <= 0 || approxBytes > MAX_BYTES) {
+        return NextResponse.json(
+            { success: false, error: 'File must be non-empty and at most 10MB' },
             { status: 400 }
         )
     }

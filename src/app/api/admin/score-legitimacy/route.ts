@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { backfillUnknownLegitimacy } from '@/lib/jobs/backfillLegitimacy'
+import { isValidAdminToken } from '@/lib/adminAuth'
 
 // Pure-compute scorer, no external API calls. 200 rows usually finish under 5s.
 export const maxDuration = 60
@@ -15,9 +16,7 @@ export const maxDuration = 60
  *   { limit?: number }   // default 200
  */
 export async function POST(req: NextRequest) {
-    const token = req.headers.get('x-admin-token') || ''
-    const expected = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    if (!expected || token !== expected) {
+    if (!isValidAdminToken(req)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

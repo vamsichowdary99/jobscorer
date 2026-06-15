@@ -7,7 +7,7 @@ export default function CookiePolicyPage() {
   return (
     <LegalPageLayout title="Cookie Policy" lastUpdated="[DATE]">
       <p style={{ marginBottom: 24 }}>
-        This policy explains the cookies and similar technologies ResuScore uses.
+        This policy explains the cookies and similar technologies JobScorer uses.
       </p>
 
       <LegalSection heading="1. Essential cookies">

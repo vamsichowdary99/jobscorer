@@ -69,6 +69,20 @@ export async function POST(req: NextRequest) {
     if (!ALLOWED_SECTIONS.includes(section as AllowedSection)) {
         return NextResponse.json({ error: `Section "${section}" is not allowed` }, { status: 400 })
     }
+    // Validate the section value: must be present, serializable, and size-bounded
+    // so a user can't store an oversized/cyclic blob in their structured_data. (M7)
+    if (value === undefined) {
+        return NextResponse.json({ error: 'value is required' }, { status: 400 })
+    }
+    let serializedValue: string
+    try {
+        serializedValue = JSON.stringify(value)
+    } catch {
+        return NextResponse.json({ error: 'value is not serializable' }, { status: 400 })
+    }
+    if (serializedValue && serializedValue.length > 200_000) {
+        return NextResponse.json({ error: 'value is too large' }, { status: 413 })
+    }
 
     // Verify ownership and fetch current structured_data.
     // Cast to any: the generated Supabase types don't cover the resumes table here (matches gap-form route).

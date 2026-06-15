@@ -11,20 +11,25 @@ export default function Footer() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 48, marginBottom: 48 }}>
                     {/* Brand */}
                     <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 16 }}>
                             <div style={{
+                                position: 'relative',
                                 width: 28,
                                 height: 28,
-                                borderRadius: 'var(--radius)',
-                                background: 'var(--color-primary)',
+                                borderRadius: 8,
+                                background: 'linear-gradient(135deg, #135bec 0%, #2563eb 100%)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                color: 'white',
-                                fontWeight: 800,
-                                fontSize: 12,
-                            }}>R</div>
-                            <span style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>ResuScore</span>
+                                boxShadow: '0 3px 8px -1px rgba(19,91,236,0.4)',
+                                flexShrink: 0,
+                            }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M4 18 L9 12 L13 15 L20 6" />
+                                    <path d="M15 6 L20 6 L20 11" />
+                                </svg>
+                            </div>
+                            <span style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", fontSize: '1rem', fontWeight: 800, letterSpacing: '-0.025em' }}><span style={{ color: '#ffffff' }}>Job</span><span style={{ color: '#93b8ff' }}>Scorer</span></span>
                         </div>
                         <p style={{ fontSize: '0.8125rem', lineHeight: 1.7, maxWidth: 260 }}>
                             AI-powered job matching and resume optimization. Find the roles that fit you best.
@@ -54,7 +59,7 @@ export default function Footer() {
                 </div>
 
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                    <p style={{ fontSize: '0.75rem' }}>© 2026 ResuScore. All rights reserved.</p>
+                    <p style={{ fontSize: '0.75rem' }}>© 2026 JobScorer. All rights reserved.</p>
                     <p style={{ fontSize: '0.75rem' }}>Powered by AI • Built with Next.js</p>
                 </div>
             </div>

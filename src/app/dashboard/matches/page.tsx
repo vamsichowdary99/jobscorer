@@ -3,8 +3,11 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { fetchMatches, fetchResumes, fetchResumeById, getPrimaryResumeId, triggerCompanyResearch, RateLimitError, CompanyResearchPendingError } from '@/lib/api'
+import { fetchMatches, fetchResumes, fetchResumeById, getPrimaryResumeId, triggerCompanyResearch, RateLimitError, CompanyResearchPendingError, countActiveScoreJobs } from '@/lib/api'
 import { addPending } from '@/lib/pendingResearch'
+import { locationFacets, matchInLocation, ALL_LOCATION_KEY } from '@/lib/locations'
+import { isJobClosed } from '@/lib/jobs/applicationStatus'
+import { reportJobStatus } from '@/lib/api'
 import { createClient as createBrowserClient } from '@/lib/supabase/client'
 import { getScoreColor } from '@/lib/types'
 import type { Job, Resume, UserJobMatch } from '@/lib/types'
@@ -14,6 +17,59 @@ import LegitimacyBadge from '@/components/LegitimacyBadge'
 type FullMatch = UserJobMatch & { job: Job }
 
 /* ── Helpers ── */
+// Collapse duplicate listings of the SAME role that arrive under different
+// job_ids across providers (Naukri, LinkedIn, JSearch, SerpAPI all index the
+// same posting with slightly different metadata). Keep the highest-scored one.
+//
+// Three normalisation steps prevent provider-variant strings from defeating the
+// dedup:
+//   1. Company: strip legal suffixes (Inc / Ltd / Pvt / Solutions / Technologies
+//      etc.) so "Gravitix Tech" == "Gravitix Tech Solutions Inc".
+//   2. Title: sort words alphabetically so "Fresher - Front End Developer" ==
+//      "Front End Developer - Fresher" (same words, different order).
+//   3. Location: use only the first comma-segment (the city) so "Hyderabad" ==
+//      "Hyderabad, Telangana, India".
+//
+// Rows missing title OR company are kept as-is (can't dedup reliably).
+function normaliseCompany(raw: string): string {
+    return raw
+        .toLowerCase()
+        .replace(/\b(pvt\.?|private|ltd\.?|limited|inc\.?|incorporated|llc|llp|solutions?|technologies?|tech|systems?|services?|group|global|india|infotech|infosystems?|software)\b/gi, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+}
+
+function normaliseTitle(raw: string): string {
+    return raw
+        .toLowerCase()
+        .replace(/[-–—,|/\\]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .split(' ')
+        .sort()
+        .join(' ')
+}
+
+function normaliseCity(raw: string): string {
+    // Take the first comma-segment — "Hyderabad, Telangana, India" → "hyderabad"
+    return raw.split(',')[0].trim().toLowerCase()
+}
+
+function dedupeMatchesByRole(list: FullMatch[]): FullMatch[] {
+    const best = new Map<string, FullMatch>()
+    for (const m of list) {
+        const title = (m.job?.title ?? '').trim()
+        const company = (m.job?.company ?? '').trim()
+        if (!title || !company) { best.set(`uniq:${m.id}`, m); continue }
+        const key = `${normaliseTitle(title)}|${normaliseCompany(company)}|${normaliseCity(m.job?.location ?? '')}`
+        const existing = best.get(key)
+        if (!existing || (m.relevance_score ?? 0) > (existing.relevance_score ?? 0)) {
+            best.set(key, m)
+        }
+    }
+    return Array.from(best.values())
+}
+
 const ICON_COLORS = ['#0f172a','#1e3a5f','#14532d','#3b0764','#0c4a6e','#1c1917','#431407','#042f2e','#1e1b4b','#162032']
 
 function iconColor(name: string) {
@@ -438,7 +494,7 @@ function parseDescription(text: string) {
 }
 
 /* ── Right panel: full detail ── */
-function JobDetail({ match }: { match: FullMatch }) {
+function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobId: string) => void }) {
     const job = match.job
     const score = match.relevance_score ?? 0
     const matched = match.matched_skills ?? []
@@ -597,6 +653,8 @@ function JobDetail({ match }: { match: FullMatch }) {
                             </div>
                         )}
                     </div>
+                    {/* Action + job-status cluster, stacked on the right */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0, maxWidth: 340 }}>
                     {/* Action buttons */}
                     <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
                         <button style={{
@@ -620,6 +678,42 @@ function JobDetail({ match }: { match: FullMatch }) {
                                 Apply Now
                             </Link>
                         )}
+                    </div>
+                    {/* Crowdsourced status check — quiet link, helps the next user. */}
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            if (!match.job_id) return
+                            await reportJobStatus(match.job_id, 'closed')
+                            onReported?.(match.job_id)
+                        }}
+                        title="Tell us if this listing is no longer accepting applications — we'll hide it for other job seekers"
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            marginTop: 12, padding: 0, border: 'none', background: 'none',
+                            color: '#94A3B8', fontSize: '0.78rem', fontWeight: 500,
+                            cursor: 'pointer', fontFamily: "'Manrope', sans-serif", transition: 'color 0.15s ease',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#135bec' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = '#94A3B8' }}
+                    >
+                        <span aria-hidden style={{ fontSize: '0.85rem', lineHeight: 1 }}>⚑</span>
+                        <span style={{ textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>
+                            No longer accepting applications? Tell us
+                        </span>
+                    </button>
+                    {/* Spend-check: warn users to verify the listing is live BEFORE the
+                     * expensive research/optimize steps, so a dead job doesn't waste them. */}
+                    <div style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 9,
+                        marginTop: 0, padding: '11px 14px', borderRadius: 10, width: '100%',
+                        background: '#fef2f2', border: '1px solid #fecaca',
+                    }}>
+                        <span aria-hidden style={{ fontSize: '0.95rem', lineHeight: 1.3, flexShrink: 0 }}>⚠️</span>
+                        <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b91c1c', margin: 0, lineHeight: 1.45, textAlign: 'left' }}>
+                            Click <strong>Apply</strong> to see if the job is open or closed before creating a resume for this company.
+                        </p>
+                    </div>
                     </div>
                 </div>
             </div>
@@ -985,6 +1079,158 @@ function StarBadge({ size = 11 }: { size?: number }) {
     )
 }
 
+function LocationPin({ size = 13, color = '#135bec' }: { size?: number; color?: string }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+            strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+            <circle cx="12" cy="10" r="3" />
+        </svg>
+    )
+}
+
+/**
+ * Compact location filter dropdown for the matches header. Collapses what could
+ * be 20-30 metros into a single button + scrollable panel, instead of a chip row
+ * that would overflow. Mirrors ResumeSelector's open/close + panel styling so it
+ * feels native to the left rail.
+ */
+function LocationFilter({
+    options,
+    value,
+    onSelect,
+    totalCount,
+}: {
+    options: { key: string; label: string; count: number }[]
+    value: string
+    onSelect: (key: string) => void
+    totalCount: number
+}) {
+    const [open, setOpen] = useState(false)
+    const wrapperRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!open) return
+        const handler = (e: MouseEvent) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false)
+        }
+        const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+        document.addEventListener('mousedown', handler)
+        document.addEventListener('keydown', esc)
+        return () => {
+            document.removeEventListener('mousedown', handler)
+            document.removeEventListener('keydown', esc)
+        }
+    }, [open])
+
+    const rows = [{ key: ALL_LOCATION_KEY, label: 'All locations', count: totalCount }, ...options]
+    const current = rows.find(r => r.key === value) ?? rows[0]
+    const isFiltered = value !== ALL_LOCATION_KEY
+
+    return (
+        <div ref={wrapperRef} style={{ position: 'relative', marginTop: 10, display: 'inline-block' }}>
+            {/* ── Trigger ── */}
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7,
+                    padding: '6px 9px 6px 11px',
+                    background: isFiltered ? '#f5f8ff' : 'white',
+                    border: `1.5px solid ${open ? '#135bec' : isFiltered ? '#c7d8f8' : '#e5e7eb'}`,
+                    borderRadius: 9, cursor: 'pointer',
+                    fontFamily: "'Manrope', sans-serif",
+                    boxShadow: open ? '0 0 0 3px rgba(19,91,236,0.12)' : 'none',
+                    transition: 'border-color 0.15s, box-shadow 0.15s, background 0.15s',
+                }}
+                onMouseEnter={e => { if (!open && !isFiltered) e.currentTarget.style.borderColor = '#c7d8f8' }}
+                onMouseLeave={e => { if (!open && !isFiltered) e.currentTarget.style.borderColor = '#e5e7eb' }}
+            >
+                <LocationPin color={isFiltered ? '#135bec' : '#6b7280'} />
+                <span style={{
+                    fontSize: '0.75rem', fontWeight: 700, letterSpacing: '-0.01em',
+                    color: isFiltered ? '#135bec' : '#374151',
+                    maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                    {current.label}
+                </span>
+                <span style={{
+                    fontSize: '0.66rem', fontWeight: 700, lineHeight: 1.5,
+                    color: isFiltered ? '#4f86f0' : '#9ca3af',
+                    background: isFiltered ? '#e3edff' : '#f3f4f6',
+                    borderRadius: 999, padding: '1px 6px',
+                }}>
+                    {current.count}
+                </span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280"
+                    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ flexShrink: 0, marginLeft: 1, transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s ease' }}>
+                    <polyline points="6 9 12 15 18 9" />
+                </svg>
+            </button>
+
+            {/* ── Panel ── */}
+            {open && (
+                <div
+                    role="listbox"
+                    className="left-scroll"
+                    style={{
+                        position: 'absolute', top: 'calc(100% + 6px)', left: 0,
+                        minWidth: 224,
+                        background: 'white', border: '1px solid #e5e7eb', borderRadius: 11,
+                        boxShadow: '0 10px 30px rgba(15,23,42,0.10), 0 4px 10px rgba(15,23,42,0.06)',
+                        padding: 6, zIndex: 50, animation: 'rsDropIn 0.18s ease-out',
+                        maxHeight: 300, overflowY: 'auto',
+                    }}
+                >
+                    {rows.map((r, idx) => {
+                        const isSel = r.key === value
+                        return (
+                            <div key={r.key}>
+                                <button
+                                    type="button"
+                                    role="option"
+                                    aria-selected={isSel}
+                                    onClick={() => { onSelect(r.key); setOpen(false) }}
+                                    style={{
+                                        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                                        padding: '8px 9px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                                        background: isSel ? '#eef4ff' : 'transparent',
+                                        fontFamily: "'Manrope', sans-serif", textAlign: 'left',
+                                        transition: 'background 0.12s',
+                                    }}
+                                    onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = '#f9fafb' }}
+                                    onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent' }}
+                                >
+                                    <span style={{ display: 'inline-flex', opacity: r.key === ALL_LOCATION_KEY ? 0.5 : 1 }}>
+                                        <LocationPin size={12} color={isSel ? '#135bec' : '#9ca3af'} />
+                                    </span>
+                                    <span style={{
+                                        flex: 1, minWidth: 0, fontSize: '0.78rem', fontWeight: 600,
+                                        color: isSel ? '#135bec' : '#374151',
+                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                    }}>
+                                        {r.label}
+                                    </span>
+                                    <span style={{ flexShrink: 0, fontSize: '0.68rem', fontWeight: 700, color: isSel ? '#4f86f0' : '#9ca3af' }}>
+                                        {r.count}
+                                    </span>
+                                </button>
+                                {/* divider after the "All locations" row */}
+                                {idx === 0 && rows.length > 1 && (
+                                    <div style={{ height: 1, background: '#f3f4f6', margin: '4px 8px' }} />
+                                )}
+                            </div>
+                        )
+                    })}
+                </div>
+            )}
+        </div>
+    )
+}
+
 function ResumeSelector({
     resumes,
     selectedResumeId,
@@ -1257,6 +1503,18 @@ export default function MatchesPage() {
     const [loading, setLoading] = useState(true)
     const [selected, setSelected] = useState<FullMatch | null>(null)
     const [filter, setFilter] = useState<FilterType>('all')
+    // Location facet — lets the user narrow a resume's accumulated matches to a
+    // single metro (Bangalore vs Hyderabad vs …) since matches pile up across
+    // every search. Keyed by metro bucket; 'all' shows everything.
+    const [locationFilter, setLocationFilter] = useState<string>(ALL_LOCATION_KEY)
+    // Jobs the user just flagged "no longer accepting" — hidden instantly for
+    // this user (the DB flip via report_job_status protects everyone else).
+    const [reportedClosed, setReportedClosed] = useState<Set<string>>(new Set())
+    // True while a scoring run is still queued/running for this user. Drives the
+    // "scoring in progress" banner and the polling backstop below so the user
+    // who just got redirected here from "Find Best Matches" sees activity
+    // instead of a blank list.
+    const [scoringInFlight, setScoringInFlight] = useState(false)
 
     // Resume selector — pinned at the top of the left panel. Filters the
     // matches list to a single resume so scores stop being a jumble across
@@ -1363,6 +1621,50 @@ export default function MatchesPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user])
 
+    // Polling backstop for the Realtime subscription above. Scoring is async
+    // (n8n queue processor) and can take minutes; the optimistic redirect from
+    // search lands the user here before any match exists. Realtime is the
+    // primary refresh, but events can be dropped (network, tab throttling, a
+    // missed reconnect). So while a score job is in flight we poll fetchMatches
+    // every 8s and re-check the queue. Polling self-terminates the moment the
+    // queue has no active score jobs, and is hard-capped at 6 minutes so a
+    // stuck/failed run can never leave us polling forever.
+    useEffect(() => {
+        if (!user) return
+        let cancelled = false
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const deadline = Date.now() + 6 * 60 * 1000
+
+        const tick = async () => {
+            if (cancelled) return
+            let active = 0
+            try {
+                active = await countActiveScoreJobs(user.id)
+            } catch {
+                // Transient query failure — treat as "unknown", try once more
+                // next tick rather than tearing down the whole backstop.
+                active = scoringInFlight ? 1 : 0
+            }
+            if (cancelled) return
+            setScoringInFlight(active > 0)
+            if (active > 0) {
+                await reload(user.id).catch(() => { /* keep prior data */ })
+                if (cancelled) return
+                if (Date.now() < deadline) {
+                    timer = setTimeout(tick, 8000)
+                } else {
+                    setScoringInFlight(false)
+                }
+            }
+        }
+
+        // Kick off immediately so a freshly-redirected user gets a status read
+        // without waiting a full interval.
+        void tick()
+        return () => { cancelled = true; if (timer) clearTimeout(timer) }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user])
+
     // Resume-scoped view: when a resume is selected, only show its matches.
     // The counts in the score-tier tabs (High/Medium/Low) also reflect just
     // this resume's slice so the numbers always tell the truth.
@@ -1370,7 +1672,17 @@ export default function MatchesPage() {
         ? matches.filter(m => m.resume_id === selectedResumeId)
         : matches
 
-    const filtered = resumeScoped.filter(m => {
+    // Faceted filtering: resume → HIDE CLOSED → location → score-tier. Closed/
+    // expired (and just-reported) jobs are dropped FIRST, so the location chips,
+    // the All/High/Medium/Low counts, and the visible list all agree and never
+    // include a dead listing.
+    const openResumeScoped = dedupeMatchesByRole(
+        resumeScoped.filter(m => !isJobClosed(m.job) && !reportedClosed.has(m.job_id ?? ''))
+    )
+    const locationOptions = locationFacets(openResumeScoped)
+    const locationScoped = openResumeScoped.filter(m => matchInLocation(m, locationFilter))
+
+    const filtered = locationScoped.filter(m => {
         const s = m.relevance_score ?? 0
         if (filter === 'high') return s >= 80
         if (filter === 'medium') return s >= 60 && s < 80
@@ -1378,9 +1690,9 @@ export default function MatchesPage() {
         return true
     })
 
-    const highFit = resumeScoped.filter(m => (m.relevance_score ?? 0) >= 80).length
-    const medFit  = resumeScoped.filter(m => { const s = m.relevance_score ?? 0; return s >= 60 && s < 80 }).length
-    const lowFit  = resumeScoped.filter(m => (m.relevance_score ?? 0) < 60).length
+    const highFit = locationScoped.filter(m => (m.relevance_score ?? 0) >= 80).length
+    const medFit  = locationScoped.filter(m => { const s = m.relevance_score ?? 0; return s >= 60 && s < 80 }).length
+    const lowFit  = locationScoped.filter(m => (m.relevance_score ?? 0) < 60).length
 
     // Pre-compute match counts per resume_id for the selector dropdown so
     // each row can show how many scored jobs that resume has.
@@ -1395,13 +1707,25 @@ export default function MatchesPage() {
         if (!selectedResumeId) return
         setSelected(prev => {
             if (prev && prev.resume_id === selectedResumeId) return prev
-            return resumeScoped[0] ?? null
+            // Recompute the scoped top from the latest `matches` rather than the
+            // `resumeScoped` closure: on first load `reload()` defaults `selected`
+            // to the GLOBAL top match (which may belong to another resume), and
+            // this effect must re-run once matches arrive to correct it. Hence
+            // `matches` is in the dep array — without it the detail panel kept
+            // showing a different resume's top job.
+            const scoped = matches.filter(m => m.resume_id === selectedResumeId)
+            return scoped[0] ?? null
         })
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedResumeId, matches])
+
+    // Reset the location facet when switching resumes — a different resume may
+    // not have any matches in the previously-selected metro.
+    useEffect(() => {
+        setLocationFilter(ALL_LOCATION_KEY)
     }, [selectedResumeId])
 
     const FILTERS: { key: FilterType; label: string; count: number }[] = [
-        { key: 'all',    label: 'All',    count: resumeScoped.length },
+        { key: 'all',    label: 'All',    count: locationScoped.length },
         { key: 'high',   label: 'High',   count: highFit },
         { key: 'medium', label: 'Medium', count: medFit },
         { key: 'low',    label: 'Low',    count: lowFit },
@@ -1475,6 +1799,27 @@ export default function MatchesPage() {
                             loading={resumesLoading}
                         />
 
+                        {/* Scoring-in-progress banner — shown while the queue still
+                            has an active score job. Reassures the user redirected
+                            here mid-run that results are on the way (the list below
+                            fills in progressively as matches land). */}
+                        {scoringInFlight && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: 9,
+                                padding: '9px 12px', marginBottom: 12, borderRadius: 9,
+                                background: '#eff6ff', border: '1px solid #bfdbfe',
+                            }}>
+                                <div style={{
+                                    width: 15, height: 15, flexShrink: 0,
+                                    border: '2px solid #bfdbfe', borderTopColor: '#135bec',
+                                    borderRadius: '50%', animation: 'spin 0.8s linear infinite',
+                                }} />
+                                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
+                                    Scoring your matches… results appear here automatically as they’re ready.
+                                </span>
+                            </div>
+                        )}
+
                         {/* Count + filters button row */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                             <span style={{
@@ -1509,6 +1854,18 @@ export default function MatchesPage() {
                                 </button>
                             ))}
                         </div>
+
+                        {/* Location facet — a compact dropdown so the filter header stays
+                            tight even when a resume's matches span many metros. Only shown
+                            once there's more than one location to choose between. */}
+                        {locationOptions.length >= 2 && (
+                            <LocationFilter
+                                options={locationOptions}
+                                value={locationFilter}
+                                onSelect={setLocationFilter}
+                                totalCount={openResumeScoped.length}
+                            />
+                        )}
                     </div>
 
                     {/* Job list */}
@@ -1605,7 +1962,14 @@ export default function MatchesPage() {
                             </div>
                         </div>
                     ) : (
-                        <JobDetail key={selected.id} match={selected} />
+                        <JobDetail
+                            key={selected.id}
+                            match={selected}
+                            onReported={(jobId) => {
+                                setReportedClosed(prev => new Set(prev).add(jobId))
+                                setSelected(filtered.find(m => m.job_id !== jobId) ?? null)
+                            }}
+                        />
                     )}
                 </div>
 

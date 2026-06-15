@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 
-export type TemplateId = 'classic' | 'rezi' | 'rezi-standard' | 'london' | 'stitch' | 'harvard' | 'sb2nov' | 'open-resume'
+export type TemplateId = 'classic' | 'rezi' | 'rezi-standard' | 'london' | 'stitch' | 'harvard' | 'sb2nov' | 'open-resume' | 'cobalt' | 'onyx' | 'jade' | 'lapis'
 
 interface Template {
   id: TemplateId
@@ -381,6 +381,175 @@ function OpenResumePreview() {
   )
 }
 
+function OnyxPreview() {
+  const RULE = '#224a85'
+  const sec = (t: string) => (
+    <div style={{ fontSize: 6.5, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: '#111', marginTop: 6, marginBottom: 3 }}>{t}</div>
+  )
+  const skill = (l: string, v: string) => (
+    <div style={{ display: 'flex', marginBottom: 1 }}><span style={{ fontWeight: 700, width: 52, flexShrink: 0 }}>{l}</span><span>{v}</span></div>
+  )
+  return (
+    <div style={{ fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif", fontSize: 7, lineHeight: 1.4, color: '#111', padding: '14px 14px', background: '#fff', height: 240, overflow: 'hidden' }}>
+      <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', lineHeight: 1.05 }}>First Last</div>
+      <div style={{ fontSize: 7.5, marginTop: 1.5 }}>Full-Stack Developer</div>
+      <div style={{ borderBottom: `1px solid ${RULE}`, margin: '4px 0' }} />
+      <div style={{ fontSize: 5.5 }}>email@gmail.com  |  +91 98765 43210  |  Bengaluru  |  github.com/user</div>
+      {sec('Summary')}
+      <div style={{ fontSize: 6 }}>CS graduate building full-stack web apps with modern technologies.</div>
+      {sec('Technical Skills')}
+      <div style={{ fontSize: 6 }}>
+        {skill('Languages:', 'JavaScript, TypeScript, Python')}
+        {skill('Frontend:', 'React.js, HTML5, CSS3, Tailwind')}
+        {skill('Backend:', 'Node.js, Express.js, REST APIs')}
+      </div>
+      {sec('Experience')}
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ fontWeight: 700 }}>Full-Stack Developer Intern</span>
+        <span style={{ fontSize: 5.5 }}>May – Aug 2024</span>
+      </div>
+      <div style={{ fontStyle: 'italic', fontSize: 6 }}>CodeOrbit Technologies, Bengaluru</div>
+      <ul style={{ margin: '2px 0 0 0', paddingLeft: 10, listStyle: 'disc' }}>
+        <li style={{ fontSize: 5.5, marginBottom: 1 }}>Developed responsive web apps using React.js and Node.js.</li>
+        <li style={{ fontSize: 5.5 }}>Built and integrated RESTful APIs for auth and data.</li>
+      </ul>
+    </div>
+  )
+}
+
+function CobaltPreview() {
+  const ACCENT = '#06296b'
+  const sec = (t: string) => (
+    <div style={{ fontSize: 6.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase' as const, color: ACCENT, borderBottom: `1px solid ${ACCENT}`, paddingBottom: 1.5, marginBottom: 3, marginTop: 6 }}>{t}</div>
+  )
+  const skill = (l: string, v: string) => (
+    <div style={{ display: 'flex', marginBottom: 1 }}><span style={{ fontWeight: 700, width: 48, flexShrink: 0 }}>{l}</span><span>{v}</span></div>
+  )
+  return (
+    <div style={{ fontFamily: "'Roboto', 'Helvetica Neue', Arial, sans-serif", fontSize: 7, lineHeight: 1.4, color: '#111', padding: '14px 14px', background: '#fff', height: 240, overflow: 'hidden' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: '#111', lineHeight: 1.05 }}>First Last</div>
+      <div style={{ fontSize: 7.5, fontWeight: 700, color: ACCENT, marginTop: 1.5 }}>Software Engineer</div>
+      <div style={{ fontSize: 5.5, color: '#111', marginTop: 2 }}>email@gmail.com  |  +91 98765 43210  |  Bengaluru  |  linkedin.com/in/user</div>
+      {sec('Professional Summary')}
+      <div style={{ fontSize: 6 }}>Backend-focused CS graduate building scalable REST APIs and reliable, efficient services.</div>
+      {sec('Skills')}
+      <div style={{ fontSize: 6 }}>
+        {skill('Languages:', 'Java, Python, SQL, JavaScript')}
+        {skill('Frameworks:', 'Spring Boot, Node.js, Express')}
+        {skill('Tools:', 'Git, Docker, AWS, Postman')}
+      </div>
+      {sec('Experience')}
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ fontWeight: 700 }}>Software Engineering Intern</span>
+        <span style={{ fontSize: 5.5 }}>May – Jul 2024</span>
+      </div>
+      <div style={{ fontStyle: 'italic', fontSize: 6 }}>TechNova Solutions, Bengaluru</div>
+      <ul style={{ margin: '2px 0 0 0', paddingLeft: 10, listStyle: 'disc' }}>
+        <li style={{ fontSize: 5.5, marginBottom: 1 }}>Built and documented RESTful APIs using Spring Boot.</li>
+        <li style={{ fontSize: 5.5 }}>Improved API response time by ~20%.</li>
+      </ul>
+    </div>
+  )
+}
+
+function JadePreview() {
+  const ACCENT = '#026857'
+  const sec = (t: string) => (
+    <div style={{ fontSize: 6, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' as const, color: ACCENT, borderBottom: `1px solid ${ACCENT}`, paddingBottom: 1, marginBottom: 2.5, marginTop: 5 }}>{t}</div>
+  )
+  return (
+    <div style={{ fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif", fontSize: 6.5, lineHeight: 1.35, color: '#1a1a1a', padding: '13px 13px', background: '#fff', height: 240, overflow: 'hidden', display: 'flex', flexDirection: 'row', gap: 10 }}>
+      {/* Left column */}
+      <div style={{ width: '37%', flexShrink: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: ACCENT, lineHeight: 1.02 }}>First Last</div>
+        <div style={{ fontSize: 6.5, fontWeight: 700, marginTop: 1 }}>Frontend Engineer</div>
+        <div style={{ fontSize: 5, marginTop: 4 }}>
+          <div style={{ marginBottom: 1 }}><b>Email:</b> first@gmail.com</div>
+          <div style={{ marginBottom: 1 }}><b>Phone:</b> +91 98765 43210</div>
+          <div><b>GitHub:</b> github.com/user</div>
+        </div>
+        {sec('Skills')}
+        <div style={{ fontSize: 5.5 }}>
+          <div style={{ fontWeight: 700 }}>Languages</div>
+          <ul style={{ margin: '1px 0 0 0', paddingLeft: 8, listStyle: 'disc' }}>
+            <li>JavaScript</li><li>TypeScript</li>
+          </ul>
+          <div style={{ fontWeight: 700, marginTop: 2 }}>Frameworks</div>
+          <ul style={{ margin: '1px 0 0 0', paddingLeft: 8, listStyle: 'disc' }}>
+            <li>React.js</li><li>Next.js</li>
+          </ul>
+        </div>
+        {sec('Education')}
+        <div style={{ fontSize: 5.5 }}>
+          <div style={{ fontWeight: 700 }}>B.Tech, CSE</div>
+          <div>RV College of Engineering</div>
+        </div>
+      </div>
+      {/* Right column */}
+      <div style={{ flex: 1 }}>
+        {sec('Summary')}
+        <div style={{ fontSize: 6 }}>Motivated CS graduate with a strong foundation in frontend development and responsive web apps.</div>
+        {sec('Experience')}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 700 }}>Frontend Developer Intern</span>
+          <span style={{ fontSize: 5.5 }}>May – Aug 2024</span>
+        </div>
+        <div style={{ fontSize: 5.5 }}>TechNova Solutions, Bengaluru</div>
+        <ul style={{ margin: '1.5px 0 0 0', paddingLeft: 9, listStyle: 'disc' }}>
+          <li style={{ fontSize: 5.5, marginBottom: 1 }}>Developed responsive web interfaces using React.js.</li>
+          <li style={{ fontSize: 5.5 }}>Built and integrated RESTful APIs.</li>
+        </ul>
+        {sec('Projects')}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 700 }}>Portfolio Website</span>
+          <span style={{ fontSize: 5.5, fontStyle: 'italic' }}>React.js, Vite</span>
+        </div>
+        <ul style={{ margin: '1.5px 0 0 0', paddingLeft: 9, listStyle: 'disc' }}>
+          <li style={{ fontSize: 5.5 }}>Responsive site with dark mode toggle.</li>
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+function LapisPreview() {
+  const ACCENT = '#1a1670'
+  const sec = (t: string) => (
+    <div style={{ marginTop: 5, marginBottom: 2.5 }}>
+      <div style={{ borderTop: '1px solid #e4e4ee', marginBottom: 2.5 }} />
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ width: 2, height: 7, background: ACCENT, marginRight: 3, flexShrink: 0 }} />
+        <span style={{ fontSize: 6.5, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' as const, color: ACCENT }}>{t}</span>
+      </div>
+    </div>
+  )
+  const pill = (t: string) => (
+    <span style={{ border: '0.6px solid #cdcdde', borderRadius: 3, padding: '1px 4px', marginRight: 3, marginBottom: 3, fontSize: 5.5, color: '#1f2024', whiteSpace: 'nowrap' as const, display: 'inline-block' }}>{t}</span>
+  )
+  return (
+    <div style={{ fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif", fontSize: 7, lineHeight: 1.35, color: '#1f2024', padding: '13px 14px', background: '#fff', height: 240, overflow: 'hidden' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', color: ACCENT, lineHeight: 1.04 }}>First Last</div>
+      <div style={{ fontSize: 7.5, fontWeight: 700, color: ACCENT, marginTop: 1 }}>Data Engineer (Entry-Level)</div>
+      <div style={{ fontSize: 5.5, color: '#1f2024', marginTop: 2.5 }}>email@gmail.com  |  +91 98765 43210  |  Bengaluru  |  github.com/user</div>
+      {sec('Summary')}
+      <div style={{ fontSize: 6 }}>CS graduate building scalable data pipelines with modern cloud tooling.</div>
+      {sec('Skills')}
+      <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: 2 }}>
+        {['Python', 'SQL', 'Spark', 'Kafka', 'Airflow', 'ETL', 'PostgreSQL', 'AWS', 'Docker', 'Pandas'].map((s, i) => <React.Fragment key={i}>{pill(s)}</React.Fragment>)}
+      </div>
+      {sec('Work Experience')}
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ fontWeight: 700 }}>Data Engineer Intern</span>
+        <span style={{ fontSize: 5.5 }}>May – Aug 2024</span>
+      </div>
+      <div style={{ fontStyle: 'italic', fontSize: 6, color: ACCENT }}>DataWave Analytics, Bengaluru</div>
+      <ul style={{ margin: '2px 0 0 0', paddingLeft: 10, listStyle: 'disc' }}>
+        <li style={{ fontSize: 5.5 }}>Designed ETL pipelines into AWS S3 and Redshift.</li>
+      </ul>
+    </div>
+  )
+}
+
 /* ─── Template Definitions ──────────────────────────────────── */
 const TEMPLATES: Template[] = [
   {
@@ -438,6 +607,34 @@ const TEMPLATES: Template[] = [
     tagline: 'Modern sky-blue accent',
     tags: ['Sans-serif', 'ATS ✓', 'Accent bar'],
     preview: <OpenResumePreview />,
+  },
+  {
+    id: 'cobalt',
+    name: 'Cobalt',
+    tagline: 'Navy single-column, blue headers',
+    tags: ['Sans-serif', 'ATS ✓', 'Blue accent'],
+    preview: <CobaltPreview />,
+  },
+  {
+    id: 'onyx',
+    name: 'Onyx',
+    tagline: 'Minimalist, wide-tracked headers',
+    tags: ['Open Sans', 'ATS ✓', 'Minimalist'],
+    preview: <OnyxPreview />,
+  },
+  {
+    id: 'jade',
+    name: 'Jade',
+    tagline: 'Two-column teal with ruled headers',
+    tags: ['Open Sans', 'Teal accent', 'Two-column'],
+    preview: <JadePreview />,
+  },
+  {
+    id: 'lapis',
+    name: 'Lapis',
+    tagline: 'Modern indigo with skill pills',
+    tags: ['Open Sans', 'Indigo accent', 'Skill pills'],
+    preview: <LapisPreview />,
   },
 ]
 

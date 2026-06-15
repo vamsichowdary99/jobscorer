@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-export const alt = 'ResuScore — AI-Powered Job Matching & Resume Optimization';
+export const alt = 'JobScorer — AI-Powered Job Matching & Resume Optimization';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -27,19 +27,20 @@ export default function OpengraphImage() {
               width: 72,
               height: 72,
               borderRadius: 18,
-              background: '#135bec',
+              background: 'linear-gradient(135deg, #135bec 0%, #2563eb 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#fff',
-              fontSize: 40,
-              fontWeight: 800,
             }}
           >
-            R
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 18 L9 12 L13 15 L20 6" />
+              <path d="M15 6 L20 6 L20 11" />
+            </svg>
           </div>
-          <div style={{ fontSize: 38, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>
-            ResuScore
+          <div style={{ display: 'flex', fontSize: 38, fontWeight: 800, letterSpacing: '-0.02em' }}>
+            <span style={{ color: '#0f172a' }}>Job</span>
+            <span style={{ color: '#135bec' }}>Scorer</span>
           </div>
         </div>
 

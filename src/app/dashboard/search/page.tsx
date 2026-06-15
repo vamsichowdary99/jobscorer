@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { searchJobs, fetchJobsSince, fetchJobsByIds, triggerJobIngestion, triggerScoring, getPrimaryResumeId, RateLimitError } from '@/lib/api'
+import { searchJobs, fetchJobsSince, fetchJobsByIds, triggerJobIngestion, triggerScoring, getPrimaryResumeId, RateLimitError, reportJobStatus } from '@/lib/api'
+import { jobStatusLabel } from '@/lib/jobs/applicationStatus'
 import type { QueueJobState } from '@/lib/hooks/useQueueJob'
 import { QueueStatusBanner } from '@/components/queue/QueueStatusBanner'
 import type { Job } from '@/lib/types'
@@ -419,6 +420,20 @@ function LevelBadge({ level }: { level: string | null }) {
 
 // ── Left Panel: Job Card ──────────────────────────────────────
 
+// Deep Search ("Fetch from Web") is the metered job_search quota. Pull the
+// user's remaining count from the billing usage endpoint (server is source of
+// truth — cache/pool hits don't consume, so we never decrement optimistically).
+type DeepUsage = { plan: 'free' | 'pro' | 'max'; used: number; limit: number }
+async function fetchDeepUsage(): Promise<DeepUsage | null> {
+    try {
+        const r = await fetch('/api/billing/usage')
+        if (!r.ok) return null
+        const d = await r.json() as { plan: 'free' | 'pro' | 'max'; usage: { feature: string; used: number; limit: number }[] }
+        const js = d.usage?.find(u => u.feature === 'job_search')
+        return js ? { plan: d.plan, used: js.used, limit: js.limit } : null
+    } catch { return null }
+}
+
 function JobCard({ job, selected, onClick }: { job: Job; selected: boolean; onClick: () => void }) {
     return (
         <button
@@ -467,6 +482,15 @@ function JobCard({ job, selected, onClick }: { job: Job; selected: boolean; onCl
                 )}
                 {job.location && job.experience_level && <span style={{ color: '#CBD5E1', fontSize: '0.75rem' }}>·</span>}
                 <LevelBadge level={job.experience_level} />
+                {jobStatusLabel(job.application_status) && (
+                    <span style={{
+                        display: 'inline-flex', alignItems: 'center', padding: '1px 7px',
+                        borderRadius: 999, background: '#fef2f2', color: '#b91c1c',
+                        fontSize: '0.625rem', fontWeight: 700,
+                    }}>
+                        {jobStatusLabel(job.application_status)}
+                    </span>
+                )}
                 {(job.legitimacy_tier === 'verified' || job.legitimacy_tier === 'proceed_with_caution') && (
                     <LegitimacyBadge
                         tier={job.legitimacy_tier}
@@ -648,11 +672,13 @@ function JobDetailPanel({
     scoreState,
     onScore,
     hasResume,
+    onReported,
 }: {
     job: Job
     scoreState: SingleScoreState | undefined
     onScore: (jobId: string) => void
     hasResume: boolean
+    onReported?: (jobId: string) => void
 }) {
     const descLines = (job.description ?? '').split('\n').filter(Boolean)
     const skills = parseSkills(job.required_skills)
@@ -705,6 +731,28 @@ function JobDetailPanel({
                             </Link>
                         )}
                     </div>
+                    {/* Crowdsourced status check — quiet link, helps the next user. */}
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            await reportJobStatus(job.id, 'closed')
+                            onReported?.(job.id)
+                        }}
+                        title="Tell us if this listing is no longer accepting applications — we'll hide it for other job seekers"
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            marginTop: 10, padding: 0, border: 'none', background: 'none',
+                            color: '#94A3B8', fontSize: '0.75rem', fontWeight: 500,
+                            cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s ease',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#135bec' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8' }}
+                    >
+                        <span aria-hidden style={{ fontSize: '0.8rem', lineHeight: 1 }}>⚑</span>
+                        <span style={{ textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>
+                            No longer accepting applications? Tell us
+                        </span>
+                    </button>
                 </div>
 
                 {/* Title */}
@@ -1006,7 +1054,7 @@ function EmptyList({ hasSearched, searching }: { hasSearched: boolean; searching
                 Looking up jobs
             </p>
             <p style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
-                Scanning our database…
+                Searching saved jobs…
             </p>
         </div>
     )
@@ -1140,7 +1188,7 @@ function EmptyList({ hasSearched, searching }: { hasSearched: boolean; searching
                 fontWeight: 700, fontSize: '0.9375rem', color: '#0F172A',
                 marginBottom: 6, letterSpacing: '-0.01em',
             }}>
-                No jobs in your local DB
+                No saved jobs match yet
             </p>
             <p style={{
                 fontSize: '0.8125rem', color: '#64748B', lineHeight: 1.55,
@@ -1155,7 +1203,7 @@ function EmptyList({ hasSearched, searching }: { hasSearched: boolean; searching
                 fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.02em',
             }}>
                 <Globe size={11} />
-                Use “Fetch from Web”
+                Use “Deep Search”
             </div>
         </div>
     )
@@ -1187,10 +1235,18 @@ export default function SearchPage() {
     const [searching, setSearching] = useState(false)
     const [hasSearched, setHasSearched] = useState(false)
     const [dateFilter, setDateFilter] = useState<DateRange>('any')
+    // Jobs the user just flagged "no longer accepting" — hidden instantly this session.
+    const [reportedClosed, setReportedClosed] = useState<Set<string>>(new Set())
     const restoredRef = useRef(false)
 
-    // Derived: results passed through the date filter. All UI/scoring uses this.
-    const visibleResults = useMemo(() => filterByDateRange(results, dateFilter), [results, dateFilter])
+    // Derived: results passed through the date filter + closed-job hide. ALL
+    // UI and the scoring request (job_ids come from visibleResults) use this, so
+    // closed/reported jobs are never shown nor sent for scoring.
+    const visibleResults = useMemo(
+        () => filterByDateRange(results, dateFilter)
+            .filter(j => j.application_status !== 'closed' && !reportedClosed.has(j.id)),
+        [results, dateFilter, reportedClosed],
+    )
     const postedDates = useMemo(() => results.map(j => j.posted_date), [results])
     const isFilterHidingAll = dateFilter !== 'any' && visibleResults.length === 0 && results.length > 0
 
@@ -1237,6 +1293,8 @@ export default function SearchPage() {
 
     const [ingesting, setIngesting] = useState(false)
     const ingestingRef = useRef(false)
+    const [deepUsage, setDeepUsage] = useState<DeepUsage | null>(null)
+    useEffect(() => { fetchDeepUsage().then(d => { if (d) setDeepUsage(d) }) }, [])
     const [ingestStatus, setIngestStatus] = useState('')
     const [ingestSuccess, setIngestSuccess] = useState(false)
     const [showIngestBanner, setShowIngestBanner] = useState(false)
@@ -1278,7 +1336,7 @@ export default function SearchPage() {
             rememberIngestion(queryStart, locStart, lvlStart, jobs.map(j => j.id))
             setIngestStatus(`${log?.new_jobs_added ?? 0} new jobs added · Showing all ${jobs.length} fetched results`)
         } catch {
-            setIngestStatus(`${log?.new_jobs_added ?? 0} new jobs added. Click "Search DB" to view.`)
+            setIngestStatus(`${log?.new_jobs_added ?? 0} new jobs added. Click "Search" to view.`)
         } finally {
             ingestingRef.current = false
             setIngesting(false)
@@ -1294,6 +1352,17 @@ export default function SearchPage() {
         setIngestStatus('Ingestion failed. Check n8n logs.')
         setIngestJobId(null)
     }
+
+    // Deep Search remaining-count display. Shown on every finite-quota plan
+    // (Free / Pro / Max) so the count is always visible; only a genuinely
+    // unlimited quota (limit < 0) hides it. Warning colour kicks in when low.
+    const deepUnlimited = deepUsage ? deepUsage.limit < 0 : false
+    const deepRemaining = deepUsage && !deepUnlimited ? Math.max(0, deepUsage.limit - deepUsage.used) : null
+    const deepExhausted = deepRemaining === 0
+    const deepLow = deepRemaining !== null && deepRemaining <= 1
+    const deepShowCount = deepUsage !== null && !deepUnlimited && deepRemaining !== null
+    const deepResetLabel = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
+        .toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 
     const [scoring, setScoring] = useState(false)
     const [scoreStatus, setScoreStatus] = useState('')
@@ -1385,10 +1454,14 @@ export default function SearchPage() {
             return
         }
 
+        // Refresh remaining deep searches from the server (only a real paid fetch
+        // consumed one; cache/pool hits leave the count unchanged — that's correct).
+        void fetchDeepUsage().then(d => { if (d) setDeepUsage(d) })
+
         const logId = result?.ingestion_log_id as string | undefined
         if (!logId) {
             setIngestSuccess(true)
-            setIngestStatus('Job fetch initiated! Results appear in ~60–90 seconds. Click "Search DB" to check.')
+            setIngestStatus('Job fetch initiated! Results appear in ~60–90 seconds. Click "Search" to check.')
             ingestingRef.current = false
             setIngesting(false)
             return
@@ -1507,16 +1580,33 @@ export default function SearchPage() {
             if (queueJobId) {
                 setSingleScores(s => ({ ...s, [jobId]: { state: 'loading', jobId, queueJobId } }))
             }
-            const deadline = Date.now() + 90_000
+            // n8n scoring is async and routinely takes a few minutes — the old
+            // 90s window timed out before the row ever landed. Poll up to 5 min,
+            // backing the interval off from 2s→5s after the first 20s to keep the
+            // query volume sane on long runs. Stop early if the queue row flips
+            // to 'failed' so the user isn't left staring at a spinner.
+            const start = Date.now()
+            const deadline = start + 5 * 60_000
             while (Date.now() < deadline) {
-                await new Promise(r => setTimeout(r, 2000))
+                const sinceStart = Date.now() - start
+                await new Promise(r => setTimeout(r, sinceStart > 20_000 ? 5000 : 2000))
                 const row = await readRow()
                 if (row?.relevance_score != null) {
                     setSingleScores(s => ({ ...s, [jobId]: { state: 'success', jobId, score: row.relevance_score, recommendation: row.recommendation } }))
                     return
                 }
+                if (queueJobId) {
+                    const { data: q } = await sb.from('job_queue')
+                        .select('status')
+                        .eq('id', queueJobId)
+                        .maybeSingle()
+                    if ((q as { status?: string } | null)?.status === 'failed') {
+                        setSingleScores(s => ({ ...s, [jobId]: { state: 'error', jobId, message: 'Scoring failed — please try again.' } }))
+                        return
+                    }
+                }
             }
-            setSingleScores(s => ({ ...s, [jobId]: { state: 'error', jobId, message: 'Scoring timed out — check AI Matches in a moment.' } }))
+            setSingleScores(s => ({ ...s, [jobId]: { state: 'error', jobId, message: 'Still scoring — open AI Matches; it’ll appear there shortly.' } }))
         } catch (err) {
             const message =
                 err instanceof RateLimitError ? `Rate limited — retry in ${err.retryAfterSec}s` :
@@ -1593,7 +1683,7 @@ export default function SearchPage() {
                                 borderRadius: '0 9999px 9999px 0',
                             }}
                         >
-                            {searching ? 'Searching…' : 'Search DB'}
+                            {searching ? 'Searching…' : 'Search'}
                         </button>
                     </div>
                 </form>
@@ -1639,12 +1729,13 @@ export default function SearchPage() {
                             {scoring ? 'Scoring…' : 'Find Best Jobs'}
                         </button>
                         <button
-                            onClick={handleIngest}
+                            onClick={deepExhausted && !ingesting ? () => router.push('/dashboard/settings#plan') : handleIngest}
                             disabled={ingesting}
+                            title="Deep Search pulls fresh listings from the web (Naukri, LinkedIn, Indeed & more). Your normal search covers jobs we already have."
                             style={{
                                 display: 'flex', alignItems: 'center', gap: 5,
                                 padding: '6px 14px', borderRadius: 9999,
-                                background: ingesting ? '#334155' : '#1E293B',
+                                background: ingesting ? '#334155' : (deepExhausted ? '#135bec' : '#1E293B'),
                                 color: '#fff',
                                 border: 'none', cursor: ingesting ? 'not-allowed' : 'pointer',
                                 fontSize: '0.8125rem', fontWeight: 600,
@@ -1653,11 +1744,59 @@ export default function SearchPage() {
                                 fontFamily: 'inherit',
                             }}
                         >
-                            <Globe size={13} />
-                            {ingesting ? 'Scraping…' : 'Fetch from Web'}
+                            <Search size={13} />
+                            {ingesting ? 'Searching…' : (deepExhausted ? 'Deep Search · Upgrade' : 'Deep Search')}
                         </button>
                     </div>
                 </div>
+
+                {/* Deep Search remaining-count — own line so it never offsets the button
+                    baseline. Refined status pill: blue (healthy) → amber (1 left) → red
+                    (exhausted), with a live status dot and emphasised count. */}
+                {deepShowCount && !ingesting && (() => {
+                    const exhausted = deepRemaining === 0
+                    const tone = exhausted
+                        ? { dot: '#EF4444', bg: '#FEF2F2', border: '#FECACA', text: '#B91C1C', count: '#B91C1C' }
+                        : deepLow
+                            ? { dot: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', text: '#B45309', count: '#B45309' }
+                            : { dot: '#135bec', bg: '#F5F8FF', border: '#DBEAFE', text: '#475569', count: '#135bec' }
+                    const clickable = deepLow || exhausted
+                    return (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                            <div
+                                onClick={clickable ? () => router.push('/dashboard/settings#plan') : undefined}
+                                title={exhausted
+                                    ? 'You’ve used all your Deep Searches this month'
+                                    : `${deepRemaining} Deep Searches remaining · resets ${deepResetLabel}`}
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 7,
+                                    padding: '4px 11px 4px 9px', borderRadius: 9999,
+                                    background: tone.bg, border: `1px solid ${tone.border}`,
+                                    fontSize: '0.6875rem', fontWeight: 600, color: tone.text,
+                                    whiteSpace: 'nowrap', letterSpacing: '0.01em',
+                                    lineHeight: 1, transition: 'all 0.2s ease',
+                                    cursor: clickable ? 'pointer' : 'default',
+                                }}
+                            >
+                                <span style={{
+                                    width: 6, height: 6, borderRadius: '50%',
+                                    background: tone.dot, flexShrink: 0,
+                                    boxShadow: `0 0 0 3px ${tone.dot}1f`,
+                                }} />
+                                {exhausted ? (
+                                    <span>No Deep Searches left · <span style={{ color: '#135bec', fontWeight: 700 }}>Upgrade</span></span>
+                                ) : deepRemaining === 1 ? (
+                                    <span><span style={{ color: tone.count, fontWeight: 800 }}>1</span> Deep Search left · <span style={{ color: '#135bec', fontWeight: 700 }}>Upgrade</span></span>
+                                ) : (
+                                    <span>
+                                        <span style={{ color: tone.count, fontWeight: 800 }}>{deepRemaining}</span>
+                                        <span style={{ color: '#94A3B8', fontWeight: 600 }}> Deep Searches left · resets {deepResetLabel}</span>
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    )
+                })()}
 
                 {/* Phase 8 — Queue status pill (shows queue position + lifecycle while waiting) */}
                 {ingestJobId && (
@@ -1882,6 +2021,10 @@ export default function SearchPage() {
                             scoreState={singleScores[selected.id]}
                             onScore={handleScoreSingleJob}
                             hasResume={!!getPrimaryResumeId()}
+                            onReported={(jobId) => {
+                                setReportedClosed(prev => new Set(prev).add(jobId))
+                                setSelected(visibleResults.find(j => j.id !== jobId) ?? null)
+                            }}
                         />
                     ) : (
                         <EmptyDetail />

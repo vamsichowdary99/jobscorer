@@ -7,12 +7,16 @@ import { existsSync } from 'fs'
 const ALLOWED_FONTS = new Set([
   'Roboto-Regular.ttf',
   'Roboto-Bold.ttf',
+  'Roboto-Italic.ttf',
   'Merriweather-Regular.ttf',
   'Merriweather-Bold.ttf',
   'Lora-Regular.ttf',
   'Lora-Bold.ttf',
   'Lato-Regular.ttf',
   'Lato-Bold.ttf',
+  'OpenSans-Regular.ttf',
+  'OpenSans-Bold.ttf',
+  'OpenSans-Italic.ttf',
 ])
 
 export async function GET(

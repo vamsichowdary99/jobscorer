@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { safeRedis } from '@/lib/redis'
 import { KEY, TTL } from '@/lib/redis-keys'
 import { requireUserLimit } from '@/lib/rate-limit'
+import { logEstimatedUsage } from '@/lib/usage'
+import { checkQuota } from '@/lib/plan'
 
 // When an L1 cache hit serves a response, the n8n "Save AI Analysis" node
 // never runs, so the DB row that powers the research-history sidebar is
@@ -109,6 +111,9 @@ export async function POST(req: NextRequest) {
     const rl = await requireUserLimit(user.id, 'company')
     if (rl) return rl
 
+    const overQuota = await checkQuota(user.id, 'company_research')
+    if (overQuota) return overQuota
+
     const webhookUrl = process.env.N8N_COMPANY_RESEARCH_WEBHOOK
     if (!webhookUrl) {
         return NextResponse.json(
@@ -167,5 +172,7 @@ export async function POST(req: NextRequest) {
         })
     }
 
+    // Reached only past the AI-cache hit, i.e. n8n (Firecrawl + AI analysis) ran — log its cost.
+    void logEstimatedUsage({ userId: user.id, feature: 'company_research' })
     return NextResponse.json({ ...value, cached: Boolean(cachedBlock) || Boolean(value.cached) })
 }

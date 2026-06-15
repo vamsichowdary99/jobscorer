@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { Job } from '@/lib/types'
 import LegitimacyBadge from './LegitimacyBadge'
+import { jobStatusLabel } from '@/lib/jobs/applicationStatus'
 
 interface Readonly_JobCardProps {
     readonly job: Job
@@ -72,6 +73,16 @@ export default function JobCard({ job, showScore, score }: Readonly_JobCardProps
                         textTransform: 'capitalize',
                     }}>
                         {job.experience_level}
+                    </span>
+                )}
+                {jobStatusLabel(job.application_status) && (
+                    <span style={{
+                        display: 'inline-flex', alignItems: 'center',
+                        padding: '2px 8px', borderRadius: 'var(--radius-full)',
+                        background: '#fef2f2', color: '#b91c1c',
+                        fontSize: '0.6875rem', fontWeight: 700,
+                    }}>
+                        {jobStatusLabel(job.application_status)}
                     </span>
                 )}
                 {(job.legitimacy_tier === 'verified' || job.legitimacy_tier === 'proceed_with_caution') && (

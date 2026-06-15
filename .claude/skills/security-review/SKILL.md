@@ -1,10 +1,10 @@
 ---
 name: security-review
-description: Use when adding API routes, handling user input, modifying Supabase tables/RLS, integrating third-party APIs, or before merging anything that touches auth, secrets, or user data. Project-aware: tuned to ResuScore's Next.js + Supabase + n8n proxy architecture.
+description: Use when adding API routes, handling user input, modifying Supabase tables/RLS, integrating third-party APIs, or before merging anything that touches auth, secrets, or user data. Project-aware: tuned to JobScorer's Next.js + Supabase + n8n proxy architecture.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
-# Security Review — ResuScore
+# Security Review — JobScorer
 
 Apply this checklist any time code touches: auth, secrets, user input, file uploads, API endpoints, Supabase schema, RLS policies, n8n webhook proxies, or third-party APIs (OpenAI, Apify, JSearch, SerpAPI, Firecrawl).
 
@@ -12,7 +12,7 @@ Confidence rule: only flag issues you're >80% sure about. Skip stylistic prefere
 
 ---
 
-## ResuScore-specific risks (check these FIRST)
+## JobScorer-specific risks (check these FIRST)
 
 These are the known weak spots in this codebase per [CLAUDE.md](../../../../CLAUDE.md). Always sweep for them on any PR that touches affected areas.
 
@@ -138,7 +138,7 @@ CREATE POLICY "Users insert own resumes"
 - [ ] CSP header set in `next.config.ts` for production
 
 ### F. Rate limiting (Upstash Redis)
-ResuScore has Upstash Redis configured (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`). Use `@upstash/ratelimit` for any expensive endpoint.
+JobScorer has Upstash Redis configured (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`). Use `@upstash/ratelimit` for any expensive endpoint.
 
 ```ts
 import { Ratelimit } from '@upstash/ratelimit'

@@ -129,7 +129,7 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
     {items
       .filter((b) => b.trim())
       .map((b, i) => (
-        <View key={i} style={{ flexDirection: "row", marginBottom: "1.5pt" }}>
+        <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "1.5pt" }}>
           <Text style={{ width: "12pt", fontSize: "10pt", paddingLeft: "2pt", fontFamily: FONT }}>{"•"}</Text>
           <BoldText style={{ flex: 1, fontSize: "10pt", lineHeight: 1.4 }}>{b}</BoldText>
         </View>
@@ -180,7 +180,7 @@ const Sb2novPdfDocument: React.FC<Sb2novPdfDocumentProps> = ({ state }) => {
   const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft;
 
   return (
-    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="ResuScore">
+    <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="JobScorer">
       <Page
         size={[PAGE_W, PAGE_H]}
         style={{

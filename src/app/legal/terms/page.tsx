@@ -7,16 +7,16 @@ export default function TermsPage() {
   return (
     <LegalPageLayout title="Terms of Service" lastUpdated="[DATE]">
       <p style={{ marginBottom: 24 }}>
-        These Terms govern your use of ResuScore, operated by <strong>[COMPANY LEGAL NAME]</strong>.
+        These Terms govern your use of JobScorer, operated by <strong>[COMPANY LEGAL NAME]</strong>.
         By creating an account you agree to these Terms and to our Privacy Policy.
       </p>
 
       <LegalSection heading="1. Eligibility">
-        <p>You must be at least 18 years old and able to form a binding contract to use ResuScore.</p>
+        <p>You must be at least 18 years old and able to form a binding contract to use JobScorer.</p>
       </LegalSection>
 
       <LegalSection heading="2. The service">
-        <p>ResuScore provides AI-assisted job matching, resume scoring, and resume optimization.</p>
+        <p>JobScorer provides AI-assisted job matching, resume scoring, and resume optimization.</p>
       </LegalSection>
 
       <LegalSection heading="3. AI output disclaimer">
@@ -28,7 +28,7 @@ export default function TermsPage() {
       <LegalSection heading="4. Acceptable use">
         {/* PASTE GENERATOR BASELINE: acceptable-use prose here */}
         <p>You agree not to misuse the service, upload unlawful content, attempt to breach security, or
-        use ResuScore to violate any third party&apos;s rights.</p>
+        use JobScorer to violate any third party&apos;s rights.</p>
       </LegalSection>
 
       <LegalSection heading="5. Your content">
@@ -37,7 +37,7 @@ export default function TermsPage() {
       </LegalSection>
 
       <LegalSection heading="6. Paid plans (not yet active)">
-        <p>ResuScore is currently free to use. Paid subscription plans may be introduced in the future;
+        <p>JobScorer is currently free to use. Paid subscription plans may be introduced in the future;
         when they are, separate billing, cancellation, and refund terms will apply and will be presented
         before any charge.</p>
       </LegalSection>
@@ -49,7 +49,7 @@ export default function TermsPage() {
 
       <LegalSection heading="8. Limitation of liability">
         {/* PASTE GENERATOR BASELINE: liability + warranty disclaimer prose here */}
-        <p>To the maximum extent permitted by law, ResuScore is provided &quot;as is&quot; without
+        <p>To the maximum extent permitted by law, JobScorer is provided &quot;as is&quot; without
         warranties, and our liability is limited as described in this section.</p>
       </LegalSection>
 

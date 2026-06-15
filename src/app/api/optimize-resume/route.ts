@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserLimit } from '@/lib/rate-limit'
+import { logEstimatedUsage } from '@/lib/usage'
+import { checkQuota } from '@/lib/plan'
 
 // Resume optimisation can take time (AI + n8n workflow)
 export const maxDuration = 120
@@ -20,8 +22,13 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     // Override user_id with authenticated user
-    const { resume_id, job_id, force_refresh, gap_data } = body
+    const { resume_id, job_id, force_refresh, gap_data, accepted_recommendations } = body
     const user_id = user.id
+
+    // The optimized_resumes cache key has no notion of accepted recommendations,
+    // so accepting any item must bypass the cache and re-run the optimizer.
+    const hasAccepted = Array.isArray(accepted_recommendations) && accepted_recommendations.length > 0
+    const skipCache = !!force_refresh || hasAccepted
 
     // ── Validate required fields ──────────────────────────
     if (!user_id || !resume_id || !job_id) {
@@ -31,8 +38,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Check cache (unless force_refresh) ────────────────
-    if (!force_refresh) {
+    // ── Check cache (unless force_refresh or items accepted) ────────────────
+    if (!skipCache) {
       const { data: cached, error: cacheError } = await supabase
         .from('optimized_resumes' as any)
         .select('*')
@@ -55,6 +62,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Past the cache → real optimization will run. Count it against the quota.
+    const overQuota = await checkQuota(user_id, 'optimize')
+    if (overQuota) return overQuota
+
     // ── Forward to n8n optimise webhook ───────────────────
     const webhookUrl =
       process.env.NEXT_PUBLIC_N8N_OPTIMIZE_WEBHOOK ||
@@ -74,7 +85,7 @@ export async function POST(req: NextRequest) {
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, resume_id, job_id, gap_data: gap_data ?? null }),
+        body: JSON.stringify({ user_id, resume_id, job_id, gap_data: gap_data ?? null, accepted_recommendations: hasAccepted ? accepted_recommendations : [] }),
         signal: controller.signal,
       })
 
@@ -82,8 +93,10 @@ export async function POST(req: NextRequest) {
 
       if (!response.ok) {
         const errorText = await response.text()
+        // Log full upstream detail server-side; return a generic message. (M9)
+        console.error('[/api/optimize-resume] n8n error:', response.status, errorText)
         return NextResponse.json(
-          { success: false, error: `n8n error: ${errorText}` },
+          { success: false, error: 'Resume optimization failed' },
           { status: response.status }
         )
       }
@@ -110,6 +123,8 @@ export async function POST(req: NextRequest) {
         data.optimized_data = data.optimized_resume
         delete data.optimized_resume
       }
+      // Fresh (non-cached) optimization ran the n8n AI workflow — log its cost.
+      void logEstimatedUsage({ userId: user_id, feature: 'optimize' })
       return NextResponse.json(data)
     } catch (fetchError: any) {
       clearTimeout(timeout)

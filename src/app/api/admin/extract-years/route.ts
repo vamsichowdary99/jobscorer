@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { backfillNullYears } from '@/lib/jobs/backfill';
+import { isValidAdminToken } from '@/lib/adminAuth';
 
 // Allow long backfills (gpt-4.1-mini fallback can take 1-2s per ambiguous JD)
 export const maxDuration = 300;
@@ -18,9 +19,7 @@ export const maxDuration = 300;
  *     force?: boolean }           // also re-process jobs that already have a value
  */
 export async function POST(req: NextRequest) {
-    const token = req.headers.get('x-admin-token') || '';
-    const expected = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!expected || token !== expected) {
+    if (!isValidAdminToken(req)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

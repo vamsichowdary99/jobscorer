@@ -18,8 +18,9 @@ import {
 import type { Resume } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { INDIA_LOCATIONS } from '@/lib/locations'
+import BillingPanel from '@/components/billing/BillingPanel'
 
-type SectionId = 'profile' | 'prefs' | 'resumes' | 'notifications' | 'usage' | 'security' | 'danger'
+type SectionId = 'profile' | 'prefs' | 'resumes' | 'notifications' | 'plan' | 'usage' | 'security' | 'danger'
 
 const ROLE_SUGGESTIONS = ['Full Stack Developer', 'SDE 1', 'Data Engineer', 'Site Reliability Engineer']
 const LOCATION_SUGGESTIONS = ['Chennai', 'Gurugram', 'Mumbai', 'Noida', 'Remote (India)']
@@ -101,6 +102,19 @@ function firstInitial(s: string | null | undefined) {
     return (c ?? 'U').toUpperCase()
 }
 
+// Plan-aware usage meters: feature keys (from PLAN_QUOTAS) → display labels.
+const USAGE_FEATURE_LABELS: Record<string, string> = {
+    job_search: 'Job Searches',
+    score: 'AI Match Runs',
+    optimize: 'Tailored Resumes',
+    company_research: 'Company Research',
+    build_plan: 'Build Plans',
+    chat: 'AI Chat Messages',
+    learning_path: 'Learning Paths',
+}
+
+type PlanUsage = { plan: 'free' | 'pro' | 'max'; usage: { feature: string; used: number; limit: number }[] }
+
 export default function SettingsPage() {
     const { user, signOut } = useAuth()
     const router = useRouter()
@@ -111,6 +125,7 @@ export default function SettingsPage() {
     const [original, setOriginal] = useState<UserSettings | null>(null)
     const [resumes, setResumes] = useState<Resume[]>([])
     const [usage, setUsage] = useState<UsageStats | null>(null)
+    const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null)
     const [loading, setLoading] = useState(true)
     const [savedPills, setSavedPills] = useState<Record<string, boolean>>({})
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -118,7 +133,7 @@ export default function SettingsPage() {
     const [signOutAllPending, setSignOutAllPending] = useState(false)
     const sectionRefs = useRef<Record<SectionId, HTMLElement | null>>({
         profile: null, prefs: null, resumes: null,
-        notifications: null, usage: null, security: null, danger: null,
+        notifications: null, plan: null, usage: null, security: null, danger: null,
     })
     // Refs to chip inputs so Try/Suggested clicks can refocus them — without
     // this, clicking a Try chip steals focus away and the dropdown never reopens
@@ -146,6 +161,17 @@ export default function SettingsPage() {
         return () => { cancelled = true }
     }, [user?.id, user?.email])
 
+    // Plan-aware usage meters (real quotas from PLAN_QUOTAS + this month's counters).
+    useEffect(() => {
+        if (!user?.id) return
+        let cancelled = false
+        fetch('/api/billing/usage')
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (!cancelled && d?.usage) setPlanUsage(d as PlanUsage) })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [user?.id])
+
     // Scroll-spy: update active nav based on which section is in view.
     useEffect(() => {
         const observer = new IntersectionObserver(
@@ -166,6 +192,17 @@ export default function SettingsPage() {
         const el = sectionRefs.current[id]
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
+
+    // Deep-link: /dashboard/settings#plan (e.g. redirected from the old /billing
+    // route) opens the Plan & Billing section once the page has loaded.
+    useEffect(() => {
+        if (loading) return
+        if (typeof window !== 'undefined' && window.location.hash) {
+            const id = window.location.hash.slice(1) as SectionId
+            const t = setTimeout(() => scrollTo(id), 120)
+            return () => clearTimeout(t)
+        }
+    }, [loading])
 
     // Compute per-section dirty state by comparing current settings against the
     // last-saved snapshot (`original`). Each section reads its own slice.
@@ -635,21 +672,41 @@ export default function SettingsPage() {
                     </Card>
 
                     {/* ─── USAGE ─── */}
+                    {/* ─── PLAN & BILLING ─── */}
+                    <Card id="plan" refSetter={el => sectionRefs.current.plan = el}
+                        title="Plan & Billing" sub="Your subscription, upgrades, and payment">
+                        <div style={S.cardBody}>
+                            <BillingPanel />
+                        </div>
+                    </Card>
+
                     <Card id="usage" refSetter={el => sectionRefs.current.usage = el}
                         title="Usage & Limits" sub={`Your activity this month · resets ${usage?.resetDate ? new Date(usage.resetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : ''}`}>
                         <div style={S.cardBody}>
                             <div style={S.usageGrid} className="rs-usage-grid">
-                                <UsageTile label="Jobs Scored" value={usage?.jobsScored ?? 0} max={500} />
-                                <UsageTile label="Resumes Tailored" value={usage?.resumesTailored ?? 0} max={20} />
-                                <UsageTile label="Companies Researched" value={usage?.companiesResearched ?? 0} max={30} />
-                                <UsageTile label="AI Chat Messages" value={usage?.aiChatMessages ?? 0} max={100} warnAt={0.7} />
+                                {(planUsage?.usage ?? []).map(u => (
+                                    <UsageTile
+                                        key={u.feature}
+                                        label={USAGE_FEATURE_LABELS[u.feature] ?? u.feature}
+                                        value={u.used}
+                                        max={u.limit < 0 ? Math.max(u.used, 1) : u.limit}
+                                        warnAt={u.feature === 'chat' ? 0.7 : 0.85}
+                                    />
+                                ))}
+                                {!planUsage && (
+                                    <div style={{ fontSize: 13, color: '#94a3b8', padding: 18 }}>Loading your usage…</div>
+                                )}
                             </div>
                             <div style={S.upgradeCard}>
                                 <span style={{ fontSize: 22 }}>💡</span>
                                 <span style={{ flex: 1, fontSize: 14, color: '#1e3a8a' }}>
-                                    You&apos;re on the <b style={{ color: '#0f172a', fontWeight: 700 }}>Free Plan</b>. Upgrade for unlimited scoring, tailoring, and research.
+                                    {(!planUsage || planUsage.plan === 'free')
+                                        ? <>You&apos;re on the <b style={{ color: '#0f172a', fontWeight: 700 }}>Free Plan</b>. Upgrade for much higher monthly limits.</>
+                                        : <>You&apos;re on the <b style={{ color: '#0f172a', fontWeight: 700 }}>{planUsage.plan === 'pro' ? 'Pro' : 'Max'} Plan</b>. Manage it under Plan &amp; Billing.</>}
                                 </span>
-                                <button style={S.btnOutline} onClick={() => alert('Plans coming soon.')}>View Plans →</button>
+                                <button style={S.btnOutline} onClick={() => scrollTo('plan')}>
+                                    {(planUsage && planUsage.plan !== 'free') ? 'Manage plan →' : 'View Plans →'}
+                                </button>
                             </div>
                         </div>
                     </Card>
@@ -685,7 +742,7 @@ export default function SettingsPage() {
 
                             <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
                                 <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>Active sessions</div>
-                                <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>Devices currently signed in to your ResuScore account</div>
+                                <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>Devices currently signed in to your JobScorer account</div>
                                 <div style={S.sessionRow}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <div style={S.sessionDot} />
@@ -707,14 +764,6 @@ export default function SettingsPage() {
                     <Card id="danger" refSetter={el => sectionRefs.current.danger = el}
                         title="Danger Zone" sub="Destructive actions. These cannot be undone." danger>
                         <div style={S.cardBody}>
-                            <div style={S.dangerRow}>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>Download your data</div>
-                                    <div style={{ fontSize: 13, color: '#64748b' }}>Export a JSON copy of your resumes, matches, optimized resumes, and settings.</div>
-                                </div>
-                                <a href="/api/account/export" style={{ ...S.btnOutline, textDecoration: 'none', whiteSpace: 'nowrap' }}>Download my data</a>
-                            </div>
-
                             <div style={S.dangerRow}>
                                 <div style={{ flex: 1 }}>
                                     <div style={S.dangerTitle}>Sign out everywhere</div>
@@ -745,7 +794,7 @@ export default function SettingsPage() {
                         <div style={{ padding: '24px 24px 20px' }}>
                             <div style={S.modalIcon}>⚠</div>
                             <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', marginBottom: 8 }}>Are you absolutely sure?</h3>
-                            <p style={{ fontSize: 13, color: '#475569', marginBottom: 16, lineHeight: 1.6 }}>This will permanently delete your ResuScore account. You&apos;ll lose:</p>
+                            <p style={{ fontSize: 13, color: '#475569', marginBottom: 16, lineHeight: 1.6 }}>This will permanently delete your JobScorer account. You&apos;ll lose:</p>
                             <ul style={S.modalList}>
                                 {[`${resumes.length} uploaded and tailored resume${resumes.length === 1 ? '' : 's'}`,
                                 'All AI job matches and scoring history',
@@ -797,6 +846,7 @@ const NAV_ITEMS: { id: SectionId; label: string; icon: string; danger?: boolean 
     { id: 'prefs', label: 'Job Preferences', icon: '🎯' },
     { id: 'resumes', label: 'Resumes', icon: '📄' },
     { id: 'notifications', label: 'Notifications', icon: '🔔' },
+    { id: 'plan', label: 'Plan & Billing', icon: '💳' },
     { id: 'usage', label: 'Usage & Limits', icon: '📊' },
     { id: 'security', label: 'Security', icon: '🔒' },
     { id: 'danger', label: 'Danger Zone', icon: '⚠️', danger: true },
