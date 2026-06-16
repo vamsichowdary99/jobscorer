@@ -204,10 +204,10 @@ export default function DashboardHomePage() {
     const activeDays = stats?.activeDaysThisWeek ?? 0
 
     return (
-        <div style={S.page}>
+        <div style={S.page} className="rs-page">
             {/* ── GREETING BAR ── */}
-            <div style={S.greetingBar} className="rs-fade-in">
-                <div style={{ flex: 1 }}>
+            <div style={S.greetingBar} className="rs-fade-in rs-greeting-bar">
+                <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={S.eyebrow}>DASHBOARD</div>
                     <h1 style={S.greetingHeadline}>
                         {greeting}, {displayName} <span style={{ display: 'inline-block', transform: 'rotate(-8deg)' }}>👋</span>
@@ -222,7 +222,7 @@ export default function DashboardHomePage() {
                                     : 'Search jobs and run AI scoring to see your matches here.'}
                     </p>
                 </div>
-                <div style={S.streakBox}>
+                <div style={S.streakBox} className="rs-streak-box">
                     <div style={S.streakEyebrow}>WEEKLY STREAK</div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         {Array.from({ length: 7 }).map((_, i) => (
@@ -242,7 +242,7 @@ export default function DashboardHomePage() {
             </div>
 
             {/* ── STAT TILES ── */}
-            <div style={S.statGrid} className="rs-fade-in" data-delay="0.1">
+            <div style={S.statGrid} className="rs-fade-in rs-stat-grid" data-delay="0.1">
                 <StatTile
                     icon="📊" label="RESUME SCORE"
                     number={resumeScore !== null ? String(resumeScore) : '—'}
@@ -279,7 +279,7 @@ export default function DashboardHomePage() {
 
             {/* ── SMART NUDGE ── */}
             {showNudge && (
-                <div style={S.nudge}>
+                <div style={S.nudge} className="rs-nudge">
                     <div style={{ fontSize: 18 }}>💡</div>
                     <div style={{ flex: 1, fontSize: 14, color: '#1e3a8a', fontWeight: 500 }}>
                         {stats!.strongMatchesThisWeek} strong match{stats!.strongMatchesThisWeek === 1 ? '' : 'es'} this week — tailor your resume to apply faster
@@ -292,7 +292,7 @@ export default function DashboardHomePage() {
             )}
 
             {/* ── BODY GRID ── */}
-            <div style={S.bodyGrid}>
+            <div style={S.bodyGrid} className="rs-body-grid">
 
                 {/* ─── MAIN COLUMN ─── */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
@@ -322,7 +322,7 @@ export default function DashboardHomePage() {
                             const maxStage = Math.max(c.applied, c.interview, c.offer, c.rejected, 1)
                             return (
                                 <>
-                                    <div style={S.pipelineGrid}>
+                                    <div style={S.pipelineGrid} className="rs-pipeline-grid">
                                         <PipelineStage label="APPLIED" number={c.applied} barColor="#135bec" barWidth={(c.applied / maxStage) * 100} />
                                         <PipelineStage label="INTERVIEW" number={c.interview} barColor="#16a34a" barWidth={(c.interview / maxStage) * 100} />
                                         <PipelineStage label="OFFER" number={c.offer} barColor="#d97706" barWidth={(c.offer / maxStage) * 100} />
@@ -343,7 +343,7 @@ export default function DashboardHomePage() {
                     </div>
 
                     {/* SKILL GAPS + QUICK ACTIONS */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="rs-inner-grid">
                         <div style={S.card}>
                             <div style={S.cardHeader}>
                                 <div style={S.cardTitle}>📊 Skill Gaps</div>
@@ -386,7 +386,7 @@ export default function DashboardHomePage() {
                     </div>
 
                     {/* COMPANIES IN PIPELINE + TAILORED RESUMES */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="rs-inner-grid">
                         <div style={S.card}>
                             <div style={S.cardHeader}>
                                 <div style={S.cardTitle}>🏢 Companies in Pipeline</div>
@@ -438,7 +438,7 @@ export default function DashboardHomePage() {
                 </div>
 
                 {/* ─── SIDEBAR ─── */}
-                <div style={S.sidebar}>
+                <div style={S.sidebar} className="rs-sidebar">
                     <div style={S.card}>
                         <div style={S.cardHeader}>
                             <div style={S.cardTitle}>📜 Recent Activity</div>
@@ -456,19 +456,7 @@ export default function DashboardHomePage() {
                 </div>
             </div>
 
-            <style>{`
-                .rs-fade-in { animation: rsFadeIn 0.4s ease both; }
-                .rs-fade-in[data-delay="0.1"] { animation-delay: 0.1s; }
-                @keyframes rsFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-                @media (max-width: 1024px) {
-                    .rs-body-grid { grid-template-columns: 1fr !important; }
-                    .rs-sidebar { position: static !important; }
-                }
-                @media (max-width: 768px) {
-                    .rs-stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
-                    .rs-greeting-bar { flex-direction: column !important; align-items: flex-start !important; }
-                }
-            `}</style>
+            {/* Responsive styles live in globals.css (.rs-* classes) */}
         </div>
     )
 }
@@ -553,9 +541,9 @@ function MatchRow({ match }: { match: FullMatch }) {
         : null
 
     return (
-        <div style={S.matchRow}>
+        <div style={S.matchRow} className="rs-match-row">
             <div style={{ ...S.matchLogo, background: companyGradient(job.company) }}>{firstInitial(job.company)}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0 }} className="rs-match-content">
                 <div style={S.matchTitle}>{job.title}</div>
                 <div style={S.matchCompany}>{job.company ?? 'Unknown Company'}</div>
                 <div style={S.matchMeta}>
@@ -569,7 +557,7 @@ function MatchRow({ match }: { match: FullMatch }) {
                     <Link href={`/dashboard/optimize?jobId=${job.id}`} style={S.btnOutline}>Tailor Resume</Link>
                 </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} className="rs-score-col">
                 <ScoreRing score={score} />
                 <div style={{
                     fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600,
@@ -725,6 +713,7 @@ const S: Record<string, React.CSSProperties> = {
     },
     greetingHeadline: {
         fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 6,
+        overflowWrap: 'break-word', minWidth: 0,
     },
     greetingSub: { fontSize: 14, color: '#475569', marginBottom: 4 },
     streakBox: {

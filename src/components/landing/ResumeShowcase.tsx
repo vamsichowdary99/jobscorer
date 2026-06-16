@@ -83,6 +83,18 @@ export default function ResumeShowcase() {
   const [inView, setInView] = useState(true);           // carousel is on-screen
   const [reducedMotion, setReducedMotion] = useState(false);
 
+  // Responsive card scaling — SSR-safe (default assumes desktop).
+  const [vw, setVw] = useState(1200);
+  useEffect(() => {
+    const check = () => setVw(window.innerWidth);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  const isMobile = vw < 640;
+  const centerScale = isMobile ? 0.70 : 1.0;
+  const stageH = isMobile ? Math.round(560 * centerScale + 80) : 600;
+
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const go = useCallback((dir: number) => setFocus(f => (f + dir + n) % n), [n]);
@@ -127,7 +139,7 @@ export default function ResumeShowcase() {
       onMouseLeave={() => setPaused(false)}
       style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
     >
-      <div className="sc-stage" style={{ position: 'relative', width: 'min(760px,94vw)', height: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="sc-stage" style={{ position: 'relative', width: 'min(760px,94vw)', height: stageH, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {/* Left preview — clickable, lifts on hover */}
         <div
           className="sc-stage-back sc-stage-back-left"
@@ -150,7 +162,7 @@ export default function ResumeShowcase() {
         </div>
         {/* Focus card */}
         <div key={focus} style={{ position: 'relative', zIndex: 3, animation: reducedMotion ? 'none' : 'jsScFocusIn .45s cubic-bezier(.22,.65,.28,1)' }}>
-          <ResumeCard data={SHOWCASE[focus]} scale={1.0} />
+          <ResumeCard data={SHOWCASE[focus]} scale={centerScale} />
         </div>
 
         <button onClick={() => go(-1)} style={arrowStyle('left')} aria-label="Previous resume">

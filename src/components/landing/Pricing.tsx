@@ -347,7 +347,7 @@ export default function Pricing() {
           ].map((b, i) => (
             <React.Fragment key={i}>
               {i > 0 && <div className="trust-divider" style={{ width: 1, alignSelf: 'center', height: 48, background: C.border }} />}
-              <div style={{ flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 14, padding: '12px 28px', justifyContent: 'center' }}>
+              <div className="trust-badge" style={{ flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 14, padding: '12px 28px', justifyContent: 'center' }}>
                 <div style={{ width: 44, height: 44, borderRadius: 11, background: C.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {b.icon}
                 </div>

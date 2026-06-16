@@ -50,3 +50,5 @@ response.txt
 rendercv/
 new_n8n.json
 *.html.bak
+
+.vercel

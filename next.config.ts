@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: __dirname,
+  },
   // Webpack fallback for @react-pdf/renderer — also used for production builds on Vercel.
   // Turbopack is intentionally excluded from next.config: it doesn't emit the
   // middleware.js.nft.json that Vercel's build infra expects, causing deploy errors.

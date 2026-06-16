@@ -23,6 +23,7 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
 
     return (
         <main
+            className={isFullBleed ? '' : 'dashboard-padded'}
             style={{
                 minHeight: '100vh',
                 paddingTop: 64,

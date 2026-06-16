@@ -97,6 +97,7 @@ function Stars({ count }: { count: number }) {
 function Card({ r }: { r: Review }) {
   return (
     <div
+      className="testim-card"
       style={{
         width: 320,
         flexShrink: 0,
@@ -211,16 +212,7 @@ export default function Testimonials() {
         </p>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, maxWidth: '100%' }}>
-        <button
-          className="testim-arrow"
-          style={{ ...arrowBtn, marginLeft: 'clamp(12px,3vw,40px)' }}
-          aria-label="Previous testimonials"
-          onClick={() => nudge(-1)}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-
+      <div style={{ position: 'relative' }}>
         <div
           className="testim-scroller"
           tabIndex={0}
@@ -235,10 +227,9 @@ export default function Testimonials() {
             if (e.key === 'ArrowLeft')  { e.preventDefault(); nudge(-1); }
           }}
           style={{
-            flex: 1,
             overflow: 'hidden',
-            WebkitMaskImage: 'linear-gradient(90deg,transparent 0%,black 6%,black 94%,transparent 100%)',
-            maskImage: 'linear-gradient(90deg,transparent 0%,black 6%,black 94%,transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(90deg,transparent 0%,black 10%,black 90%,transparent 100%)',
+            maskImage: 'linear-gradient(90deg,transparent 0%,black 10%,black 90%,transparent 100%)',
           }}
         >
           <div ref={trackRef} className="testim-track" style={{ display: 'flex', gap: 20, width: 'max-content', padding: '8px 0 16px', willChange: 'transform' }}>
@@ -248,7 +239,15 @@ export default function Testimonials() {
 
         <button
           className="testim-arrow"
-          style={{ ...arrowBtn, marginRight: 'clamp(12px,3vw,40px)' }}
+          style={{ ...arrowBtn, position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 5 }}
+          aria-label="Previous testimonials"
+          onClick={() => nudge(-1)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <button
+          className="testim-arrow"
+          style={{ ...arrowBtn, position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 5 }}
           aria-label="Next testimonials"
           onClick={() => nudge(1)}
         >

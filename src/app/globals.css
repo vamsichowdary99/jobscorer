@@ -281,3 +281,38 @@ h4 {
 /* ── Phase 8 QueueStatusBanner spinner ────────────────────── */
 @keyframes qsb-spin { to { transform: rotate(360deg); } }
 .qsb-spin { animation: qsb-spin 1s linear infinite; }
+
+/* ── Dashboard layout — mobile padding ─────────────────────── */
+@media (max-width: 768px) {
+  .dashboard-padded {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+/* ── Dashboard page — animations & responsive ───────────────── */
+@keyframes rsFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes rsPulse   { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.rs-fade-in { animation: rsFadeIn 0.4s ease both; }
+.rs-fade-in[data-delay="0.1"] { animation-delay: 0.1s; }
+
+@media (max-width: 1024px) {
+  .rs-body-grid  { grid-template-columns: 1fr !important; }
+  .rs-sidebar    { position: static !important; }
+}
+@media (max-width: 768px) {
+  .rs-greeting-bar { flex-direction: column !important; align-items: flex-start !important; }
+  .rs-streak-box   { min-width: 0 !important; width: 100% !important; }
+  .rs-stat-grid    { grid-template-columns: repeat(2, 1fr) !important; }
+  .rs-inner-grid   { grid-template-columns: 1fr !important; }
+  .rs-pipeline-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .rs-nudge        { flex-wrap: wrap !important; gap: 10px !important; }
+}
+@media (max-width: 480px) {
+  .rs-page        { padding-left: 14px !important; padding-right: 14px !important; }
+  .rs-match-row   { position: relative !important; padding-right: 64px !important; }
+  .rs-score-col   { position: absolute !important; top: 14px !important; right: 14px !important; }
+  .rs-nudge       { flex-direction: column !important; align-items: flex-start !important; }
+  .rs-stat-grid   { gap: 10px !important; }
+}

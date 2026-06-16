@@ -127,7 +127,6 @@
   .jobscorer-landing .sn-rail-spacer { display: none !important; }
 }
 @media (max-width: 760px) {
-  .jobscorer-landing .rs-carousel-card { width: 170px !important; }
   .jobscorer-landing .sc-stage-back { display: none !important; }
   .jobscorer-landing .cmp-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
   .jobscorer-landing .cmp-table { min-width: 640px; }
@@ -146,6 +145,30 @@
 }
 @media (max-width: 680px) {
   .jobscorer-landing .trust-divider { display: none !important; }
+}
+@media (max-width: 600px) {
+  /* Trust badges: stack in a centered column with icons flush-left so they align */
+  .jobscorer-landing .trust-grid {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 4px !important;
+  }
+  .jobscorer-landing .trust-badge {
+    flex: 0 0 auto !important;
+    width: 260px !important;
+    justify-content: flex-start !important;
+    padding: 10px 0 !important;
+  }
+  /* Testimonials: narrow cards to fit mobile viewport, widen mask to cover overlaid arrows */
+  .jobscorer-landing .testim-card {
+    width: 76vw !important;
+    min-width: 220px !important;
+    padding: 20px 18px 16px !important;
+  }
+  .jobscorer-landing .testim-scroller {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 20%, black 80%, transparent 100%) !important;
+    mask-image: linear-gradient(90deg, transparent 0%, black 20%, black 80%, transparent 100%) !important;
+  }
 }
 @media (max-width: 640px) {
   .jobscorer-landing { font-size: 16px; }
