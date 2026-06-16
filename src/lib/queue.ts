@@ -71,10 +71,9 @@ export async function enqueue(
         .eq('status', 'pending')
         .lt('created_at', row.created_at);
 
-    // Fire-and-forget wake-up so the Queue Processor picks up the job within
-    // ~1s instead of waiting for the next 60s schedule tick. We don't await
-    // and we don't surface errors — the schedule trigger is the safety net.
-    void wakeQueueProcessor();
+    // Await the wake-up so Vercel doesn't kill the fetch before it fires.
+    // The 2s timeout caps the added latency; errors are swallowed internally.
+    await wakeQueueProcessor();
 
     return { job_id: row.id, queue_position: (count ?? 0) + 1 };
 }
