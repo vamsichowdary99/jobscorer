@@ -111,7 +111,6 @@ export default function DashboardHomePage() {
     const [tipIdx, setTipIdx] = useState(0)
     const [nudgeDismissed, setNudgeDismissed] = useState(false)
     const [greeting, setGreeting] = useState('Hello')
-
     // Randomize the tip and compute time-aware greeting only on the client to
     // avoid SSR hydration mismatch (random + clock-hour differ between renders).
     useEffect(() => {
@@ -206,7 +205,7 @@ export default function DashboardHomePage() {
     return (
         <div style={S.page} className="rs-page">
             {/* ── GREETING BAR ── */}
-            <div style={S.greetingBar} className="rs-fade-in rs-greeting-bar">
+            <div style={S.greetingBar} className="rs-greeting-bar rs-fade-in">
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={S.eyebrow}>DASHBOARD</div>
                     <h1 style={S.greetingHeadline}>
@@ -242,7 +241,7 @@ export default function DashboardHomePage() {
             </div>
 
             {/* ── STAT TILES ── */}
-            <div style={S.statGrid} className="rs-fade-in rs-stat-grid" data-delay="0.1">
+            <div style={S.statGrid} className="rs-stat-grid rs-fade-in" data-delay="0.1">
                 <StatTile
                     icon="📊" label="RESUME SCORE"
                     number={resumeScore !== null ? String(resumeScore) : '—'}
