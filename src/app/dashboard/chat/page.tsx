@@ -80,6 +80,9 @@ const I = {
     People: (p: React.SVGProps<SVGSVGElement>) => (
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>
     ),
+    Menu: (p: React.SVGProps<SVGSVGElement>) => (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+    ),
 }
 
 /* ── resume display helpers (handles n8n's double-stringified JSON) ─ */
@@ -1095,18 +1098,23 @@ function HeroComposer({
     )
 }
 
-function ActionChips({ onPick, disabled }: { onPick: (t: string) => void; disabled?: boolean }) {
+function ActionChips({ onPick, disabled, isMobile }: { onPick: (t: string) => void; disabled?: boolean; isMobile?: boolean }) {
     return (
         <div style={{
-            display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap',
-            marginTop: 18, maxWidth: 880, marginLeft: 'auto', marginRight: 'auto',
+            display: 'flex', gap: 8, justifyContent: isMobile ? 'flex-start' : 'center',
+            flexDirection: isMobile ? 'column' : 'row', flexWrap: isMobile ? 'nowrap' : 'wrap',
+            marginTop: 18, width: isMobile ? '100%' : undefined,
+            maxWidth: isMobile ? '100%' : 880,
+            marginLeft: 'auto', marginRight: 'auto',
         }}>
             {QUICK_ACTIONS.map(a => (
                 <button key={a.label} type="button" disabled={disabled}
                     onClick={() => onPick(a.prompt)} className="rs-chip-btn"
                     style={{
                         display: 'inline-flex', alignItems: 'center', gap: 7,
-                        padding: '8px 14px', borderRadius: 99,
+                        padding: isMobile ? '10px 14px' : '8px 14px',
+                        borderRadius: isMobile ? 12 : 99,
+                        width: isMobile ? '100%' : undefined,
                         background: '#fff', border: '1px solid var(--rs-line)',
                         fontSize: '.8125rem', color: 'var(--rs-ink-2)', fontWeight: 500,
                         boxShadow: '0 1px 2px rgba(15,23,42,.04)',
@@ -1450,6 +1458,9 @@ export default function AIChatPage() {
     // AbortController for the in-flight stream so the Stop button can cancel mid-response.
     const abortRef = useRef<AbortController | null>(null)
 
+    const [isMobile, setIsMobile] = useState(false)
+    const [sidebarOpen, setSidebarOpen] = useState(false)
+
     // Saved jobs (localStorage) + toasts.
     const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
     const [toastMsg, setToastMsg] = useState<string | null>(null)
@@ -1471,6 +1482,14 @@ export default function AIChatPage() {
                 if (Array.isArray(arr)) setSavedIds(new Set(arr.filter(x => typeof x === 'string')))
             }
         } catch { /* ignore */ }
+    }, [])
+
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
     }, [])
 
     /* most-recent jobId from any tool result — used as the default for "build learning path" */
@@ -1869,21 +1888,68 @@ export default function AIChatPage() {
         <div className="rs-chat-root">
             <style>{globalChatStyle}</style>
 
-            <Sidebar
-                history={history}
-                activeId={activeId}
-                onSelect={selectChat}
-                onNew={startNewChat}
-                onDelete={deleteChat}
-            />
+            {/* Mobile sidebar backdrop */}
+            {isMobile && sidebarOpen && (
+                <div
+                    onClick={() => setSidebarOpen(false)}
+                    style={{
+                        position: 'fixed', inset: 0, top: 64, zIndex: 198,
+                        background: 'rgba(0,0,0,0.35)',
+                    }}
+                />
+            )}
 
-            <main className="rs-chat-main">
+            {/* Sidebar — slide-over on mobile, direct child on desktop */}
+            {isMobile ? (
+                <div style={{
+                    position: 'fixed', left: 0, top: 64, bottom: 0, zIndex: 199,
+                    width: 300,
+                    transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+                    transition: 'transform 0.25s cubic-bezier(.4,0,.2,1)',
+                }}>
+                    <Sidebar
+                        history={history}
+                        activeId={activeId}
+                        onSelect={(id) => { selectChat(id); setSidebarOpen(false) }}
+                        onNew={() => { startNewChat(); setSidebarOpen(false) }}
+                        onDelete={deleteChat}
+                    />
+                </div>
+            ) : (
+                <Sidebar
+                    history={history}
+                    activeId={activeId}
+                    onSelect={selectChat}
+                    onNew={startNewChat}
+                    onDelete={deleteChat}
+                />
+            )}
+
+            <main className="rs-chat-main" style={{ position: 'relative' }}>
+                {/* Mobile hamburger — always visible at top-left */}
+                {isMobile && (
+                    <button
+                        type="button"
+                        onClick={() => setSidebarOpen(s => !s)}
+                        style={{
+                            position: 'absolute', top: 10, left: 10, zIndex: 10,
+                            width: 36, height: 36, borderRadius: 9,
+                            background: '#fff', border: '1px solid var(--rs-line)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', color: 'var(--rs-ink)',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        }}
+                        aria-label="Chat history"
+                    >
+                        <I.Menu />
+                    </button>
+                )}
                 {!hasMessages ? (
                     /* ── ENTRY · empty hero state ── */
                     <div className="rs-chat-hero" style={{
                         flex: 1, display: 'flex', flexDirection: 'column',
                         alignItems: 'center', justifyContent: 'center',
-                        padding: '40px 32px 56px',
+                        padding: isMobile ? '56px 16px 32px' : '40px 32px 56px',
                         background: 'linear-gradient(180deg,#FAFBFD 0%,#FFFFFF 100%)',
                         overflowY: 'auto',
                     }}>
@@ -1913,7 +1979,7 @@ export default function AIChatPage() {
                             disabled={isLoading}
                         />
 
-                        <ActionChips onPick={(t) => send(t)} disabled={isLoading} />
+                        <ActionChips onPick={(t) => send(t)} disabled={isLoading} isMobile={isMobile} />
 
                         <div style={{
                             fontSize: '.6875rem', color: 'var(--rs-muted-2)',
@@ -1929,12 +1995,28 @@ export default function AIChatPage() {
                     <>
                         <div style={{
                             height: 56, borderBottom: '1px solid var(--rs-line-2)',
-                            display: 'flex', alignItems: 'center', padding: '0 24px', gap: 12,
+                            display: 'flex', alignItems: 'center',
+                            padding: isMobile ? '0 12px' : '0 24px', gap: 8,
                             background: 'rgba(255,255,255,.85)',
                             backdropFilter: 'blur(10px)',
                             WebkitBackdropFilter: 'blur(10px)',
                             flexShrink: 0,
                         }}>
+                            {isMobile && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSidebarOpen(s => !s)}
+                                    style={{
+                                        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                                        background: 'transparent', border: 'none',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        cursor: 'pointer', color: 'var(--rs-ink)',
+                                    }}
+                                    aria-label="Chat history"
+                                >
+                                    <I.Menu />
+                                </button>
+                            )}
                             <BetaPill />
                             <div style={{
                                 fontSize: '.8125rem', color: 'var(--rs-muted)',
@@ -2510,5 +2592,13 @@ const globalChatStyle = `
 /* responsive: collapse sidebar on small screens */
 @media (max-width: 880px) {
   .rs-chat-root > aside { width: 0; overflow: hidden; border-right: none; }
+}
+
+/* mobile: full-bleed chat area (dashboard left nav collapses to 0) */
+@media (max-width: 767px) {
+  .rs-chat-root {
+    left: 0 !important;
+    right: 0 !important;
+  }
 }
 `

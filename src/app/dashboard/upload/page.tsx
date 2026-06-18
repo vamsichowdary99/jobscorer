@@ -327,6 +327,25 @@ const LINK_META: Record<LinkKind, { label: string; accent: string; tint: string;
     },
 }
 
+function ScoreRing({ score, size }: { score: number; size: number }) {
+    const cx = size / 2, cy = size / 2
+    const r = size * 0.4
+    const circ = 2 * Math.PI * r
+    const offset = circ * (1 - Math.min(Math.max(score, 0), 100) / 100)
+    return (
+        <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth={Math.round(size * 0.068)} />
+                <circle cx={cx} cy={cy} r={r} fill="none" stroke="#135bec" strokeWidth={Math.round(size * 0.068)} strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} transform={`rotate(-90 ${cx} ${cy})`} />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: Math.round(size * 0.255), fontWeight: 800, color: '#135bec', lineHeight: 1 }}>{score}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: Math.max(7, Math.round(size * 0.095)), fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94a3b8', marginTop: 2 }}>JOBSCORER</span>
+            </div>
+        </div>
+    )
+}
+
 function LinkChip({ href, kind, label }: { href: string; kind: LinkKind; label?: string }) {
     const [hover, setHover] = useState(false)
     const meta = LINK_META[kind]
@@ -930,6 +949,26 @@ export default function UploadPage() {
         return () => mq.removeEventListener('change', handler)
     }, [])
 
+    // On mobile: bottom sheet (slides up, stays above keyboard). Desktop: centred modal.
+    const popContentStyle: React.CSSProperties = isMobile ? {
+        position: 'fixed',
+        bottom: 0, left: 0, right: 0, top: 'auto',
+        margin: 0, width: '100%', height: 'auto',
+        maxHeight: '88vh',
+        borderRadius: '20px 20px 0 0',
+        padding: 0,
+        background: '#ffffff',
+        border: 'none',
+        borderTop: '1px solid #e2e8f0',
+        boxShadow: '0 -20px 60px rgba(0,0,0,0.25)',
+        color: '#0f172a',
+        zIndex: 60,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+    } : POP_CONTENT_BASE
+    const SHEET_HANDLE = isMobile ? <div style={{ width: 36, height: 4, borderRadius: 99, background: '#cbd5e1', margin: '10px auto 0', flexShrink: 0 }} /> : null
+
     return (
         <div style={S.root}>
 
@@ -1105,13 +1144,7 @@ export default function UploadPage() {
                                             </div>
                                         </div>
                                         <div style={{ paddingRight: isMobile ? 0 : 20, flexShrink: 0 }}>
-                                            <div style={{ ...ring(pct), ...(isMobile ? { width: 80, height: 80 } : {}) }}>
-                                                <div style={{ ...S.ringInner, ...(isMobile ? { width: 60, height: 60 } : {}) }} />
-                                                <div style={S.ringText}>
-                                                    <span style={{ ...S.ringNum, ...(isMobile ? { fontSize: 18 } : {}) }}>{sc}</span>
-                                                    <span style={S.ringLabel}>JobScorer</span>
-                                                </div>
-                                            </div>
+                                            <ScoreRing score={sc} size={isMobile ? 72 : 120} />
                                         </div>
                                     </section>
 
@@ -1132,7 +1165,8 @@ export default function UploadPage() {
                                                         <span style={{ color: '#1d4ed8', fontSize: 14, lineHeight: 1 }}>+</span>
                                                         <motion.span layout="position" layoutId="work-add-label">Add</motion.span>
                                                     </MorphingPopoverTrigger>
-                                                    <MorphingPopoverContent style={POP_CONTENT_BASE}>
+                                                    <MorphingPopoverContent style={popContentStyle}>
+                                                        {SHEET_HANDLE}
                                                         <div style={POP_HEADER}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="experience" />
@@ -1153,7 +1187,7 @@ export default function UploadPage() {
                                                                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                                                                         </button>
                                                                     )}
-                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
                                                                         <div>
                                                                             <label style={{ ...UM_LABEL, marginTop: 0 }}>Role / Title</label>
                                                                             <input autoFocus={i === 0} style={UM_INPUT} placeholder="e.g. Java Full Stack Trainee" value={w.title} onChange={e => setWorkEntries(prev => { const u = [...prev]; u[i] = { ...u[i], title: e.target.value }; return u })} />
@@ -1163,7 +1197,7 @@ export default function UploadPage() {
                                                                             <input style={UM_INPUT} placeholder="e.g. CODEGNAN" value={w.company} onChange={e => setWorkEntries(prev => { const u = [...prev]; u[i] = { ...u[i], company: e.target.value }; return u })} />
                                                                         </div>
                                                                     </div>
-                                                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8 }}>
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '2fr 1fr 1fr', gap: 8 }}>
                                                                         <div>
                                                                             <label style={UM_LABEL}>Location</label>
                                                                             <input style={UM_INPUT} placeholder="Hyderabad, India" value={w.location} onChange={e => setWorkEntries(prev => { const u = [...prev]; u[i] = { ...u[i], location: e.target.value }; return u })} />
@@ -1249,7 +1283,8 @@ export default function UploadPage() {
                                                         <span style={{ color: '#1d4ed8', fontSize: 14, lineHeight: 1 }}>+</span>
                                                         <motion.span layout="position" layoutId="skills-add-label">Manage</motion.span>
                                                     </MorphingPopoverTrigger>
-                                                    <MorphingPopoverContent style={POP_CONTENT_BASE}>
+                                                    <MorphingPopoverContent style={popContentStyle}>
+                                                        {SHEET_HANDLE}
                                                         <div style={POP_HEADER}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="skills" />
@@ -1324,7 +1359,8 @@ export default function UploadPage() {
                                                         <span style={{ color: '#1d4ed8', fontSize: 14, lineHeight: 1 }}>+</span>
                                                         <motion.span layout="position" layoutId="edu-add-label">Add</motion.span>
                                                     </MorphingPopoverTrigger>
-                                                    <MorphingPopoverContent style={POP_CONTENT_BASE}>
+                                                    <MorphingPopoverContent style={popContentStyle}>
+                                                        {SHEET_HANDLE}
                                                         <div style={POP_HEADER}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="education" />
@@ -1347,7 +1383,7 @@ export default function UploadPage() {
                                                                     )}
                                                                     <label style={{ ...UM_LABEL, marginTop: 0 }}>School / University</label>
                                                                     <input autoFocus={i === 0} style={UM_INPUT} placeholder="e.g. Parul University" value={e.institution} onChange={ev => setEduEntries(prev => { const u = [...prev]; u[i] = { ...u[i], institution: ev.target.value }; return u })} />
-                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
                                                                         <div>
                                                                             <label style={UM_LABEL}>Degree</label>
                                                                             <input style={UM_INPUT} placeholder="B.Tech" value={e.degree} onChange={ev => setEduEntries(prev => { const u = [...prev]; u[i] = { ...u[i], degree: ev.target.value }; return u })} />
@@ -1422,7 +1458,8 @@ export default function UploadPage() {
                                                         <span style={{ color: '#d97706', fontSize: 16, lineHeight: 1 }}>+</span>
                                                         <motion.span layout="position" layoutId="cert-add-label">Add</motion.span>
                                                     </MorphingPopoverTrigger>
-                                                    <MorphingPopoverContent style={POP_CONTENT_BASE}>
+                                                    <MorphingPopoverContent style={popContentStyle}>
+                                                        {SHEET_HANDLE}
                                                         <div style={POP_HEADER}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="certifications" />
@@ -1445,7 +1482,7 @@ export default function UploadPage() {
                                                                     )}
                                                                     <label style={{ ...UM_LABEL, marginTop: 0 }}>Certification Name</label>
                                                                     <input autoFocus={i === 0} style={UM_INPUT} placeholder="e.g. AWS Certified Cloud Practitioner" value={c.name} onChange={e => setCertEntries(prev => { const u = [...prev]; u[i] = { ...u[i], name: e.target.value }; return u })} />
-                                                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 8 }}>
                                                                         <div>
                                                                             <label style={UM_LABEL}>Issuer</label>
                                                                             <input style={UM_INPUT} placeholder="Amazon, Google, Microsoft…" value={c.issuer} onChange={e => setCertEntries(prev => { const u = [...prev]; u[i] = { ...u[i], issuer: e.target.value }; return u })} />
@@ -1500,7 +1537,8 @@ export default function UploadPage() {
                                                         <span style={{ color: '#d97706', fontSize: 16, lineHeight: 1 }}>+</span>
                                                         <motion.span layout="position" layoutId="project-add-label">Add</motion.span>
                                                     </MorphingPopoverTrigger>
-                                                    <MorphingPopoverContent style={POP_CONTENT_BASE}>
+                                                    <MorphingPopoverContent style={popContentStyle}>
+                                                        {SHEET_HANDLE}
                                                         <div style={POP_HEADER}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="projects" />
@@ -1575,7 +1613,8 @@ export default function UploadPage() {
                                                         <span style={{ color: '#16a34a', fontSize: 16, lineHeight: 1 }}>+</span>
                                                         <motion.span layout="position" layoutId="achiev-add-label">Add</motion.span>
                                                     </MorphingPopoverTrigger>
-                                                    <MorphingPopoverContent style={POP_CONTENT_BASE}>
+                                                    <MorphingPopoverContent style={popContentStyle}>
+                                                        {SHEET_HANDLE}
                                                         <div style={POP_HEADER}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="achievements" />
@@ -1642,7 +1681,8 @@ export default function UploadPage() {
                                                         <span style={{ color: '#7c3aed', fontSize: 16, lineHeight: 1 }}>+</span>
                                                         <motion.span layout="position" layoutId="links-add-label">{hasAnyLink ? 'Edit Links' : 'Add Links'}</motion.span>
                                                     </MorphingPopoverTrigger>
-                                                    <MorphingPopoverContent style={POP_CONTENT_BASE}>
+                                                    <MorphingPopoverContent style={popContentStyle}>
+                                                        {SHEET_HANDLE}
                                                         <div style={POP_HEADER}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="links" />

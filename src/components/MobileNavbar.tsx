@@ -256,8 +256,10 @@ export default function MobileNavbar() {
                         aria-label="Open navigation menu"
                         aria-expanded={open}
                     >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                            <path d="M3 12h18M3 6h18M3 18h18"/>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="3" y1="6" x2="21" y2="6" />
+                            <line x1="3" y1="12" x2="21" y2="12" />
+                            <line x1="3" y1="18" x2="21" y2="18" />
                         </svg>
                     </button>
                 </div>
@@ -312,25 +314,27 @@ const S: Record<string, CSSProperties> = {
         height: 30,
         borderRadius: '50%',
         background: '#135bec',
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 700,
+        color: '#ffffff',
+        fontSize: 13,
+        fontWeight: 800,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
         fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+        lineHeight: 1,
+        userSelect: 'none',
     },
     hamburger: {
         width: 36,
         height: 36,
         borderRadius: 10,
-        background: 'none',
-        border: 'none',
+        background: '#f1f5f9',
+        border: '1px solid #e2e8f0',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#64748b',
+        color: '#0f172a',
         cursor: 'pointer',
         flexShrink: 0,
         padding: 0,

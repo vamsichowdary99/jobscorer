@@ -344,7 +344,7 @@ function JobsPanel({
     resumeSelector?: React.ReactNode
 }) {
     return (
-        <aside style={{
+        <aside className="ci-jobs-panel" style={{
             width: 380,
             flexShrink: 0,
             borderRight: '1px solid #e8edf2',
@@ -718,7 +718,7 @@ function V3TechStack({
 
                 {/* Must Have + Good To Have */}
                 {(jdRequirements.length > 0 || niceToHaves.length > 0) && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div className="ci-req-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                         {jdRequirements.length > 0 && (
                             <div style={{
                                 padding: '12px 14px', borderRadius: 9,
@@ -849,7 +849,7 @@ function V3AIVerdict({ quickIntel, matchingSkills, skillGaps }: {
             )}
 
             {(matchingSkills.length > 0 || skillGaps.length > 0) && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <div className="ci-skills-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                     {matchingSkills.length > 0 && (
                         <div>
                             <V3Label color="#16a34a" size={11}>Skills You Have</V3Label>
@@ -1522,6 +1522,9 @@ function CompanyIntelPage() {
                     .ci-right { overflow: visible; }
                     .ci-bento { grid-template-columns: 1fr; }
                     .ci-span2, .ci-span3 { grid-column: span 1; }
+                    .ci-jobs-panel { width: 100% !important; height: auto !important; max-height: 45vh !important; position: static !important; top: auto !important; border-right: none !important; border-bottom: 1px solid #e8edf2 !important; }
+                    .ci-req-grid { grid-template-columns: 1fr !important; }
+                    .ci-skills-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
                 }
                 @keyframes rsDropIn {
                     from { opacity: 0; transform: translateY(-4px) scale(0.99); }

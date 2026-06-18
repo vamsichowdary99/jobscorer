@@ -2157,6 +2157,15 @@ function OptimizePageInner() {
     const [buildPlanLoading, setBuildPlanLoading] = useState(false)
     const [buildPlanError, setBuildPlanError] = useState<string | null>(null)
     const autoTriggeredRef = useRef(false)
+    const [isMobile, setIsMobile] = useState(false)
+
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
 
     // Load all user resumes on mount, default to primary resume
     useEffect(() => {
@@ -2413,7 +2422,7 @@ function OptimizePageInner() {
     }, [selected, resumeId, pendingGapData, user?.id, refreshOptimizedList])
 
     return (
-        <div style={{ fontFamily: "'DM Sans', sans-serif", padding: '24px 28px' }}>
+        <div style={{ fontFamily: "'DM Sans', sans-serif", padding: isMobile ? '16px 14px' : '24px 28px' }}>
             {/* Template Picker Modal */}
             {showTemplatePicker && (
                 <TemplatePickerModal
@@ -2458,11 +2467,11 @@ function OptimizePageInner() {
             </div>
 
             {/* Two-Panel Layout */}
-            <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 14 : 20, alignItems: 'flex-start' }}>
 
                 {/* ── LEFT PANEL: Generated Resumes ── */}
                 <div style={{
-                    width: 340, flexShrink: 0,
+                    width: isMobile ? '100%' : 340, flexShrink: 0,
                     background: T.surface, borderRadius: T.radius,
                     border: `1px solid ${T.border}`,
                     boxShadow: T.shadow,
@@ -2512,7 +2521,7 @@ function OptimizePageInner() {
                     </div>
 
                     {/* Optimized resume list */}
-                    <div style={{ maxHeight: 'calc(100vh - 320px)', overflowY: 'auto', padding: '8px 0' }}>
+                    <div style={{ maxHeight: isMobile ? 220 : 'calc(100vh - 320px)', overflowY: 'auto', padding: '8px 0' }}>
                         {loadingOptimized ? (
                             Array.from({ length: 3 }).map((_, i) => (
                                 <div key={i} style={{ margin: '0 12px 8px', padding: '16px', borderRadius: 12, border: `1px solid ${T.borderLight}` }}>
@@ -2584,11 +2593,11 @@ function OptimizePageInner() {
 
                 {/* ── RIGHT PANEL: Result ── */}
                 <div style={{
-                    flex: 1, minWidth: 0,
+                    flex: 1, minWidth: 0, width: isMobile ? '100%' : undefined,
                     background: T.surface, borderRadius: T.radius,
                     border: `1px solid ${T.border}`,
                     boxShadow: T.shadow,
-                    minHeight: 600, height: 'calc(100vh - 160px)',
+                    minHeight: isMobile ? 400 : 600, height: isMobile ? 'auto' : 'calc(100vh - 160px)',
                     overflow: 'hidden', display: 'flex', flexDirection: 'column',
                 }}>
                     {/* ── IDLE STATE ── */}
@@ -2693,9 +2702,11 @@ function OptimizePageInner() {
                         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', animation: 'optSlideUp 0.4s ease both' }}>
                             {/* Top bar */}
                             <div style={{
-                                padding: '14px 20px',
+                                padding: isMobile ? '12px 14px' : '14px 20px',
                                 borderBottom: `1px solid ${T.borderLight}`,
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                display: 'flex', alignItems: isMobile ? 'flex-start' : 'center',
+                                justifyContent: 'space-between', flexWrap: 'wrap',
+                                gap: isMobile ? 10 : 0,
                                 background: T.surface, flexShrink: 0,
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
@@ -2719,15 +2730,15 @@ function OptimizePageInner() {
                                         </span>
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                     <button
                                         onClick={() => openBuildPlan()}
                                         style={{
                                             display: 'inline-flex', alignItems: 'center', gap: 7,
-                                            padding: '10px 18px', borderRadius: T.radiusSm,
+                                            padding: isMobile ? '8px 12px' : '10px 18px', borderRadius: T.radiusSm,
                                             border: `1.5px solid ${T.border}`,
                                             background: T.surface, color: T.textSecondary,
-                                            fontWeight: 600, fontSize: '0.8125rem',
+                                            fontWeight: 600, fontSize: isMobile ? '0.75rem' : '0.8125rem',
                                             fontFamily: "'DM Sans', sans-serif",
                                             cursor: 'pointer', transition: 'all 0.15s ease',
                                         }}
@@ -2743,10 +2754,10 @@ function OptimizePageInner() {
                                         onClick={() => handleGenerate(true)}
                                         style={{
                                             display: 'inline-flex', alignItems: 'center', gap: 7,
-                                            padding: '10px 18px', borderRadius: T.radiusSm,
+                                            padding: isMobile ? '8px 12px' : '10px 18px', borderRadius: T.radiusSm,
                                             border: `1.5px solid ${T.border}`,
                                             background: T.surface, color: T.textSecondary,
-                                            fontWeight: 600, fontSize: '0.8125rem',
+                                            fontWeight: 600, fontSize: isMobile ? '0.75rem' : '0.8125rem',
                                             fontFamily: "'DM Sans', sans-serif",
                                             cursor: 'pointer', transition: 'all 0.15s ease',
                                         }}
@@ -2762,9 +2773,9 @@ function OptimizePageInner() {
                                         onClick={handleGenerateResume}
                                         style={{
                                             display: 'inline-flex', alignItems: 'center', gap: 8,
-                                            padding: '11px 22px', borderRadius: T.radiusSm,
+                                            padding: isMobile ? '8px 14px' : '11px 22px', borderRadius: T.radiusSm,
                                             background: `linear-gradient(135deg, ${T.primary}, ${T.primaryDark})`,
-                                            color: 'white', fontWeight: 700, fontSize: '0.875rem',
+                                            color: 'white', fontWeight: 700, fontSize: isMobile ? '0.8125rem' : '0.875rem',
                                             fontFamily: "'DM Sans', sans-serif",
                                             border: 'none', cursor: 'pointer',
                                             boxShadow: T.primaryShadow,

@@ -504,10 +504,7 @@ function StatTile({ icon, label, number, suffix, delta, href, isNorthStar }: {
         <Link href={href} style={base}
             onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
             {isNorthStar && (
-                <>
-                    <div style={S.northStarBadge}>⭐ NORTH STAR</div>
-                    <div style={{ position: 'absolute', top: 12, right: 90, fontSize: 16 }}>✨</div>
-                </>
+                <div style={S.northStarBadge}>⭐ NORTH STAR</div>
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <span style={{ fontSize: 14, color: isNorthStar ? '#f59e0b' : '#135bec' }}>{icon}</span>
@@ -735,10 +732,10 @@ const S: Record<string, React.CSSProperties> = {
     },
     statGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 },
     northStarBadge: {
-        position: 'absolute', top: 12, right: 12,
+        display: 'inline-flex', marginBottom: 8,
         fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 600,
         letterSpacing: '0.08em', textTransform: 'uppercase', color: '#d97706',
-        background: '#fef3c7', padding: '2px 7px', borderRadius: 99,
+        background: 'rgba(217,119,6,0.12)', padding: '2px 7px', borderRadius: 99,
     },
     nudge: {
         background: '#eff6ff', borderLeft: '3px solid #135bec', borderRadius: 10,
@@ -788,27 +785,29 @@ const S: Record<string, React.CSSProperties> = {
         display: 'flex', gap: 10, alignItems: 'flex-start',
     },
     itemRow: {
-        display: 'flex', alignItems: 'center', gap: 12, padding: 10,
-        borderRadius: 8, marginBottom: 8,
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '9px 0', borderBottom: '1px solid #f1f5f9',
     },
     itemIcon: {
-        width: 36, height: 36, borderRadius: 8,
+        width: 34, height: 34, borderRadius: 8,
         display: 'grid', placeItems: 'center',
         color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0,
+        fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
     },
     itemName: {
-        fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 2,
+        fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 2,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
     },
-    itemMeta: { fontSize: 12, color: '#94a3b8' },
+    itemMeta: { fontSize: 11, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     itemBadge: {
         padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700,
-        background: '#dcfce7', color: '#15803d',
+        background: '#dbeafe', color: '#1d4ed8', flexShrink: 0,
     },
-    itemTime: { fontSize: 12, color: '#94a3b8' },
+    itemTime: { fontSize: 11, color: '#94a3b8', flexShrink: 0 },
     iconBtn: {
-        width: 28, height: 28, borderRadius: 6,
+        width: 26, height: 26, borderRadius: 6, flexShrink: 0,
         display: 'grid', placeItems: 'center', color: '#64748b', cursor: 'pointer',
+        background: '#f1f5f9', border: 'none',
     },
     tipCard: { paddingLeft: 12, paddingTop: 14, borderTop: '1px solid #e2e8f0' },
     tipLabel: {
