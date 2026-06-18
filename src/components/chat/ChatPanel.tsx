@@ -247,6 +247,14 @@ export default function ChatPanel() {
   const { user } = useAuth();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    setIsMobile(mq.matches)
+    const h = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', h)
+    return () => mq.removeEventListener('change', h)
+  }, []);
   const [isMaximized, setIsMaximized] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -757,7 +765,7 @@ export default function ChatPanel() {
         aria-label={isOpen ? 'Close AI chat' : 'Open AI chat'}
         aria-expanded={isOpen}
         style={{
-          position: 'fixed', bottom: 24, right: 24,
+          position: 'fixed', bottom: isMobile ? 90 : 24, right: isMobile ? 16 : 24,
           width: 54, height: 54, borderRadius: '50%',
           border: 'none', cursor: 'pointer', zIndex: 10000,
           background: isOpen ? '#64748b' : '#135bec',

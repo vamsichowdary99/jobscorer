@@ -55,6 +55,7 @@ body {
   color: var(--color-text-primary);
   background: var(--color-bg);
   line-height: 1.6;
+  overflow-x: hidden;
 }
 
 /* ── Typography ────────────────────────────────────────────── */
@@ -324,9 +325,16 @@ h4 {
   .rs-greeting-bar  { flex-direction: column !important; align-items: flex-start !important; }
   .rs-streak-box    { min-width: 0 !important; width: 100% !important; flex-direction: row !important; flex-wrap: wrap !important; justify-content: space-between !important; }
   .rs-stat-grid     { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
-  .rs-inner-grid    { grid-template-columns: 1fr !important; }
+  .rs-inner-grid    { grid-template-columns: 1fr !important; gap: 11px !important; }
   .rs-pipeline-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .rs-nudge         { flex-direction: column !important; align-items: flex-start !important; flex-wrap: wrap !important; gap: 10px !important; }
+  .rs-compact-card  { padding: 15px !important; border-radius: 14px !important; }
+  .rs-compact-card .rs-card-head { margin-bottom: 13px !important; }
+  .rs-compact-irow  { padding: 8px 0 !important; gap: 9px !important; }
+  .rs-compact-iicon { width: 32px !important; height: 32px !important; font-size: 13px !important; }
+  .rs-compact-iname { font-size: 12.5px !important; }
+  .rs-compact-imeta { font-size: 11px !important; }
+  .rs-compact-ibadge { font-size: 9.5px !important; padding: 2px 7px !important; }
 }
 @media (max-width: 480px) {
   .rs-page      { padding-left: 14px !important; padding-right: 14px !important; }

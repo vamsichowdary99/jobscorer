@@ -338,9 +338,8 @@ function ScoreRing({ score, size }: { score: number; size: number }) {
                 <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth={Math.round(size * 0.068)} />
                 <circle cx={cx} cy={cy} r={r} fill="none" stroke="#135bec" strokeWidth={Math.round(size * 0.068)} strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} transform={`rotate(-90 ${cx} ${cy})`} />
             </svg>
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: Math.round(size * 0.255), fontWeight: 800, color: '#135bec', lineHeight: 1 }}>{score}</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: Math.max(7, Math.round(size * 0.095)), fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94a3b8', marginTop: 2 }}>JOBSCORER</span>
             </div>
         </div>
     )
@@ -1123,28 +1122,62 @@ export default function UploadPage() {
                                     )}
 
                                     {/* Hero card */}
-                                    <section style={{ ...S.hero, ...(isMobile ? { padding: '16px 14px' } : {}) }}>
-                                        <div>
-                                            <h1 style={{ ...S.heroName, ...(isMobile ? { fontSize: 20 } : {}) }}>{preview.name}</h1>
-                                            {preview.role && <p style={S.heroRole}>{preview.role}</p>}
-                                            {(preview.email || preview.location) && <p style={S.heroContact}>{[preview.email, preview.location].filter(Boolean).join(' · ')}</p>}
-                                            <div style={S.statRow}>
-                                                {[
-                                                    { v: pad(preview.years),              l: isMobile ? 'Exp Yrs' : 'Experience' },
-                                                    { v: pad(preview.skills.length),      l: 'Skills' },
-                                                    { v: pad(allProjects.length),         l: 'Projects' },
-                                                    { v: pad(allCerts.length),            l: 'Certs' },
-                                                    { v: pad(savedAchievs.length),        l: 'Achievements' },
-                                                ].map(s => (
-                                                    <div key={s.l} style={{ ...S.stat, ...(isMobile ? { minWidth: 0, flex: '1 1 0', padding: '8px 5px' } : {}) }}>
-                                                        <span style={{ ...S.statNum, ...(isMobile ? { fontSize: 14 } : {}) }}>{s.v}</span>
-                                                        <span style={{ ...S.statLabel, ...(isMobile ? { fontSize: 8 } : {}) }}>{s.l}</span>
-                                                    </div>
-                                                ))}
+                                    <section style={{
+                                        borderRadius: 14,
+                                        padding: isMobile ? '16px 14px' : '24px 28px',
+                                        background: 'linear-gradient(135deg,#e0f2fe 0%,#fff 100%)',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                                        marginBottom: isMobile ? 11 : 18,
+                                        border: '1px solid #e2e8f0',
+                                        overflow: 'hidden',
+                                        position: 'relative',
+                                    }}>
+                                        {/* hero-top: name/contact on left (flex:1), score ring on right */}
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <h1 style={{ fontSize: isMobile ? 20 : 28, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.03em', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isMobile ? 'normal' : 'nowrap' }}>{preview.name}</h1>
+                                                {preview.role && <p style={S.heroRole}>{preview.role}</p>}
+                                                {(preview.email || preview.location) && <p style={{ ...S.heroContact, fontSize: isMobile ? 11 : 13 }}>{[preview.email, preview.location].filter(Boolean).join(' · ')}</p>}
                                             </div>
+                                            <ScoreRing score={sc} size={isMobile ? 70 : 100} />
                                         </div>
-                                        <div style={{ paddingRight: isMobile ? 0 : 20, flexShrink: 0 }}>
-                                            <ScoreRing score={sc} size={isMobile ? 72 : 120} />
+                                        {/* stat row: full width, below hero-top */}
+                                        <div style={{ display: 'flex', gap: isMobile ? 6 : 8 }}>
+                                            {[
+                                                { v: pad(preview.years),              l: isMobile ? 'Exp Yrs'  : 'Experience' },
+                                                { v: pad(preview.skills.length),      l: 'Skills' },
+                                                { v: pad(allProjects.length),         l: 'Projects' },
+                                                { v: pad(allCerts.length),            l: 'Certs' },
+                                                { v: pad(savedAchievs.length),        l: isMobile ? 'Achievmts' : 'Achievements' },
+                                            ].map(s => (
+                                                <div key={s.l} style={{
+                                                    flex: 1,
+                                                    background: 'rgba(255,255,255,0.8)',
+                                                    border: '1px solid rgba(255,255,255,0.6)',
+                                                    borderRadius: 9,
+                                                    padding: isMobile ? '8px 6px' : '10px 8px',
+                                                    textAlign: 'center',
+                                                }}>
+                                                    <span style={{
+                                                        fontFamily: "'JetBrains Mono', monospace",
+                                                        fontSize: isMobile ? 15 : 18,
+                                                        fontWeight: 800,
+                                                        color: '#0f172a',
+                                                        display: 'block',
+                                                        lineHeight: 1,
+                                                        marginBottom: 3,
+                                                    }}>{s.v}</span>
+                                                    <span style={{
+                                                        fontFamily: "'JetBrains Mono', monospace",
+                                                        fontSize: isMobile ? 7.5 : 8.5,
+                                                        fontWeight: 700,
+                                                        color: '#94a3b8',
+                                                        textTransform: 'uppercase',
+                                                        letterSpacing: '0.07em',
+                                                        display: 'block',
+                                                    }}>{s.l}</span>
+                                                </div>
+                                            ))}
                                         </div>
                                     </section>
 
@@ -1764,7 +1797,7 @@ export default function UploadPage() {
                                                     {/* Header bar */}
                                                     <div style={{
                                                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                        padding: '11px 24px',
+                                                        padding: isMobile ? '8px 14px' : '11px 24px',
                                                         borderBottom: '1px solid #f1f5f9',
                                                         background: '#fafafa',
                                                     }}>
@@ -1776,9 +1809,9 @@ export default function UploadPage() {
                                                     </div>
 
                                                     {/* Main content */}
-                                                    <div className="mob-assess-hero" style={{ padding: '24px 28px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 28, alignItems: 'start' }}>
+                                                    <div style={{ padding: isMobile ? '12px 14px' : '24px 28px', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'auto 1fr', gap: isMobile ? 12 : 28, alignItems: 'start' }}>
                                                         {/* Score ring */}
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, justifySelf: isMobile ? 'center' : 'start' }}>
                                                             <div style={{ position: 'relative', width: 112, height: 112 }}>
                                                                 <svg width="112" height="112" viewBox="0 0 112 112" style={{ transform: 'rotate(-90deg)' }}>
                                                                     <circle cx="56" cy="56" r="46" fill="transparent" stroke="#f1f5f9" strokeWidth="7"/>
@@ -1810,7 +1843,7 @@ export default function UploadPage() {
                                                             </p>
 
                                                             {/* Two column: asset + action */}
-                                                            <div className="mob-assess-topasset" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10, marginBottom: 14 }}>
                                                                 <div className="assess-asset-card" style={{ padding: '12px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', transition: 'border-color 0.15s' }}>
                                                                     <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.13em', marginBottom: 6 }}>Your Biggest Asset</div>
                                                                     <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.775rem', color: '#15803d', margin: 0, lineHeight: 1.55 }}>{resumeAnalysis.biggest_asset}</p>
@@ -1822,7 +1855,7 @@ export default function UploadPage() {
                                                             </div>
 
                                                             {/* Strengths + Gaps */}
-                                                            <div className="mob-assess-swgrid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
                                                                 <div>
                                                                     <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>Strengths</div>
                                                                     {(resumeAnalysis.strengths || []).map((s, i) => (
@@ -1847,14 +1880,14 @@ export default function UploadPage() {
 
                                                     {/* Playbook — 4 concrete actions: roles, companies, cuts, certs */}
                                                     {(resumeAnalysis.recommended_roles?.length || resumeAnalysis.target_companies || resumeAnalysis.cut_or_condense?.length || resumeAnalysis.recommended_certifications?.length) ? (
-                                                        <div style={{ borderTop: '1px solid #f1f5f9', padding: '20px 28px 22px', background: 'linear-gradient(180deg, #fafbfc 0%, #ffffff 100%)' }}>
+                                                        <div style={{ borderTop: '1px solid #f1f5f9', padding: isMobile ? '14px 14px 16px' : '20px 28px 22px', background: 'linear-gradient(180deg, #fafbfc 0%, #ffffff 100%)' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14 }}>
                                                                 <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#135bec' }} />
                                                                 <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.16em' }}>Your Playbook</span>
                                                                 <span style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, #e5e7eb 0%, transparent 80%)' }} />
                                                                 <span style={{ fontFamily: 'monospace', fontSize: '0.6rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>4 moves</span>
                                                             </div>
-                                                            <div className="mob-assess-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
 
                                                                 {/* 1. Recommended roles */}
                                                                 {(resumeAnalysis.recommended_roles?.length ?? 0) > 0 && (
@@ -1970,7 +2003,7 @@ export default function UploadPage() {
                                                             <button
                                                                 className="expand-btn"
                                                                 onClick={() => setAssessmentExpanded(p => !p)}
-                                                                style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '10px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.15s', borderRadius: '0 0 14px 14px' }}
+                                                                style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: isMobile ? '10px 14px' : '10px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.15s', borderRadius: '0 0 14px 14px' }}
                                                             >
                                                                 <span style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.13em' }}>Full Assessment</span>
                                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" style={{ transform: assessmentExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
@@ -1978,7 +2011,7 @@ export default function UploadPage() {
                                                                 </svg>
                                                             </button>
                                                             {assessmentExpanded && (
-                                                                <div style={{ padding: '0 28px 24px' }}>
+                                                                <div style={{ padding: isMobile ? '0 14px 20px' : '0 28px 24px' }}>
                                                                     {resumeAnalysis.full_assessment.split('\n\n').map((para, i) => (
                                                                         <p key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.825rem', color: '#64748b', lineHeight: 1.75, margin: '0 0 14px' }}>{para}</p>
                                                                     ))}

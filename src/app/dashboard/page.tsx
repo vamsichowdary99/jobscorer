@@ -395,8 +395,8 @@ export default function DashboardHomePage() {
 
                     {/* COMPANIES IN PIPELINE + TAILORED RESUMES */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="rs-inner-grid">
-                        <div style={S.card}>
-                            <div style={S.cardHeader}>
+                        <div style={S.card} className="rs-compact-card">
+                            <div style={S.cardHeader} className="rs-card-head">
                                 <div style={S.cardTitle}>🏢 Companies in Pipeline</div>
                                 {pipeline.length > 0 && (
                                     <Link href="/dashboard/research" style={S.cardLink}>View all →</Link>
@@ -406,20 +406,20 @@ export default function DashboardHomePage() {
                                 : pipeline.length === 0
                                     ? <EmptyState icon="🏢" label="No company research yet" href="/dashboard/research" cta="Research a company →" compact />
                                     : pipeline.map(p => (
-                                        <div key={p.company_name + p.researched_at} style={S.itemRow}>
-                                            <div style={{ ...S.itemIcon, background: companyGradient(p.company_name) }}>{firstInitial(p.company_name)}</div>
+                                        <div key={p.company_name + p.researched_at} style={S.itemRow} className="rs-compact-irow">
+                                            <div style={{ ...S.itemIcon, background: companyGradient(p.company_name) }} className="rs-compact-iicon">{firstInitial(p.company_name)}</div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={S.itemName}>{p.company_name}</div>
-                                                <div style={S.itemMeta}>{p.job_title ?? 'Research'}</div>
+                                                <div style={S.itemName} className="rs-compact-iname">{p.company_name}</div>
+                                                <div style={S.itemMeta} className="rs-compact-imeta">{p.job_title ?? 'Research'}</div>
                                             </div>
-                                            <div style={{ ...S.itemBadge, background: '#dbeafe', color: '#1d4ed8' }}>Researched</div>
+                                            <div style={{ ...S.itemBadge, background: '#dbeafe', color: '#1d4ed8' }} className="rs-compact-ibadge">Researched</div>
                                             <div style={S.itemTime}>{relativeTime(p.researched_at)}</div>
                                         </div>
                                     ))}
                         </div>
 
-                        <div style={S.card}>
-                            <div style={S.cardHeader}>
+                        <div style={S.card} className="rs-compact-card">
+                            <div style={S.cardHeader} className="rs-card-head">
                                 <div style={S.cardTitle}>📄 Tailored Resumes</div>
                                 {resumes.length > 0 && (
                                     <Link href="/dashboard/resumes" style={S.cardLink}>View all →</Link>
@@ -429,15 +429,15 @@ export default function DashboardHomePage() {
                                 : resumes.length === 0
                                     ? <EmptyState icon="📄" label="No tailored resumes yet" href="/dashboard/optimize" cta="Tailor a resume →" compact />
                                     : resumes.map(r => (
-                                        <Link href="/dashboard/resumes" key={r.name + r.updatedAt} style={{ ...S.itemRow, textDecoration: 'none', color: 'inherit' }}>
-                                            <div style={{ ...S.itemIcon, background: '#eff6ff', color: '#135bec', fontSize: 18 }}>📄</div>
+                                        <Link href="/dashboard/resumes" key={r.name + r.updatedAt} style={{ ...S.itemRow, textDecoration: 'none', color: 'inherit' }} className="rs-compact-irow">
+                                            <div style={{ ...S.itemIcon, background: '#eff6ff', color: '#135bec', fontSize: 18 }} className="rs-compact-iicon">📄</div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={S.itemName}>{r.name}</div>
-                                                <div style={S.itemMeta}>{r.jobTitle}</div>
+                                                <div style={S.itemName} className="rs-compact-iname">{r.name}</div>
+                                                <div style={S.itemMeta} className="rs-compact-imeta">{r.jobTitle}</div>
                                             </div>
                                             <div style={S.itemTime}>{relativeTime(r.updatedAt)}</div>
                                             <div style={S.iconBtn} title="Download">
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
                                             </div>
                                         </Link>
                                     ))}

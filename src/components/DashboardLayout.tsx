@@ -45,6 +45,7 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
                 // position:sticky on descendants (e.g., Settings left nav).
                 // `visible` lets the page/window be the scroller, which sticky
                 // can correctly use as its scroll reference.
+                overflowX: 'hidden',
                 overflowY: isFullBleed && !isMobile ? 'hidden' : 'visible',
                 display: 'flex',
                 flexDirection: 'column',
