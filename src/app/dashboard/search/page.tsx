@@ -1639,126 +1639,222 @@ export default function SearchPage() {
             <div style={{
                 background: '#fff',
                 borderBottom: '1px solid #E2E8F0',
-                padding: '12px 24px',
+                padding: isMobile ? '10px 14px' : '12px 24px',
                 flexShrink: 0,
                 display: 'flex', flexDirection: 'column', gap: 8,
             }}>
-                {/* Row 1: pill search bar */}
-                <form onSubmit={handleSearch} style={{ display: 'flex', alignItems: 'center' }}>
-                    <div style={{
-                        display: 'flex', flex: 1,
-                        border: '1px solid #E2E8F0',
-                        borderRadius: 9999,
-                        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-                        background: '#fff',
-                    }}>
-                        {/* Job title autocomplete */}
-                        <AutocompleteInput
-                            value={query}
-                            onChange={setQuery}
-                            placeholder="Job title, company, or keyword…"
-                            suggestions={IT_ROLES}
-                            icon={<Search size={13} style={{ color: '#94A3B8', marginRight: 7, flexShrink: 0 }} />}
-                            borderStyle={{ flex: 2, borderRight: '1px solid #E2E8F0', borderRadius: '9999px 0 0 9999px' }}
-                        />
-
-                        {/* Location autocomplete */}
-                        <AutocompleteInput
-                            value={location}
-                            onChange={setLocation}
-                            placeholder="City or location"
-                            suggestions={INDIA_LOCATIONS}
-                            icon={<MapPin size={13} style={{ color: '#94A3B8', marginRight: 7, flexShrink: 0 }} />}
-                            borderStyle={{ flex: 1, borderRight: '1px solid #E2E8F0' }}
-                        />
-
-                        {/* Level dropdown */}
-                        <LevelDropdown value={level} onChange={setLevel} />
-
-                        {/* Search button */}
-                        <button
-                            type="submit"
-                            disabled={searching}
-                            style={{
-                                padding: '8px 20px',
-                                background: searching
-                                    ? '#93C5FD'
-                                    : 'linear-gradient(135deg, #3B82F6, #2563EB)',
-                                color: '#fff',
-                                border: 'none', cursor: searching ? 'not-allowed' : 'pointer',
-                                fontSize: '0.8125rem', fontWeight: 600,
-                                transition: 'opacity 0.15s',
-                                whiteSpace: 'nowrap', flexShrink: 0,
-                                fontFamily: 'inherit',
-                                borderRadius: '0 9999px 9999px 0',
-                            }}
-                        >
-                            {searching ? 'Searching…' : 'Search'}
-                        </button>
-                    </div>
-                </form>
-
-                {/* Row 2: action buttons */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.8125rem', color: '#94A3B8' }}>
-                            {hasSearched && !searching && (
-                                dateFilter === 'any'
-                                    ? `${results.length} jobs found`
-                                    : `${visibleResults.length} of ${results.length} jobs`
-                            )}
-                        </span>
-                        {hasSearched && !searching && results.length > 0 && (
-                            <DatePostedFilter
-                                value={dateFilter}
-                                onChange={setDateFilter}
-                                postedDates={postedDates}
+                {/* ── Mobile: stacked inputs + 2×2 action grid ── */}
+                {isMobile ? (
+                    <form onSubmit={handleSearch} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {/* Stacked inputs card */}
+                        <div style={{
+                            border: '1px solid #E2E8F0', borderRadius: 14,
+                            overflow: 'hidden', background: '#fff',
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                        }}>
+                            <AutocompleteInput
+                                value={query}
+                                onChange={setQuery}
+                                placeholder="Job title, company, or keyword…"
+                                suggestions={IT_ROLES}
+                                icon={<Search size={13} style={{ color: '#94A3B8', marginRight: 7, flexShrink: 0 }} />}
+                                borderStyle={{ borderBottom: '1px solid #E2E8F0' }}
                             />
-                        )}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <PasteJobButton />
-                        <button
-                            onClick={() => handleScore()}
-                            disabled={scoring || visibleResults.length === 0}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 5,
-                                padding: '6px 14px', borderRadius: 9999,
-                                background: scoring || visibleResults.length === 0
-                                    ? '#E2E8F0'
-                                    : 'linear-gradient(135deg, #7C3AED, #6D28D9)',
-                                color: scoring || visibleResults.length === 0 ? '#94A3B8' : '#fff',
-                                border: 'none', cursor: scoring || visibleResults.length === 0 ? 'not-allowed' : 'pointer',
-                                fontSize: '0.8125rem', fontWeight: 600,
-                                boxShadow: visibleResults.length > 0 && !scoring ? '0 2px 8px rgba(109,40,217,0.25)' : 'none',
-                                transition: 'all 0.15s', whiteSpace: 'nowrap',
-                                fontFamily: 'inherit',
-                            }}
-                        >
-                            <Sparkles size={13} />
-                            {scoring ? 'Scoring…' : 'Find Best Jobs'}
-                        </button>
-                        <button
-                            onClick={deepExhausted && !ingesting ? () => router.push('/dashboard/settings#plan') : handleIngest}
-                            disabled={ingesting}
-                            title="Deep Search pulls fresh listings from the web (Naukri, LinkedIn, Indeed & more). Your normal search covers jobs we already have."
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 5,
-                                padding: '6px 14px', borderRadius: 9999,
-                                background: ingesting ? '#334155' : (deepExhausted ? '#135bec' : '#1E293B'),
-                                color: '#fff',
-                                border: 'none', cursor: ingesting ? 'not-allowed' : 'pointer',
-                                fontSize: '0.8125rem', fontWeight: 600,
-                                opacity: ingesting ? 0.7 : 1,
-                                transition: 'all 0.15s', whiteSpace: 'nowrap',
-                                fontFamily: 'inherit',
-                            }}
-                        >
-                            <Search size={13} />
-                            {ingesting ? 'Searching…' : (deepExhausted ? 'Deep Search · Upgrade' : 'Deep Search')}
-                        </button>
-                    </div>
-                </div>
+                            <AutocompleteInput
+                                value={location}
+                                onChange={setLocation}
+                                placeholder="City or location"
+                                suggestions={INDIA_LOCATIONS}
+                                icon={<MapPin size={13} style={{ color: '#94A3B8', marginRight: 7, flexShrink: 0 }} />}
+                                borderStyle={{}}
+                            />
+                        </div>
+
+                        {/* 2×2 action grid */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            {/* Search DB */}
+                            <button
+                                type="submit"
+                                disabled={searching}
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                    padding: '11px 8px', borderRadius: 10,
+                                    background: searching ? '#93C5FD' : 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                                    color: '#fff', border: 'none',
+                                    cursor: searching ? 'not-allowed' : 'pointer',
+                                    fontSize: '0.875rem', fontWeight: 700, fontFamily: 'inherit',
+                                    boxShadow: searching ? 'none' : '0 2px 8px rgba(37,99,235,0.25)',
+                                }}
+                            >
+                                <Search size={14} />
+                                {searching ? 'Searching…' : 'Search DB'}
+                            </button>
+
+                            {/* Find Best Jobs */}
+                            <button
+                                type="button"
+                                onClick={() => handleScore()}
+                                disabled={scoring || visibleResults.length === 0}
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                    padding: '11px 8px', borderRadius: 10,
+                                    background: scoring || visibleResults.length === 0
+                                        ? '#E2E8F0'
+                                        : 'linear-gradient(135deg, #7C3AED, #6D28D9)',
+                                    color: scoring || visibleResults.length === 0 ? '#94A3B8' : '#fff',
+                                    border: 'none',
+                                    cursor: scoring || visibleResults.length === 0 ? 'not-allowed' : 'pointer',
+                                    fontSize: '0.875rem', fontWeight: 700, fontFamily: 'inherit',
+                                    boxShadow: visibleResults.length > 0 && !scoring ? '0 2px 8px rgba(109,40,217,0.25)' : 'none',
+                                }}
+                            >
+                                <Sparkles size={14} />
+                                {scoring ? 'Scoring…' : 'Find Best Jobs'}
+                            </button>
+
+                            {/* Deep Search */}
+                            <button
+                                type="button"
+                                onClick={deepExhausted && !ingesting ? () => router.push('/dashboard/settings#plan') : handleIngest}
+                                disabled={ingesting}
+                                style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                    padding: '11px 8px', borderRadius: 10,
+                                    background: ingesting ? '#334155' : (deepExhausted ? '#135bec' : '#1E293B'),
+                                    color: '#fff', border: 'none',
+                                    cursor: ingesting ? 'not-allowed' : 'pointer',
+                                    fontSize: '0.875rem', fontWeight: 700, fontFamily: 'inherit',
+                                    opacity: ingesting ? 0.7 : 1,
+                                }}
+                            >
+                                <Globe size={14} />
+                                {ingesting ? 'Searching…' : (deepExhausted ? 'Upgrade' : 'Deep Search')}
+                            </button>
+
+                            {/* Paste JD */}
+                            <PasteJobButton compact />
+                        </div>
+                    </form>
+                ) : (
+                    <>
+                        {/* Row 1: pill search bar */}
+                        <form onSubmit={handleSearch} style={{ display: 'flex', alignItems: 'center' }}>
+                            <div style={{
+                                display: 'flex', flex: 1,
+                                border: '1px solid #E2E8F0',
+                                borderRadius: 9999,
+                                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                                background: '#fff',
+                            }}>
+                                {/* Job title autocomplete */}
+                                <AutocompleteInput
+                                    value={query}
+                                    onChange={setQuery}
+                                    placeholder="Job title, company, or keyword…"
+                                    suggestions={IT_ROLES}
+                                    icon={<Search size={13} style={{ color: '#94A3B8', marginRight: 7, flexShrink: 0 }} />}
+                                    borderStyle={{ flex: 2, borderRight: '1px solid #E2E8F0', borderRadius: '9999px 0 0 9999px' }}
+                                />
+
+                                {/* Location autocomplete */}
+                                <AutocompleteInput
+                                    value={location}
+                                    onChange={setLocation}
+                                    placeholder="City or location"
+                                    suggestions={INDIA_LOCATIONS}
+                                    icon={<MapPin size={13} style={{ color: '#94A3B8', marginRight: 7, flexShrink: 0 }} />}
+                                    borderStyle={{ flex: 1, borderRight: '1px solid #E2E8F0' }}
+                                />
+
+                                {/* Level dropdown */}
+                                <LevelDropdown value={level} onChange={setLevel} />
+
+                                {/* Search button */}
+                                <button
+                                    type="submit"
+                                    disabled={searching}
+                                    style={{
+                                        padding: '8px 20px',
+                                        background: searching
+                                            ? '#93C5FD'
+                                            : 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                                        color: '#fff',
+                                        border: 'none', cursor: searching ? 'not-allowed' : 'pointer',
+                                        fontSize: '0.8125rem', fontWeight: 600,
+                                        transition: 'opacity 0.15s',
+                                        whiteSpace: 'nowrap', flexShrink: 0,
+                                        fontFamily: 'inherit',
+                                        borderRadius: '0 9999px 9999px 0',
+                                    }}
+                                >
+                                    {searching ? 'Searching…' : 'Search'}
+                                </button>
+                            </div>
+                        </form>
+
+                        {/* Row 2: action buttons */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.8125rem', color: '#94A3B8' }}>
+                                    {hasSearched && !searching && (
+                                        dateFilter === 'any'
+                                            ? `${results.length} jobs found`
+                                            : `${visibleResults.length} of ${results.length} jobs`
+                                    )}
+                                </span>
+                                {hasSearched && !searching && results.length > 0 && (
+                                    <DatePostedFilter
+                                        value={dateFilter}
+                                        onChange={setDateFilter}
+                                        postedDates={postedDates}
+                                    />
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <PasteJobButton />
+                                <button
+                                    onClick={() => handleScore()}
+                                    disabled={scoring || visibleResults.length === 0}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 5,
+                                        padding: '6px 14px', borderRadius: 9999,
+                                        background: scoring || visibleResults.length === 0
+                                            ? '#E2E8F0'
+                                            : 'linear-gradient(135deg, #7C3AED, #6D28D9)',
+                                        color: scoring || visibleResults.length === 0 ? '#94A3B8' : '#fff',
+                                        border: 'none', cursor: scoring || visibleResults.length === 0 ? 'not-allowed' : 'pointer',
+                                        fontSize: '0.8125rem', fontWeight: 600,
+                                        boxShadow: visibleResults.length > 0 && !scoring ? '0 2px 8px rgba(109,40,217,0.25)' : 'none',
+                                        transition: 'all 0.15s', whiteSpace: 'nowrap',
+                                        fontFamily: 'inherit',
+                                    }}
+                                >
+                                    <Sparkles size={13} />
+                                    {scoring ? 'Scoring…' : 'Find Best Jobs'}
+                                </button>
+                                <button
+                                    onClick={deepExhausted && !ingesting ? () => router.push('/dashboard/settings#plan') : handleIngest}
+                                    disabled={ingesting}
+                                    title="Deep Search pulls fresh listings from the web (Naukri, LinkedIn, Indeed & more). Your normal search covers jobs we already have."
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 5,
+                                        padding: '6px 14px', borderRadius: 9999,
+                                        background: ingesting ? '#334155' : (deepExhausted ? '#135bec' : '#1E293B'),
+                                        color: '#fff',
+                                        border: 'none', cursor: ingesting ? 'not-allowed' : 'pointer',
+                                        fontSize: '0.8125rem', fontWeight: 600,
+                                        opacity: ingesting ? 0.7 : 1,
+                                        transition: 'all 0.15s', whiteSpace: 'nowrap',
+                                        fontFamily: 'inherit',
+                                    }}
+                                >
+                                    <Search size={13} />
+                                    {ingesting ? 'Searching…' : (deepExhausted ? 'Deep Search · Upgrade' : 'Deep Search')}
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                )}
 
                 {/* Deep Search remaining-count — own line so it never offsets the button
                     baseline. Refined status pill: blue (healthy) → amber (1 left) → red

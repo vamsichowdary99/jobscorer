@@ -37,23 +37,40 @@ const STEP_LABELS = [
     'Researching the company',
 ] as const
 
-export function PasteJobButton() {
+export function PasteJobButton({ compact }: { compact?: boolean } = {}) {
     const [open, setOpen] = useState(false)
     return (
         <>
-            <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="rs-paste-trigger"
-                aria-label="Paste a job description from elsewhere"
-            >
-                <span className="rs-paste-trigger__icon">
-                    <ClipIcon size={20} color="#fff" sw={1.75} />
-                </span>
-                <span className="rs-paste-trigger__pill">
-                    Paste Job Description
-                </span>
-            </button>
+            {compact ? (
+                <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        padding: '10px 8px', borderRadius: 10,
+                        border: '1.5px solid #BFDBFE', background: '#fff',
+                        color: '#135bec', fontWeight: 700, fontSize: '0.875rem',
+                        cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    }}
+                >
+                    <ClipIcon size={14} color="#135bec" sw={2} />
+                    Paste JD
+                </button>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    className="rs-paste-trigger"
+                    aria-label="Paste a job description from elsewhere"
+                >
+                    <span className="rs-paste-trigger__icon">
+                        <ClipIcon size={20} color="#fff" sw={1.75} />
+                    </span>
+                    <span className="rs-paste-trigger__pill">
+                        Paste Job Description
+                    </span>
+                </button>
+            )}
             {open && <PasteJobModal onClose={() => setOpen(false)} />}
             <style>{TRIGGER_CSS}</style>
         </>

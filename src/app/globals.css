@@ -334,3 +334,46 @@ h4 {
   .rs-score-col { position: absolute !important; top: 14px !important; right: 14px !important; }
   .rs-stat-grid { gap: 10px !important; }
 }
+/* ── AI Profile Assessment — mobile layout (≤767px) ────────── */
+@media (max-width: 767px) {
+  /* Score ring + headline: collapse to single column */
+  .mob-assess-hero {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    padding: 12px 14px !important;
+  }
+
+  /* Score ring: centre-align when stacked */
+  .mob-assess-hero > div:first-child {
+    align-items: center !important;
+  }
+
+  /* Biggest Asset + Top Action: stack to single column */
+  .mob-assess-topasset {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Strengths / Gaps: stack to single column */
+  .mob-assess-swgrid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* 4 Playbook cards: stack to single column */
+  .mob-assess-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Playbook card inner padding tightened on mobile */
+  .mob-assess-grid > div {
+    padding: 11px 12px !important;
+  }
+
+  /* Playbook section outer padding */
+  .mob-assess-grid {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}

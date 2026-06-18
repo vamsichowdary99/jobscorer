@@ -506,6 +506,14 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
     const { user } = useAuth()
     const [researchLoading, setResearchLoading] = useState(false)
     const [researchError, setResearchError] = useState<string | null>(null)
+    const [isMobile, setIsMobile] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
 
     // Hard blockers always surface first; mitigatable nice-to-haves trail them.
     const sortedGaps = gaps ? [...gaps].sort((a, b) => {
@@ -595,20 +603,20 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
             {/* ── JOB HEADER ── */}
             <div style={{
                 background: 'white',
-                padding: '28px 36px 24px',
+                padding: isMobile ? '14px 16px 12px' : '28px 36px 24px',
                 borderBottom: '1px solid #f3f4f6',
                 position: 'sticky', top: 0, zIndex: 10,
             }}>
-                <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
-                    <CompanyIcon company={job.company} size={56} />
+                <div style={{ display: 'flex', gap: isMobile ? 10 : 18, alignItems: 'flex-start' }}>
+                    <CompanyIcon company={job.company} size={isMobile ? 40 : 56} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <h1 style={{
-                            fontSize: '1.5rem', fontWeight: 800, color: '#111827',
-                            letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 8,
+                            fontSize: isMobile ? '1.05rem' : '1.5rem', fontWeight: 800, color: '#111827',
+                            letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 6,
                         }}>{job.title}</h1>
-                        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: isMobile ? 8 : 16, alignItems: 'center', flexWrap: 'wrap' }}>
                             {job.company && (
-                                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#135bec' }}>
+                                <span style={{ fontSize: isMobile ? '0.8125rem' : '0.875rem', fontWeight: 600, color: '#135bec' }}>
                                     {job.company}
                                 </span>
                             )}
@@ -618,7 +626,7 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                     {job.location}
                                 </span>
                             )}
-                            {job.schedule_type && (
+                            {!isMobile && job.schedule_type && (
                                 <span style={{ fontSize: '0.8125rem', color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                                     {job.schedule_type}
@@ -630,7 +638,7 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                     background: '#f3f4f6', color: '#6b7280', fontWeight: 600, textTransform: 'capitalize',
                                 }}>{job.experience_level}</span>
                             )}
-                            {(job.legitimacy_tier === 'verified' || job.legitimacy_tier === 'proceed_with_caution') && (
+                            {!isMobile && (job.legitimacy_tier === 'verified' || job.legitimacy_tier === 'proceed_with_caution') && (
                                 <LegitimacyBadge
                                     tier={job.legitimacy_tier}
                                     signals={job.legitimacy_signals}
@@ -638,7 +646,7 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                 />
                             )}
                         </div>
-                        {job.legitimacy_tier === 'suspicious' && (
+                        {!isMobile && job.legitimacy_tier === 'suspicious' && (
                             <div style={{ marginTop: 12, maxWidth: 520 }}>
                                 <LegitimacyBadge
                                     tier={job.legitimacy_tier}
@@ -648,81 +656,105 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                             </div>
                         )}
                         {match.recommendation && (
-                            <div style={{ marginTop: 14 }}>
-                                <RecommendationBadge rec={match.recommendation} size="lg" />
+                            <div style={{ marginTop: isMobile ? 8 : 14 }}>
+                                <RecommendationBadge rec={match.recommendation} size={isMobile ? 'sm' : 'lg'} />
                             </div>
                         )}
                     </div>
-                    {/* Action + job-status cluster, stacked on the right */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0, maxWidth: 340 }}>
-                    {/* Action buttons */}
-                    <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+                    {/* Action cluster — desktop only (right column) */}
+                    {!isMobile && (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0, maxWidth: 340 }}>
+                        {/* Action buttons */}
+                        <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+                            <button style={{
+                                padding: '10px 20px', borderRadius: 8,
+                                border: '1.5px solid #e5e7eb', background: 'white',
+                                fontSize: '0.875rem', fontWeight: 600, color: '#374151',
+                                cursor: 'pointer', fontFamily: "'Manrope', sans-serif",
+                            }}>Save</button>
+                            {job.source_url && (
+                                <Link href={job.source_url} target="_blank" style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '10px 22px', borderRadius: 8,
+                                    background: '#135bec', color: 'white',
+                                    fontSize: '0.875rem', fontWeight: 700, textDecoration: 'none',
+                                    boxShadow: '0 2px 8px rgba(19,91,236,0.3)',
+                                    transition: 'all 0.15s ease',
+                                }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#0f4cc7'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = '#135bec'; e.currentTarget.style.transform = 'translateY(0)' }}
+                                >
+                                    Apply Now
+                                </Link>
+                            )}
+                        </div>
+                        {/* Crowdsourced status check */}
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                if (!match.job_id) return
+                                await reportJobStatus(match.job_id, 'closed')
+                                onReported?.(match.job_id)
+                            }}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                marginTop: 12, padding: 0, border: 'none', background: 'none',
+                                color: '#94A3B8', fontSize: '0.78rem', fontWeight: 500,
+                                cursor: 'pointer', fontFamily: "'Manrope', sans-serif", transition: 'color 0.15s ease',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#135bec' }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#94A3B8' }}
+                        >
+                            <span aria-hidden style={{ fontSize: '0.85rem', lineHeight: 1 }}>⚑</span>
+                            <span style={{ textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>
+                                No longer accepting applications? Tell us
+                            </span>
+                        </button>
+                        <div style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 9,
+                            marginTop: 0, padding: '11px 14px', borderRadius: 10, width: '100%',
+                            background: '#fef2f2', border: '1px solid #fecaca',
+                        }}>
+                            <span aria-hidden style={{ fontSize: '0.95rem', lineHeight: 1.3, flexShrink: 0 }}>⚠️</span>
+                            <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b91c1c', margin: 0, lineHeight: 1.45, textAlign: 'left' }}>
+                                Click <strong>Apply</strong> to see if the job is open or closed before creating a resume for this company.
+                            </p>
+                        </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Mobile action buttons — below the title row, clear chat bubble */}
+                {isMobile && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingRight: 64 }}>
                         <button style={{
-                            padding: '10px 20px', borderRadius: 8,
+                            flex: 1, padding: '9px 12px', borderRadius: 8,
                             border: '1.5px solid #e5e7eb', background: 'white',
                             fontSize: '0.875rem', fontWeight: 600, color: '#374151',
                             cursor: 'pointer', fontFamily: "'Manrope', sans-serif",
                         }}>Save</button>
-                        {job.source_url && (
+                        {job.source_url ? (
                             <Link href={job.source_url} target="_blank" style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 6,
-                                padding: '10px 22px', borderRadius: 8,
+                                flex: 2, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                padding: '9px 16px', borderRadius: 8,
                                 background: '#135bec', color: 'white',
                                 fontSize: '0.875rem', fontWeight: 700, textDecoration: 'none',
                                 boxShadow: '0 2px 8px rgba(19,91,236,0.3)',
-                                transition: 'all 0.15s ease',
-                            }}
-                                onMouseEnter={e => { e.currentTarget.style.background = '#0f4cc7'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                                onMouseLeave={e => { e.currentTarget.style.background = '#135bec'; e.currentTarget.style.transform = 'translateY(0)' }}
-                            >
+                            }}>
                                 Apply Now
                             </Link>
+                        ) : (
+                            <div style={{ flex: 2 }} />
                         )}
                     </div>
-                    {/* Crowdsourced status check — quiet link, helps the next user. */}
-                    <button
-                        type="button"
-                        onClick={async () => {
-                            if (!match.job_id) return
-                            await reportJobStatus(match.job_id, 'closed')
-                            onReported?.(match.job_id)
-                        }}
-                        title="Tell us if this listing is no longer accepting applications — we'll hide it for other job seekers"
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            marginTop: 12, padding: 0, border: 'none', background: 'none',
-                            color: '#94A3B8', fontSize: '0.78rem', fontWeight: 500,
-                            cursor: 'pointer', fontFamily: "'Manrope', sans-serif", transition: 'color 0.15s ease',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#135bec' }}
-                        onMouseLeave={e => { e.currentTarget.style.color = '#94A3B8' }}
-                    >
-                        <span aria-hidden style={{ fontSize: '0.85rem', lineHeight: 1 }}>⚑</span>
-                        <span style={{ textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>
-                            No longer accepting applications? Tell us
-                        </span>
-                    </button>
-                    {/* Spend-check: warn users to verify the listing is live BEFORE the
-                     * expensive research/optimize steps, so a dead job doesn't waste them. */}
-                    <div style={{
-                        display: 'flex', alignItems: 'flex-start', gap: 9,
-                        marginTop: 0, padding: '11px 14px', borderRadius: 10, width: '100%',
-                        background: '#fef2f2', border: '1px solid #fecaca',
-                    }}>
-                        <span aria-hidden style={{ fontSize: '0.95rem', lineHeight: 1.3, flexShrink: 0 }}>⚠️</span>
-                        <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b91c1c', margin: 0, lineHeight: 1.45, textAlign: 'left' }}>
-                            Click <strong>Apply</strong> to see if the job is open or closed before creating a resume for this company.
-                        </p>
-                    </div>
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* ── BODY ── */}
-            <div style={{ padding: '28px 36px' }}>
+            <div style={{ padding: isMobile ? '14px 16px' : '28px 36px' }}>
 
                 {/* Score + Skills row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.8fr', gap: 16, marginBottom: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1.8fr', gap: 16, marginBottom: 20 }}>
 
                     {/* Score card */}
                     <div style={{
@@ -887,8 +919,9 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                     <div style={{ marginBottom: 28 }}>
                         <div style={{
                             background: 'linear-gradient(135deg, #1d4ed8 0%, #135bec 50%, #2563eb 100%)',
-                            borderRadius: 14, padding: '18px 24px',
-                            display: 'flex', alignItems: 'center', gap: 16,
+                            borderRadius: 14, padding: isMobile ? '14px 16px' : '18px 24px',
+                            display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 12 : 16,
+                            flexWrap: isMobile ? 'wrap' : 'nowrap',
                             boxShadow: '0 4px 16px rgba(19,91,236,0.3)',
                         }}>
                             <div style={{
