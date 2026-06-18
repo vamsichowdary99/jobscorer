@@ -111,6 +111,15 @@ export default function DashboardHomePage() {
     const [tipIdx, setTipIdx] = useState(0)
     const [nudgeDismissed, setNudgeDismissed] = useState(false)
     const [greeting, setGreeting] = useState('Hello')
+    const [isMobile, setIsMobile] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
+
     // Randomize the tip and compute time-aware greeting only on the client to
     // avoid SSR hydration mismatch (random + clock-hour differ between renders).
     useEffect(() => {
@@ -205,10 +214,10 @@ export default function DashboardHomePage() {
     return (
         <div style={S.page} className="rs-page">
             {/* ── GREETING BAR ── */}
-            <div style={S.greetingBar} className="rs-greeting-bar rs-fade-in">
+            <div style={{ ...S.greetingBar, ...(isMobile ? { padding: '16px 14px', gap: 12 } : {}) }} className="rs-greeting-bar rs-fade-in">
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={S.eyebrow}>DASHBOARD</div>
-                    <h1 style={S.greetingHeadline}>
+                    <h1 style={{ ...S.greetingHeadline, ...(isMobile ? { fontSize: 20 } : {}) }}>
                         {greeting}, {displayName} <span style={{ display: 'inline-block', transform: 'rotate(-8deg)' }}>👋</span>
                     </h1>
                     <p style={S.greetingSub}>
@@ -291,13 +300,13 @@ export default function DashboardHomePage() {
             )}
 
             {/* ── BODY GRID ── */}
-            <div style={S.bodyGrid} className="rs-body-grid">
+            <div style={{ ...S.bodyGrid, ...(isMobile ? { gap: 16 } : {}) }} className="rs-body-grid">
 
                 {/* ─── MAIN COLUMN ─── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24, minWidth: 0 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 24, minWidth: 0 }}>
 
                     {/* TOP MATCHES */}
-                    <div style={S.card}>
+                    <div style={{ ...S.card, ...(isMobile ? { padding: 14 } : {}) }}>
                         <div style={S.cardHeader}>
                             <div style={S.cardTitle}>🎯 Top Matches Today</div>
                             {stats && stats.totalMatches > 0 && (

@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Suspense } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import PendingResearchToaster from './PendingResearchToaster'
 import UpgradeToast from './billing/UpgradeToast'
 
@@ -21,20 +21,31 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
     const pathname = usePathname()
     const isFullBleed = FULL_BLEED_PAGES.includes(pathname)
 
+    const [isMobile, setIsMobile] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
+
+    const sidePad = isFullBleed ? 0 : isMobile ? 16 : 40
+
     return (
         <main
             className={isFullBleed ? '' : 'dashboard-padded'}
             style={{
                 minHeight: '100vh',
                 paddingTop: 64,
-                paddingRight: isFullBleed ? 0 : 40,
+                paddingRight: sidePad,
                 paddingBottom: isFullBleed ? 0 : 40,
-                paddingLeft: isFullBleed ? 0 : 40,
+                paddingLeft: sidePad,
                 // `auto` here creates a sticky containing block that breaks
                 // position:sticky on descendants (e.g., Settings left nav).
                 // `visible` lets the page/window be the scroller, which sticky
                 // can correctly use as its scroll reference.
-                overflowY: isFullBleed ? 'hidden' : 'visible',
+                overflowY: isFullBleed && !isMobile ? 'hidden' : 'visible',
                 display: 'flex',
                 flexDirection: 'column',
                 background: 'var(--color-bg)',
