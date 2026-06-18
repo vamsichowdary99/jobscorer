@@ -1616,6 +1616,16 @@ export default function SearchPage() {
         }
     }
 
+    const [isMobile, setIsMobile] = useState(false)
+    const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
+
     return (
         <div style={{
             display: 'flex', flexDirection: 'column',
@@ -1944,7 +1954,7 @@ export default function SearchPage() {
 
                 {/* Left Panel: Job List */}
                 <div style={{
-                    width: '32%', minWidth: 260, maxWidth: 400,
+                    width: isMobile ? '100%' : '32%', minWidth: isMobile ? 0 : 260, maxWidth: isMobile ? '100%' : 400,
                     background: '#fff',
                     borderRadius: 10,
                     border: '1px solid #E2E8F0',
@@ -1998,23 +2008,53 @@ export default function SearchPage() {
                                 key={job.id}
                                 job={job}
                                 selected={selected?.id === job.id}
-                                onClick={() => setSelected(job)}
+                                onClick={() => { setSelected(job); if (isMobile) setMobileSheetOpen(true) }}
                             />
                         ))
                     )}
                 </div>
 
-                {/* Right Panel: Job Detail */}
-                <div style={{
-                    flex: '1 1 0', minWidth: 0,
-                    overflowY: 'auto', overflowX: 'hidden',
-                    height: '100%',
-                    background: '#fff',
-                    borderRadius: 10,
-                    border: '1px solid #E2E8F0',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-                }}>
-                    {selected ? (
+                {/* Right Panel: Job Detail — hidden on mobile */}
+                {!isMobile && (
+                    <div style={{
+                        flex: '1 1 0', minWidth: 0,
+                        overflowY: 'auto', overflowX: 'hidden',
+                        height: '100%',
+                        background: '#fff',
+                        borderRadius: 10,
+                        border: '1px solid #E2E8F0',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                    }}>
+                        {selected ? (
+                            <JobDetailPanel
+                                key={selected.id}
+                                job={selected}
+                                scoreState={singleScores[selected.id]}
+                                onScore={handleScoreSingleJob}
+                                hasResume={!!getPrimaryResumeId()}
+                                onReported={(jobId) => {
+                                    setReportedClosed(prev => new Set(prev).add(jobId))
+                                    setSelected(visibleResults.find(j => j.id !== jobId) ?? null)
+                                }}
+                            />
+                        ) : (
+                            <EmptyDetail />
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* ── Mobile Bottom Sheet: Job Detail ── */}
+            {isMobile && mobileSheetOpen && selected && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 50 }}>
+                    <div onClick={() => setMobileSheetOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#fff', borderRadius: '20px 20px 0 0', maxHeight: '88vh', overflowY: 'auto', paddingBottom: 32 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px 0' }}>
+                            <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e5e7eb', margin: '0 auto' }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 0' }}>
+                            <button onClick={() => setMobileSheetOpen(false)} style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>Close</button>
+                        </div>
                         <JobDetailPanel
                             key={selected.id}
                             job={selected}
@@ -2024,13 +2064,12 @@ export default function SearchPage() {
                             onReported={(jobId) => {
                                 setReportedClosed(prev => new Set(prev).add(jobId))
                                 setSelected(visibleResults.find(j => j.id !== jobId) ?? null)
+                                setMobileSheetOpen(false)
                             }}
                         />
-                    ) : (
-                        <EmptyDetail />
-                    )}
+                    </div>
                 </div>
-            </div>
+            )}
 
             <style>{`
                 @keyframes spin { to { transform: rotate(360deg); } }

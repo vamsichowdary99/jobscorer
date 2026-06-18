@@ -278,6 +278,22 @@ h4 {
   }
 }
 
+/* ── Mobile / Desktop nav visibility ───────────────────────── */
+/* desktop-nav-wrapper: visible at ≥768px, hidden on mobile.    */
+/* mobile-nav-wrapper:  visible at ≤767px, hidden on desktop.   */
+/* No !important needed — these are the sole display authority. */
+.desktop-nav-wrapper { display: block; }
+.mobile-nav-wrapper  { display: none;  }
+
+@media (max-width: 767px) {
+  .desktop-nav-wrapper { display: none; }
+  .mobile-nav-wrapper  { display: block; }
+}
+
+/* ── Mobile drawer / overlay global resets ─────────────────── */
+/* Drawer & overlay use position:fixed so they need no extra CSS */
+/* here — all styling lives in MobileNavbar.tsx inline styles.   */
+
 /* ── Phase 8 QueueStatusBanner spinner ────────────────────── */
 @keyframes qsb-spin { to { transform: rotate(360deg); } }
 .qsb-spin { animation: qsb-spin 1s linear infinite; }

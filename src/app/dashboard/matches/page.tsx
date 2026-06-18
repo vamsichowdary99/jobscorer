@@ -1731,6 +1731,16 @@ export default function MatchesPage() {
         { key: 'low',    label: 'Low',    count: lowFit },
     ]
 
+    const [isMobile, setIsMobile] = useState(false)
+    const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
+
     return (
         <>
             <style>{`
@@ -1774,10 +1784,10 @@ export default function MatchesPage() {
 
                 {/* ════════ LEFT PANEL ════════ */}
                 <div style={{
-                    width: 360,
+                    width: isMobile ? '100%' : 360,
                     flexShrink: 0,
                     background: '#f9fafb',
-                    borderRight: '1px solid #e5e7eb',
+                    borderRight: isMobile ? 'none' : '1px solid #e5e7eb',
                     display: 'flex',
                     flexDirection: 'column',
                 }}>
@@ -1907,7 +1917,7 @@ export default function MatchesPage() {
                                     <JobCard
                                         match={match}
                                         selected={selected?.id === match.id}
-                                        onClick={() => setSelected(match)}
+                                        onClick={() => { setSelected(match); if (isMobile) setMobileSheetOpen(true) }}
                                         idx={i}
                                     />
                                 </div>
@@ -1917,8 +1927,8 @@ export default function MatchesPage() {
                     </div>
                 </div>
 
-                {/* ════════ RIGHT PANEL ════════ */}
-                <div className="right-scroll" style={{
+                {/* ════════ RIGHT PANEL ════════ — hidden on mobile */}
+                {!isMobile && <div className="right-scroll" style={{
                     flex: 1,
                     background: '#f7f8fa',
                     overflowY: 'auto',
@@ -1971,9 +1981,33 @@ export default function MatchesPage() {
                             }}
                         />
                     )}
-                </div>
+                </div>}
 
             </div>
+
+            {/* ── Mobile Bottom Sheet: Match Detail ── */}
+            {isMobile && mobileSheetOpen && selected && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 50 }}>
+                    <div onClick={() => setMobileSheetOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#f7f8fa', borderRadius: '20px 20px 0 0', maxHeight: '90vh', overflowY: 'auto', paddingBottom: 32 }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 20px 0' }}>
+                            <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e5e7eb' }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 0' }}>
+                            <button onClick={() => setMobileSheetOpen(false)} style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>Close</button>
+                        </div>
+                        <JobDetail
+                            key={selected.id}
+                            match={selected}
+                            onReported={(jobId) => {
+                                setReportedClosed(prev => new Set(prev).add(jobId))
+                                setSelected(filtered.find(m => m.job_id !== jobId) ?? null)
+                                setMobileSheetOpen(false)
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
         </>
     )
 }

@@ -921,6 +921,15 @@ export default function UploadPage() {
     const allCerts    = preview ? [...preview.certs, ...savedCerts.filter(sc => !preview.certs.some(pc => pc.name === sc.name))] : savedCerts
     const allProjects = preview ? [...preview.projects, ...savedProjects.filter(sp => !preview.projects.some(pp => pp.name === sp.name))] : savedProjects
 
+    const [isMobile, setIsMobile] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
+
     return (
         <div style={S.root}>
 
@@ -939,10 +948,39 @@ export default function UploadPage() {
                 )}
             </AnimatePresence>
 
-            <div style={S.body}>
+            <div style={{ ...S.body, ...(isMobile ? { flexDirection: 'column' } : {}) }}>
+
+                {/* ── Mobile Resume Tab Strip ──────────────────────────── */}
+                {isMobile && (
+                    <div style={{ padding: '10px 14px', background: '#fff', borderBottom: '1px solid #e5e7eb', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as React.CSSProperties['WebkitOverflowScrolling'], display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button
+                            onClick={() => { setViewMode('upload'); setFile(null); setUploadError('') }}
+                            disabled={atLimit}
+                            style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 20, background: viewMode === 'upload' ? '#1d4ed8' : '#f3f4f6', color: viewMode === 'upload' ? '#fff' : '#374151', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: atLimit ? 0.5 : 1, whiteSpace: 'nowrap' }}
+                        >
+                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
+                            Upload
+                        </button>
+                        {resumes.map(r => {
+                            const active = viewMode === 'view' && selectedResume?.id === r.id
+                            const rv = parse(r)
+                            const name = rv?.name && rv.name !== 'Unknown' ? rv.name : (r.original_filename || 'Unnamed')
+                            const shortName = name.length > 18 ? name.substring(0, 18) + '…' : name
+                            return (
+                                <button
+                                    key={r.id}
+                                    onClick={() => switchResume(r)}
+                                    style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 20, background: active ? '#dbeafe' : '#f3f4f6', color: active ? '#1d4ed8' : '#374151', border: `1.5px solid ${active ? '#bfdbfe' : 'transparent'}`, fontSize: 13, fontWeight: active ? 600 : 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                >
+                                    {shortName}
+                                </button>
+                            )
+                        })}
+                    </div>
+                )}
 
                 {/* ── Sidebar ─────────────────────────────────────────── */}
-                <aside style={S.sidebar}>
+                <aside style={{ ...S.sidebar, ...(isMobile ? { display: 'none' } : {}) }}>
                     <div style={S.sidebarHead}>
                         <h2 style={S.sidebarTitle}>My Resumes</h2>
                         <button onClick={() => { setViewMode('upload'); setFile(null); setUploadError('') }} disabled={atLimit} style={{ ...S.uploadBtn, opacity: atLimit ? 0.4 : 1 }}>
@@ -1003,8 +1041,8 @@ export default function UploadPage() {
 
                 {/* ── Main ────────────────────────────────────────────── */}
                 <main style={S.main}>
-                    <div style={S.scroll}>
-                        <div style={S.inner}>
+                    <div style={{ ...S.scroll, ...(isMobile ? { padding: '16px 16px 100px' } : {}) }}>
+                        <div style={{ ...S.inner, ...(isMobile ? { maxWidth: '100%' } : {}) }}>
 
                             {viewMode === 'upload' ? (
                                 /* Upload form */
