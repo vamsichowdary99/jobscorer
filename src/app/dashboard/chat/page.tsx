@@ -1903,9 +1903,10 @@ export default function AIChatPage() {
             {isMobile ? (
                 <div style={{
                     position: 'fixed', left: 0, top: 64, bottom: 0, zIndex: 199,
-                    width: 300,
+                    width: 300, overflow: 'hidden',
                     transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
                     transition: 'transform 0.25s cubic-bezier(.4,0,.2,1)',
+                    pointerEvents: sidebarOpen ? 'auto' : 'none',
                 }}>
                     <Sidebar
                         history={history}
