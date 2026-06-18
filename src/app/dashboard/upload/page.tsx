@@ -1046,7 +1046,7 @@ export default function UploadPage() {
 
                             {viewMode === 'upload' ? (
                                 /* Upload form */
-                                <div style={{ maxWidth: 460, margin: '36px auto', background: '#fff', borderRadius: 16, padding: 36, boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
+                                <div style={{ maxWidth: 460, margin: isMobile ? '16px 0' : '36px auto', background: '#fff', borderRadius: 16, padding: isMobile ? 20 : 36, boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
                                     <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>Upload your resume</h2>
                                     <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 24px', lineHeight: '1.6' }}>AI extracts your skills, experience, and education to find your best job matches.</p>
                                     <div onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => document.getElementById('rs-file')?.click()} style={{ border: `2px dashed ${dragging ? '#1d4ed8' : '#d1d5db'}`, borderRadius: 12, padding: '40px 20px', textAlign: 'center', cursor: 'pointer', background: dragging ? '#eff6ff' : '#fafafa', transition: 'all 0.2s' }}>
@@ -1084,9 +1084,9 @@ export default function UploadPage() {
                                     )}
 
                                     {/* Hero card */}
-                                    <section style={S.hero}>
+                                    <section style={{ ...S.hero, ...(isMobile ? { padding: '16px 14px' } : {}) }}>
                                         <div>
-                                            <h1 style={S.heroName}>{preview.name}</h1>
+                                            <h1 style={{ ...S.heroName, ...(isMobile ? { fontSize: 20 } : {}) }}>{preview.name}</h1>
                                             {preview.role && <p style={S.heroRole}>{preview.role}</p>}
                                             {(preview.email || preview.location) && <p style={S.heroContact}>{[preview.email, preview.location].filter(Boolean).join(' · ')}</p>}
                                             <div style={S.statRow}>
@@ -1097,18 +1097,18 @@ export default function UploadPage() {
                                                     { v: pad(allCerts.length),            l: 'Certs' },
                                                     { v: pad(savedAchievs.length),        l: 'Achievements' },
                                                 ].map(s => (
-                                                    <div key={s.l} style={S.stat}>
-                                                        <span style={S.statNum}>{s.v}</span>
+                                                    <div key={s.l} style={{ ...S.stat, ...(isMobile ? { minWidth: 50, padding: '8px 6px' } : {}) }}>
+                                                        <span style={{ ...S.statNum, ...(isMobile ? { fontSize: 14 } : {}) }}>{s.v}</span>
                                                         <span style={S.statLabel}>{s.l}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
-                                        <div style={{ paddingRight: 20, flexShrink: 0 }}>
-                                            <div style={ring(pct)}>
-                                                <div style={S.ringInner} />
+                                        <div style={{ paddingRight: isMobile ? 0 : 20, flexShrink: 0 }}>
+                                            <div style={{ ...ring(pct), ...(isMobile ? { width: 80, height: 80 } : {}) }}>
+                                                <div style={{ ...S.ringInner, ...(isMobile ? { width: 60, height: 60 } : {}) }} />
                                                 <div style={S.ringText}>
-                                                    <span style={S.ringNum}>{sc}</span>
+                                                    <span style={{ ...S.ringNum, ...(isMobile ? { fontSize: 18 } : {}) }}>{sc}</span>
                                                     <span style={S.ringLabel}>JobScorer</span>
                                                 </div>
                                             </div>
@@ -1116,10 +1116,10 @@ export default function UploadPage() {
                                     </section>
 
                                     {/* Main Grid */}
-                                    <div style={S.grid}>
+                                    <div style={{ ...S.grid, ...(isMobile ? { gridTemplateColumns: '1fr' } : {}) }}>
 
                                         {/* Experience — 2 cols */}
-                                        <div style={{ ...S.card, gridColumn: 'span 2' }}>
+                                        <div style={{ ...S.card, gridColumn: isMobile ? 'span 1' : 'span 2' }}>
                                             <div style={SECTION_HEAD}>
                                                 <h2 style={S.cardTitle}>Experience</h2>
                                                 <MorphingPopover
@@ -1621,7 +1621,7 @@ export default function UploadPage() {
                                         </div>
 
                                         {/* Links / Portfolio */}
-                                        <div style={{ ...S.purpleCard, gridColumn: 'span 2' }}>
+                                        <div style={{ ...S.purpleCard, gridColumn: isMobile ? 'span 1' : 'span 2' }}>
                                             <h2 style={S.cardTitle}>Links & Portfolio</h2>
                                             {hasAnyLink ? (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
@@ -1970,13 +1970,13 @@ export default function UploadPage() {
                     </div>
 
                     {/* Bottom Action Bar */}
-                    <div style={S.bar}>
-                        <div style={S.barInfo}>
+                    <div style={{ ...S.bar, ...(isMobile ? { padding: '10px 14px' } : {}) }}>
+                        <div style={{ ...S.barInfo, ...(isMobile ? { fontSize: 11 } : {}) }}>
                             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
                             {lastSaved ? <><span>Last saved</span><strong style={{ color: '#111827', marginLeft: 3 }}>{Math.max(1, Math.floor((Date.now() - lastSaved.getTime()) / 60000))} min ago</strong></> : <span>No unsaved changes</span>}
                         </div>
-                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                            <button onClick={() => { setAddingSection(null); setEditingIndex(null); setCertEntries([EMPTY_CERT]); setProjectEntries([EMPTY_PROJECT]); setAchievEntries([EMPTY_ACHIEV]); setLinkEntry(EMPTY_LINKS); setWorkEntries([EMPTY_WORK]); setEduEntries([EMPTY_EDU]) }} style={S.discardBtn}>Discard Changes</button>
+                        <div style={{ display: 'flex', gap: isMobile ? 7 : 10, alignItems: 'center' }}>
+                            {!isMobile && <button onClick={() => { setAddingSection(null); setEditingIndex(null); setCertEntries([EMPTY_CERT]); setProjectEntries([EMPTY_PROJECT]); setAchievEntries([EMPTY_ACHIEV]); setLinkEntry(EMPTY_LINKS); setWorkEntries([EMPTY_WORK]); setEduEntries([EMPTY_EDU]) }} style={S.discardBtn}>Discard Changes</button>}
                             <button onClick={() => {
                                 if (addingSection === 'work_experience') saveWork()
                                 else if (addingSection === 'education')  saveEducation()
@@ -1985,8 +1985,8 @@ export default function UploadPage() {
                                 else if (addingSection === 'projects')   saveProjects()
                                 else if (addingSection === 'achievements') saveAchievementsItems()
                                 else if (addingSection === 'links')      handleSaveSection('links', linkEntry)
-                            }} style={S.saveBtn}>Save Changes</button>
-                            <button onClick={() => router.push('/dashboard/matches')} style={S.matchBtn}>
+                            }} style={{ ...S.saveBtn, ...(isMobile ? { padding: '8px 14px', fontSize: 12 } : {}) }}>Save Changes</button>
+                            <button onClick={() => router.push('/dashboard/matches')} style={{ ...S.matchBtn, ...(isMobile ? { padding: '8px 12px', fontSize: 12 } : {}) }}>
                                 Find Best Matches
                                 <svg width="13" height="13" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" fillRule="evenodd" /></svg>
                             </button>
