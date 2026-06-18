@@ -1123,6 +1123,8 @@ function CompanyIntelPage() {
     const [researchLoading, setResearchLoading] = useState(false)
     const [quickIntel, setQuickIntel] = useState<QuickIntel | null>(null)
     const [mounted, setMounted] = useState(false)
+    const [isMobile, setIsMobile] = useState(false)
+    const [historySheetOpen, setHistorySheetOpen] = useState(false)
 
     /* ── Resume selector state ── */
     const [resumes, setResumes] = useState<Resume[]>([])
@@ -1133,6 +1135,15 @@ function CompanyIntelPage() {
     // Tracks job ids we've already refreshed the sidebar for after a research
     // landed, so the refresh fires at most once per job (no refetch loop).
     const refreshedHistoryFor = useRef<Set<string>>(new Set())
+
+    /* ── Mobile detection ── */
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const h = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', h)
+        return () => mq.removeEventListener('change', h)
+    }, [])
 
     /* ── Load resumes + counts + pick default resume ── */
     useEffect(() => {
@@ -1517,14 +1528,34 @@ function CompanyIntelPage() {
                     .ci-bento { grid-template-columns: 1fr 1fr; }
                     .ci-span3 { grid-column: span 2; }
                 }
-                @media (max-width: 768px) {
+                @media (max-width: 767px) {
                     .ci-shell { flex-direction: column; height: auto; overflow: visible; }
                     .ci-right { overflow: visible; }
+                    .ci-content { padding: 14px 14px 80px !important; }
                     .ci-bento { grid-template-columns: 1fr; }
                     .ci-span2, .ci-span3 { grid-column: span 1; }
-                    .ci-jobs-panel { width: 100% !important; height: auto !important; max-height: 45vh !important; position: static !important; top: auto !important; border-right: none !important; border-bottom: 1px solid #e8edf2 !important; }
+                    .ci-jobs-panel { display: none !important; }
                     .ci-req-grid { grid-template-columns: 1fr !important; }
                     .ci-skills-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
+                    /* mobile chips bar */
+                    .ci-chips-scroll { display: flex; align-items: center; gap: 7px; overflow-x: auto; scrollbar-width: none; padding: 9px 12px 9px 14px; flex: 1; min-width: 0; }
+                    .ci-chips-scroll::-webkit-scrollbar { display: none; }
+                    .ci-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; border: 1.5px solid #e2e8f0; background: #fff; cursor: pointer; white-space: nowrap; flex-shrink: 0; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+                    .ci-chip.active { border-color: #2563eb; background: #eff6ff; }
+                    .ci-chip-name { font-size: 11.5px; font-weight: 700; color: #0f172a; }
+                    .ci-chip.active .ci-chip-name { color: #2563eb; }
+                    /* mobile search zone */
+                    .ci-search-zone { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 11px 14px; flex-shrink: 0; }
+                    .ci-res-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; border: 1.5px solid rgba(37,99,235,0.25); background: #eff6ff; font-size: 11.5px; font-weight: 600; color: #2563eb; cursor: pointer; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+                    .ci-see-all-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px; border: 1.5px solid rgba(37,99,235,0.2); background: #eff6ff; font-size: 11px; font-weight: 700; color: #2563eb; cursor: pointer; white-space: nowrap; flex-shrink: 0; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+                    /* bottom sheet */
+                    .ci-sheet-ov { position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,0.5); backdrop-filter: blur(3px); }
+                    .ci-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-radius: 22px 22px 0 0; box-shadow: 0 -20px 60px rgba(0,0,0,0.2); z-index: 55; max-height: 80vh; display: flex; flex-direction: column; }
+                    .ci-sheet-handle { width: 36px; height: 4px; border-radius: 99px; background: #cbd5e1; margin: 11px auto 0; flex-shrink: 0; }
+                    .ci-sheet-list { flex: 1; overflow-y: auto; padding: 8px 14px 24px; scrollbar-width: none; }
+                    .ci-sheet-list::-webkit-scrollbar { display: none; }
+                    .ci-sheet-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; cursor: pointer; border: none; background: none; width: 100%; text-align: left; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+                    .ci-sheet-item:hover, .ci-sheet-item.active { background: #eff6ff; }
                 }
                 @keyframes rsDropIn {
                     from { opacity: 0; transform: translateY(-4px) scale(0.99); }
@@ -1670,8 +1701,107 @@ function CompanyIntelPage() {
                 }
             `}</style>
 
+            {/* ── History bottom sheet (mobile) ── */}
+            {isMobile && historySheetOpen && (
+                <>
+                    <div className="ci-sheet-ov" onClick={() => setHistorySheetOpen(false)} />
+                    <div className="ci-sheet">
+                        <div className="ci-sheet-handle" />
+                        <div style={{ padding: '13px 16px 11px', borderBottom: '1px solid #e2e8f0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
+                                <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>Research History</div>
+                                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}>{matches.length} {matches.length === 1 ? 'company' : 'companies'} researched</div>
+                            </div>
+                            <button onClick={() => setHistorySheetOpen(false)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div className="ci-sheet-list">
+                            {matches.map(m => {
+                                const sc = m.relevance_score
+                                const color = sc >= 70 ? '#059669' : sc >= 50 ? '#d97706' : '#dc2626'
+                                const r = 14, circ = 2 * Math.PI * r
+                                const offset = circ * (1 - sc / 100)
+                                const isActive = m.job_id === selectedJobId
+                                return (
+                                    <button key={m.id} className={`ci-sheet-item${isActive ? ' active' : ''}`} onClick={() => { handleSelectJob(m); setHistorySheetOpen(false) }}>
+                                        <div style={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}>
+                                            <svg width="36" height="36" viewBox="0 0 36 36">
+                                                <circle cx="18" cy="18" r={r} fill="none" stroke="#e2e8f0" strokeWidth="3"/>
+                                                <circle cx="18" cy="18" r={r} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} transform="rotate(-90 18 18)"/>
+                                            </svg>
+                                            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 800, color }}>{sc}</span>
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: isActive ? '#2563eb' : '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.job?.company || 'Company'}</div>
+                                            <div style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>{m.job?.title || 'Job'}</div>
+                                            {m.job?.location && <div style={{ fontSize: 10.5, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                                                {m.job.location}
+                                            </div>}
+                                        </div>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </>
+            )}
+
             <div className={`ci-shell${mounted ? ' ready' : ''}`}>
-                {/* ═══ LEFT: Jobs Panel ═══ */}
+                {/* ═══ MOBILE: chips bar + resume selector (replaces JobsPanel) ═══ */}
+                {isMobile && (
+                    <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                        {/* Resume selector row */}
+                        <div className="ci-search-zone">
+                            <ResumeSelector
+                                resumes={resumes}
+                                selectedResumeId={selectedResumeId}
+                                onSelect={setSelectedResumeId}
+                                researchCountByResume={researchCounts}
+                                primaryResumeId={primaryResumeId}
+                                loading={resumesLoading}
+                            />
+                        </div>
+                        {/* Horizontal chips bar */}
+                        {matches.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', borderTop: '1px solid #f1f5f9' }}>
+                                <div className="ci-chips-scroll">
+                                    {matches.map(m => {
+                                        const sc = m.relevance_score
+                                        const color = sc >= 70 ? '#059669' : sc >= 50 ? '#d97706' : '#dc2626'
+                                        const r = 8, circ = 2 * Math.PI * r
+                                        const offset = circ * (1 - sc / 100)
+                                        const isActive = m.job_id === selectedJobId
+                                        return (
+                                            <button key={m.id} className={`ci-chip${isActive ? ' active' : ''}`} onClick={() => handleSelectJob(m)}>
+                                                <div style={{ position: 'relative', width: 22, height: 22, flexShrink: 0 }}>
+                                                    <svg width="22" height="22" viewBox="0 0 22 22">
+                                                        <circle cx="11" cy="11" r={r} fill="none" stroke="#e2e8f0" strokeWidth="2.5"/>
+                                                        <circle cx="11" cy="11" r={r} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset} transform="rotate(-90 11 11)"/>
+                                                    </svg>
+                                                    <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 7, fontWeight: 800, color }}>{sc}</span>
+                                                </div>
+                                                <span className="ci-chip-name">{m.job?.company || 'Company'}</span>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                                {matches.length > 3 && (
+                                    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 12px', borderLeft: '1px solid #e2e8f0', alignSelf: 'stretch', background: '#fff', minWidth: 80 }}>
+                                        <button className="ci-see-all-btn" onClick={() => setHistorySheetOpen(true)}>
+                                            See all <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, minWidth: 20, height: 18, padding: '0 5px', borderRadius: 99, background: '#2563eb', color: '#fff', lineHeight: 1, marginLeft: 2 }}>{matches.length}</span>
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ═══ LEFT: Jobs Panel (desktop only) ═══ */}
+                {!isMobile && (
                 <JobsPanel
                     matches={matches}
                     loading={matchesLoading}
@@ -1688,6 +1818,7 @@ function CompanyIntelPage() {
                         />
                     }
                 />
+                )}
 
                 {/* ═══ RIGHT: Company Intel ═══ */}
                 <div className="ci-right">
@@ -1807,8 +1938,8 @@ function CompanyIntelPage() {
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <h1 style={{
                                                 fontFamily: "'Plus Jakarta Sans', sans-serif",
-                                                fontSize: 30, fontWeight: 700, color: '#0f172a',
-                                                letterSpacing: '-0.03em', lineHeight: 1.1, margin: '0 0 4px',
+                                                fontSize: isMobile ? 24 : 30, fontWeight: 800, color: '#0f172a',
+                                                letterSpacing: '-0.03em', lineHeight: 1.15, margin: '0 0 10px',
                                             }}>{research.company_name}</h1>
                                             {research.industry && (
                                                 <p style={{ fontSize: 15, color: '#64748b', lineHeight: 1.4, margin: '0 0 10px' }}>
@@ -1841,10 +1972,10 @@ function CompanyIntelPage() {
                                                 </div>
                                             )}
                                             {companySnapshot.length > 0 && (
-                                                <ul style={{ listStyle: 'none', margin: '0 0 12px', padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                                <ul style={{ listStyle: 'none', margin: '0 0 13px', padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
                                                     {companySnapshot.map((fact: string, i: number) => (
-                                                        <li key={i} style={{ display: 'flex', gap: 10, fontSize: 16, color: '#374151', lineHeight: 1.55 }}>
-                                                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#135bec', flexShrink: 0, marginTop: 9 }} />
+                                                        <li key={i} style={{ display: 'flex', gap: 8, fontSize: isMobile ? 13 : 16, color: '#374151', lineHeight: 1.6 }}>
+                                                            <span style={{ marginTop: isMobile ? 6 : 9, flexShrink: 0 }}>•</span>
                                                             {fact}
                                                         </li>
                                                     ))}
@@ -1852,10 +1983,10 @@ function CompanyIntelPage() {
                                             )}
                                             {(research.mission || quickIntel?.fit_reason) && (
                                                 <blockquote style={{
-                                                    margin: 0, padding: '9px 14px',
-                                                    background: '#eff6ff', borderLeft: '3px solid #135bec',
+                                                    margin: '0 0 14px', padding: '11px 13px',
+                                                    background: '#f8faff', borderLeft: '3px solid #135bec',
                                                     borderRadius: '0 8px 8px 0',
-                                                    fontSize: 15, color: '#64748b', fontStyle: 'italic', lineHeight: 1.65,
+                                                    fontSize: isMobile ? 12.5 : 15, color: '#374151', fontStyle: 'italic', lineHeight: 1.65,
                                                 }}>
                                                     {research.mission || quickIntel?.fit_reason}
                                                 </blockquote>
@@ -1906,27 +2037,26 @@ function CompanyIntelPage() {
                                     {/* Button row */}
                                     <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
                                         <button onClick={handleGenerateResume} type="button" style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 7,
-                                            padding: '10px 20px', borderRadius: 10,
-                                            fontFamily: V3_K_SANS, fontSize: 15, fontWeight: 600, cursor: 'pointer',
+                                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                            padding: isMobile ? '11px 14px' : '10px 20px', borderRadius: 9,
+                                            fontFamily: V3_K_SANS, fontSize: isMobile ? 13 : 15, fontWeight: 700, cursor: 'pointer',
                                             transition: 'all 0.15s', border: 'none',
                                             background: '#135bec', color: '#fff',
                                             boxShadow: '0 4px 14px rgba(19,91,236,0.28)',
                                         }}>
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z"/></svg>
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>
                                             Generate Resume
                                         </button>
                                         <Link href="/dashboard/matches" style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 7,
-                                            padding: '10px 20px', borderRadius: 10,
-                                            fontFamily: V3_K_SANS, fontSize: 15, fontWeight: 600,
+                                            flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                            padding: isMobile ? '11px 14px' : '10px 20px', borderRadius: 9,
+                                            fontFamily: V3_K_SANS, fontSize: isMobile ? 13 : 15, fontWeight: 700,
                                             transition: 'all 0.15s',
-                                            background: '#fff', color: '#135bec',
-                                            border: '1.5px solid #135bec',
+                                            background: '#fff', color: '#0f172a',
+                                            border: '1.5px solid #e2e8f0',
                                             textDecoration: 'none', whiteSpace: 'nowrap',
                                         }}>
-                                            All Matches
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                                            All Matches →
                                         </Link>
                                     </div>
                                 </div>

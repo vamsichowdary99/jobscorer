@@ -206,7 +206,7 @@ const S: Record<string, React.CSSProperties> = {
     bannerBtn:   { background: '#fff', border: '1px solid #bfdbfe', color: '#1d4ed8', borderRadius: 9999, padding: '3px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
     hero:        { borderRadius: 16, padding: '28px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg,#e0f2fe 0%,#fff 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 18, position: 'relative', overflow: 'hidden' },
     heroName:    { fontSize: 32, fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.02em' },
-    heroRole:    { fontSize: 11, fontWeight: 600, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '5px 0 0' },
+    heroRole:    { fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.09em', margin: '5px 0 3px' },
     heroContact: { fontSize: 13, color: '#6b7280', margin: '3px 0 0' },
     statRow:     { display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' },
     stat:        { background: '#fff', borderRadius: 10, padding: '12px 18px', textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', minWidth: 80 },
@@ -1130,15 +1130,15 @@ export default function UploadPage() {
                                             {(preview.email || preview.location) && <p style={S.heroContact}>{[preview.email, preview.location].filter(Boolean).join(' · ')}</p>}
                                             <div style={S.statRow}>
                                                 {[
-                                                    { v: pad(preview.years),              l: 'Experience' },
+                                                    { v: pad(preview.years),              l: isMobile ? 'Exp Yrs' : 'Experience' },
                                                     { v: pad(preview.skills.length),      l: 'Skills' },
                                                     { v: pad(allProjects.length),         l: 'Projects' },
                                                     { v: pad(allCerts.length),            l: 'Certs' },
                                                     { v: pad(savedAchievs.length),        l: 'Achievements' },
                                                 ].map(s => (
-                                                    <div key={s.l} style={{ ...S.stat, ...(isMobile ? { minWidth: 0, flex: '1 1 0', padding: '8px 6px' } : {}) }}>
+                                                    <div key={s.l} style={{ ...S.stat, ...(isMobile ? { minWidth: 0, flex: '1 1 0', padding: '8px 5px' } : {}) }}>
                                                         <span style={{ ...S.statNum, ...(isMobile ? { fontSize: 14 } : {}) }}>{s.v}</span>
-                                                        <span style={S.statLabel}>{s.l}</span>
+                                                        <span style={{ ...S.statLabel, ...(isMobile ? { fontSize: 8 } : {}) }}>{s.l}</span>
                                                     </div>
                                                 ))}
                                             </div>
