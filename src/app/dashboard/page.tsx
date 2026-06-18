@@ -300,7 +300,7 @@ export default function DashboardHomePage() {
             )}
 
             {/* ── BODY GRID ── */}
-            <div style={{ ...S.bodyGrid, ...(isMobile ? { gap: 16 } : {}) }} className="rs-body-grid">
+            <div style={{ ...S.bodyGrid, ...(isMobile ? { gap: 16, gridTemplateColumns: '1fr' } : {}) }} className="rs-body-grid">
 
                 {/* ─── MAIN COLUMN ─── */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 14 : 24, minWidth: 0 }}>
@@ -351,7 +351,7 @@ export default function DashboardHomePage() {
                     </div>
 
                     {/* SKILL GAPS + QUICK ACTIONS */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="rs-inner-grid">
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }} className="rs-inner-grid">
                         <div style={S.card}>
                             <div style={S.cardHeader}>
                                 <div style={S.cardTitle}>📊 Skill Gaps</div>
@@ -394,8 +394,8 @@ export default function DashboardHomePage() {
                     </div>
 
                     {/* COMPANIES IN PIPELINE + TAILORED RESUMES */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }} className="rs-inner-grid">
-                        <div style={S.card} className="rs-compact-card">
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }} className="rs-inner-grid">
+                        <div style={{ ...S.card, padding: isMobile ? 14 : 22 }} className="rs-compact-card">
                             <div style={S.cardHeader} className="rs-card-head">
                                 <div style={S.cardTitle}>🏢 Companies in Pipeline</div>
                                 {pipeline.length > 0 && (
@@ -418,7 +418,7 @@ export default function DashboardHomePage() {
                                     ))}
                         </div>
 
-                        <div style={S.card} className="rs-compact-card">
+                        <div style={{ ...S.card, padding: isMobile ? 14 : 22 }} className="rs-compact-card">
                             <div style={S.cardHeader} className="rs-card-head">
                                 <div style={S.cardTitle}>📄 Tailored Resumes</div>
                                 {resumes.length > 0 && (
@@ -446,7 +446,7 @@ export default function DashboardHomePage() {
                 </div>
 
                 {/* ─── SIDEBAR ─── */}
-                <div style={S.sidebar} className="rs-sidebar">
+                <div style={{ ...S.sidebar, ...(isMobile ? { position: 'static' } : {}) }} className="rs-sidebar">
                     <div style={S.card}>
                         <div style={S.cardHeader}>
                             <div style={S.cardTitle}>📜 Recent Activity</div>

@@ -673,12 +673,14 @@ function JobDetailPanel({
     onScore,
     hasResume,
     onReported,
+    isMobile,
 }: {
     job: Job
     scoreState: SingleScoreState | undefined
     onScore: (jobId: string) => void
     hasResume: boolean
     onReported?: (jobId: string) => void
+    isMobile?: boolean
 }) {
     const descLines = (job.description ?? '').split('\n').filter(Boolean)
     const skills = parseSkills(job.required_skills)
@@ -703,56 +705,60 @@ function JobDetailPanel({
                     }}>
                         {job.source}
                     </span>
-                    {/* Score + Apply buttons — top right */}
-                    <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                        <ScoreThisJobButton
-                            jobId={job.id}
-                            scoreState={scoreState}
-                            onScore={onScore}
-                            hasResume={hasResume}
-                        />
-                        {job.source_url && (
-                            <Link
-                                href={job.source_url}
-                                target="_blank"
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '8px 18px', borderRadius: 8,
-                                    background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
-                                    color: '#fff', fontSize: '0.8125rem', fontWeight: 600,
-                                    textDecoration: 'none', whiteSpace: 'nowrap',
-                                    boxShadow: '0 2px 10px rgba(37,99,235,0.25)',
-                                    transition: 'opacity 0.15s',
-                                }}
-                                onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.opacity = '0.88'}
-                                onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.opacity = '1'}
-                            >
-                                Apply Now <ExternalLink size={13} />
-                            </Link>
-                        )}
-                    </div>
-                    {/* Crowdsourced status check — quiet link, helps the next user. */}
-                    <button
-                        type="button"
-                        onClick={async () => {
-                            await reportJobStatus(job.id, 'closed')
-                            onReported?.(job.id)
-                        }}
-                        title="Tell us if this listing is no longer accepting applications — we'll hide it for other job seekers"
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            marginTop: 10, padding: 0, border: 'none', background: 'none',
-                            color: '#94A3B8', fontSize: '0.75rem', fontWeight: 500,
-                            cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s ease',
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#135bec' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8' }}
-                    >
-                        <span aria-hidden style={{ fontSize: '0.8rem', lineHeight: 1 }}>⚑</span>
-                        <span style={{ textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>
-                            No longer accepting applications? Tell us
-                        </span>
-                    </button>
+                    {/* Score + Apply buttons — desktop top-right only */}
+                    {!isMobile && (
+                        <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            <ScoreThisJobButton
+                                jobId={job.id}
+                                scoreState={scoreState}
+                                onScore={onScore}
+                                hasResume={hasResume}
+                            />
+                            {job.source_url && (
+                                <Link
+                                    href={job.source_url}
+                                    target="_blank"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '8px 18px', borderRadius: 8,
+                                        background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                                        color: '#fff', fontSize: '0.8125rem', fontWeight: 600,
+                                        textDecoration: 'none', whiteSpace: 'nowrap',
+                                        boxShadow: '0 2px 10px rgba(37,99,235,0.25)',
+                                        transition: 'opacity 0.15s',
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.opacity = '0.88'}
+                                    onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.opacity = '1'}
+                                >
+                                    Apply Now <ExternalLink size={13} />
+                                </Link>
+                            )}
+                        </div>
+                    )}
+                    {/* "No longer accepting" — desktop only (inline with header row) */}
+                    {!isMobile && (
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                await reportJobStatus(job.id, 'closed')
+                                onReported?.(job.id)
+                            }}
+                            title="Tell us if this listing is no longer accepting applications — we'll hide it for other job seekers"
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                marginTop: 10, padding: 0, border: 'none', background: 'none',
+                                color: '#94A3B8', fontSize: '0.75rem', fontWeight: 500,
+                                cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s ease',
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#135bec' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8' }}
+                        >
+                            <span aria-hidden style={{ fontSize: '0.8rem', lineHeight: 1 }}>⚑</span>
+                            <span style={{ textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>
+                                No longer accepting applications? Tell us
+                            </span>
+                        </button>
+                    )}
                 </div>
 
                 {/* Title */}
@@ -802,6 +808,57 @@ function JobDetailPanel({
                         Posted: {formatDate(job.posted_date)}
                     </span>
                 </div>
+
+                {/* Mobile action buttons — own row below meta chips */}
+                {isMobile && (
+                    <>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 14, marginBottom: 6 }}>
+                            <ScoreThisJobButton
+                                jobId={job.id}
+                                scoreState={scoreState}
+                                onScore={onScore}
+                                hasResume={hasResume}
+                            />
+                            {job.source_url && (
+                                <Link
+                                    href={job.source_url}
+                                    target="_blank"
+                                    style={{
+                                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                        padding: '11px 18px', borderRadius: 10,
+                                        background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                                        color: '#fff', fontSize: '0.875rem', fontWeight: 700,
+                                        textDecoration: 'none',
+                                        boxShadow: '0 2px 10px rgba(37,99,235,0.25)',
+                                    }}
+                                >
+                                    Apply Now <ExternalLink size={13} />
+                                </Link>
+                            )}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                await reportJobStatus(job.id, 'closed')
+                                onReported?.(job.id)
+                            }}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                padding: 0, border: 'none', background: 'none',
+                                color: '#94A3B8', fontSize: '0.75rem', fontWeight: 500,
+                                cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s ease',
+                                marginBottom: 4,
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#135bec' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8' }}
+                        >
+                            <span aria-hidden style={{ fontSize: '0.8rem', lineHeight: 1 }}>⚑</span>
+                            <span style={{ textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>
+                                No longer accepting? Tell us
+                            </span>
+                        </button>
+                    </>
+                )}
             </div>
 
             {/* Divider */}
@@ -1630,7 +1687,8 @@ export default function SearchPage() {
         <div style={{
             display: 'flex', flexDirection: 'column',
             height: 'calc(100vh - 64px)',
-            overflow: 'hidden',
+            overflowX: 'hidden',
+            overflowY: isMobile ? 'auto' : 'hidden',
             background: '#F1F5F9',
             fontFamily: "'Plus Jakarta Sans', sans-serif",
         }}>
@@ -1642,6 +1700,7 @@ export default function SearchPage() {
                 padding: isMobile ? '10px 14px' : '12px 24px',
                 flexShrink: 0,
                 display: 'flex', flexDirection: 'column', gap: 8,
+                position: 'relative', zIndex: 10,
             }}>
                 {/* ── Mobile: stacked inputs + 2×2 action grid ── */}
                 {isMobile ? (
@@ -1649,7 +1708,7 @@ export default function SearchPage() {
                         {/* Stacked inputs card */}
                         <div style={{
                             border: '1px solid #E2E8F0', borderRadius: 14,
-                            overflow: 'hidden', background: '#fff',
+                            background: '#fff', position: 'relative',
                             boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                         }}>
                             <AutocompleteInput
@@ -2046,7 +2105,7 @@ export default function SearchPage() {
             </div>
 
             {/* ── Two-Panel Body ── */}
-            <div style={{ display: 'flex', flex: '1 1 0', minHeight: 0, overflow: 'hidden', padding: '12px 16px', gap: 12 }}>
+            <div style={{ display: 'flex', flex: isMobile ? 'none' : '1 1 0', minHeight: isMobile ? undefined : 0, overflow: isMobile ? 'visible' : 'hidden', padding: '12px', gap: 12 }}>
 
                 {/* Left Panel: Job List */}
                 <div style={{
@@ -2056,8 +2115,8 @@ export default function SearchPage() {
                     border: '1px solid #E2E8F0',
                     boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                     display: 'flex', flexDirection: 'column',
-                    overflowY: 'auto', overflowX: 'hidden',
-                    height: '100%',
+                    overflowY: isMobile ? 'visible' : 'auto', overflowX: 'hidden',
+                    height: isMobile ? 'auto' : '100%',
                 }}>
                     {/* Count header */}
                     {hasSearched && results.length > 0 && (
@@ -2157,6 +2216,7 @@ export default function SearchPage() {
                             scoreState={singleScores[selected.id]}
                             onScore={handleScoreSingleJob}
                             hasResume={!!getPrimaryResumeId()}
+                            isMobile={true}
                             onReported={(jobId) => {
                                 setReportedClosed(prev => new Set(prev).add(jobId))
                                 setSelected(visibleResults.find(j => j.id !== jobId) ?? null)

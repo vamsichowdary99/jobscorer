@@ -1809,22 +1809,23 @@ export default function UploadPage() {
                                                     </div>
 
                                                     {/* Main content */}
-                                                    <div style={{ padding: isMobile ? '12px 14px' : '24px 28px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: isMobile ? 12 : 28, alignItems: 'start' }}>
-                                                        {/* Score ring */}
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, justifySelf: 'start' }}>
-                                                            <div style={{ position: 'relative', width: 112, height: 112 }}>
-                                                                <svg width="112" height="112" viewBox="0 0 112 112" style={{ transform: 'rotate(-90deg)' }}>
-                                                                    <circle cx="56" cy="56" r="46" fill="transparent" stroke="#f1f5f9" strokeWidth="7"/>
-                                                                    <circle cx="56" cy="56" r="46" fill="transparent"
+                                                    <div style={{ padding: isMobile ? '12px 14px' : '24px 28px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: isMobile ? 10 : 28, alignItems: 'start' }}>
+                                                        {/* Score ring — 80px on mobile, 112px on desktop */}
+                                                        {(() => { const rs = isMobile ? 80 : 112; const rc = rs/2; const rr = isMobile ? 33 : 46; const rsw = isMobile ? 5 : 7; const circ = 2 * Math.PI * rr; return (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, justifySelf: 'start' }}>
+                                                            <div style={{ position: 'relative', width: rs, height: rs }}>
+                                                                <svg width={rs} height={rs} viewBox={`0 0 ${rs} ${rs}`} style={{ transform: 'rotate(-90deg)' }}>
+                                                                    <circle cx={rc} cy={rc} r={rr} fill="transparent" stroke="#f1f5f9" strokeWidth={rsw}/>
+                                                                    <circle cx={rc} cy={rc} r={rr} fill="transparent"
                                                                         stroke={resumeAnalysis.market_readiness_score >= 7 ? '#10b981' : resumeAnalysis.market_readiness_score >= 5 ? '#f59e0b' : '#ef4444'}
-                                                                        strokeWidth="7" strokeLinecap="round"
+                                                                        strokeWidth={rsw} strokeLinecap="round"
                                                                         className="score-ring-fill"
-                                                                        strokeDasharray={2 * Math.PI * 46}
-                                                                        strokeDashoffset={2 * Math.PI * 46 * (1 - resumeAnalysis.market_readiness_score / 10)}
+                                                                        strokeDasharray={circ}
+                                                                        strokeDashoffset={circ * (1 - resumeAnalysis.market_readiness_score / 10)}
                                                                     />
                                                                 </svg>
                                                                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                                                                    <span style={{ fontFamily: 'monospace', fontSize: '1.6rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
+                                                                    <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '1.2rem' : '1.6rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
                                                                         {resumeAnalysis.market_readiness_score.toFixed(1)}
                                                                     </span>
                                                                     <span style={{ fontFamily: 'monospace', fontSize: '0.5rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>/10</span>
@@ -1834,6 +1835,7 @@ export default function UploadPage() {
                                                                 {resumeAnalysis.market_readiness_score >= 7 ? 'Strong' : resumeAnalysis.market_readiness_score >= 5 ? 'Developing' : 'Early Stage'}
                                                             </span>
                                                         </div>
+                                                        ); })()}
 
                                                         {/* Right side content */}
                                                         <div>
@@ -1844,33 +1846,33 @@ export default function UploadPage() {
 
                                                             {/* Two column: asset + action */}
                                                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-                                                                <div className="assess-asset-card" style={{ padding: '12px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', transition: 'border-color 0.15s' }}>
+                                                                <div className="assess-asset-card" style={{ padding: isMobile ? '8px 10px' : '12px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', transition: 'border-color 0.15s' }}>
                                                                     <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.13em', marginBottom: 6 }}>Your Biggest Asset</div>
-                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.775rem', color: '#15803d', margin: 0, lineHeight: 1.55 }}>{resumeAnalysis.biggest_asset}</p>
+                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.72rem' : '0.775rem', color: '#15803d', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.biggest_asset}</p>
                                                                 </div>
-                                                                <div className="assess-action-card" style={{ padding: '12px 14px', borderRadius: 8, background: '#eff6ff', border: '1px solid #bfdbfe', transition: 'border-color 0.15s' }}>
+                                                                <div className="assess-action-card" style={{ padding: isMobile ? '8px 10px' : '12px 14px', borderRadius: 8, background: '#eff6ff', border: '1px solid #bfdbfe', transition: 'border-color 0.15s' }}>
                                                                     <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.13em', marginBottom: 6 }}>Top Action</div>
-                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.775rem', color: '#1e40af', margin: 0, lineHeight: 1.55 }}>{resumeAnalysis.top_action}</p>
+                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.72rem' : '0.775rem', color: '#1e40af', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.top_action}</p>
                                                                 </div>
                                                             </div>
 
                                                             {/* Strengths + Gaps */}
-                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 8 : 12 }}>
                                                                 <div>
                                                                     <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>Strengths</div>
                                                                     {(resumeAnalysis.strengths || []).map((s, i) => (
-                                                                        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
-                                                                            <span style={{ color: '#10b981', flexShrink: 0, marginTop: 2, fontSize: 10 }}>✓</span>
-                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.75rem', color: '#475569', lineHeight: 1.5 }}>{s}</span>
+                                                                        <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'flex-start', marginBottom: 5 }}>
+                                                                            <span style={{ color: '#10b981', flexShrink: 0, marginTop: 2, fontSize: 9 }}>✓</span>
+                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.68rem' : '0.75rem', color: '#475569', lineHeight: 1.45 }}>{s}</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
                                                                 <div>
                                                                     <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>Gaps to Close</div>
                                                                     {(resumeAnalysis.gaps || []).map((g, i) => (
-                                                                        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
-                                                                            <span style={{ color: '#ef4444', flexShrink: 0, marginTop: 2, fontSize: 10 }}>○</span>
-                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.75rem', color: '#475569', lineHeight: 1.5 }}>{g}</span>
+                                                                        <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'flex-start', marginBottom: 5 }}>
+                                                                            <span style={{ color: '#ef4444', flexShrink: 0, marginTop: 2, fontSize: 9 }}>○</span>
+                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.68rem' : '0.75rem', color: '#475569', lineHeight: 1.45 }}>{g}</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
