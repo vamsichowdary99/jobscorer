@@ -1097,7 +1097,7 @@ export default function UploadPage() {
                                                     { v: pad(allCerts.length),            l: 'Certs' },
                                                     { v: pad(savedAchievs.length),        l: 'Achievements' },
                                                 ].map(s => (
-                                                    <div key={s.l} style={{ ...S.stat, ...(isMobile ? { minWidth: 50, padding: '8px 6px' } : {}) }}>
+                                                    <div key={s.l} style={{ ...S.stat, ...(isMobile ? { minWidth: 0, flex: '1 1 0', padding: '8px 6px' } : {}) }}>
                                                         <span style={{ ...S.statNum, ...(isMobile ? { fontSize: 14 } : {}) }}>{s.v}</span>
                                                         <span style={S.statLabel}>{s.l}</span>
                                                     </div>
@@ -1975,7 +1975,7 @@ export default function UploadPage() {
                             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
                             {lastSaved ? <><span>Last saved</span><strong style={{ color: '#111827', marginLeft: 3 }}>{Math.max(1, Math.floor((Date.now() - lastSaved.getTime()) / 60000))} min ago</strong></> : <span>No unsaved changes</span>}
                         </div>
-                        <div style={{ display: 'flex', gap: isMobile ? 7 : 10, alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: isMobile ? 7 : 10, alignItems: 'center', ...(isMobile ? { paddingRight: 60 } : {}) }}>
                             {!isMobile && <button onClick={() => { setAddingSection(null); setEditingIndex(null); setCertEntries([EMPTY_CERT]); setProjectEntries([EMPTY_PROJECT]); setAchievEntries([EMPTY_ACHIEV]); setLinkEntry(EMPTY_LINKS); setWorkEntries([EMPTY_WORK]); setEduEntries([EMPTY_EDU]) }} style={S.discardBtn}>Discard Changes</button>}
                             <button onClick={() => {
                                 if (addingSection === 'work_experience') saveWork()
