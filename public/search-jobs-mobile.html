@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobScorer · Search Jobs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --p:#135bec;--pl:#e8f0fe;--ph:#0f4cc7;
+      --bg:#f8fafc;--sur:#fff;--alt:#f1f5f9;
+      --tx:#0f172a;--ts:#64748b;--tt:#94a3b8;
+      --bd:#e2e8f0;--bdf:#f1f5f9;
+      --gr:#10b981;--grb:#ecfdf5;--grbd:#a7f3d0;
+      --sans:'Plus Jakarta Sans',system-ui,sans-serif;
+      --mono:'JetBrains Mono',monospace;
+    }
+    body{background:#0f172a;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:32px 16px 48px;font-family:var(--sans);overflow-x:hidden;}
+
+    /* Phone */
+    .phone{width:390px;height:844px;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 40px 80px -20px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.1);display:flex;flex-direction:column;background:var(--bg);}
+
+    /* Chrome */
+    .chrome{background:#f1f3f4;border-bottom:1px solid #dadce0;padding:9px 10px;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+    .cbtn{width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;color:#5f6368;cursor:pointer;flex-shrink:0;}
+    .curl{flex:1;background:#fff;border:1px solid #dadce0;border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:5px;font-size:11.5px;color:#202124;font-family:system-ui,sans-serif;}
+
+    /* State bar */
+    .sbar{background:#0f172a;padding:8px 12px;display:flex;gap:5px;flex-shrink:0;}
+    .sbtn{flex:1;padding:5px 3px;border-radius:7px;border:none;font-family:var(--sans);font-size:9.5px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.45);}
+    .sbtn.on{background:var(--p);color:#fff;}
+
+    /* Scroll */
+    .scroll{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .scroll::-webkit-scrollbar{display:none;}
+
+    /* Navbar */
+    .nb{position:sticky;top:0;z-index:40;height:54px;background:#fff;border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 14px;gap:10px;}
+    .nlogo{display:flex;align-items:center;gap:7px;flex:1;text-decoration:none;}
+    .nmark{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#135bec,#2563eb);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px -1px rgba(19,91,236,0.33);flex-shrink:0;}
+    .nwm{font-weight:800;font-size:15px;letter-spacing:-0.025em;color:var(--tx);}
+    .nwm b{color:var(--p);font-weight:800;}
+    .nav{width:28px;height:28px;border-radius:50%;background:var(--p);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .hbg{width:34px;height:34px;border-radius:9px;background:none;border:none;display:flex;align-items:center;justify-content:center;color:var(--ts);cursor:pointer;flex-shrink:0;}
+
+    /* Drawer overlay — now absolute inside .phone */
+    .ov{position:absolute;inset:0;z-index:400;background:rgba(15,23,42,0.5);backdrop-filter:blur(2px);display:none;}
+    .ov.open{display:block;}
+
+    /* Drawer */
+    .dr{position:absolute;top:0;right:-100%;z-index:410;width:75%;max-width:280px;height:100%;background:#fff;box-shadow:-8px 0 40px rgba(15,23,42,0.2);display:flex;flex-direction:column;transition:right .28s cubic-bezier(.32,.72,.2,1);}
+    .dr.open{right:0;}
+    .drh{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bd);}
+    .drc{width:30px;height:30px;border-radius:9px;background:var(--alt);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--ts);}
+    .drl{flex:1;overflow-y:auto;padding:8px 10px;}
+    .dl{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;text-decoration:none;font-size:13.5px;font-weight:500;color:var(--ts);margin-bottom:1px;}
+    .dl:hover,.dl.on{background:var(--pl);color:var(--p);font-weight:600;}
+    .di{width:28px;height:28px;border-radius:8px;background:var(--alt);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .dl.on .di{background:rgba(19,91,236,0.12);}
+    .drf{padding:12px 14px 28px;border-top:1px solid var(--bd);}
+    .dru{display:flex;align-items:center;gap:10px;padding:10px;background:var(--alt);border-radius:10px;margin-bottom:8px;}
+    .dso{width:100%;padding:9px;border-radius:10px;border:none;background:none;font-family:var(--sans);font-size:13px;font-weight:600;color:#dc2626;cursor:pointer;}
+
+    /* Sheet overlay — absolute inside .phone */
+    .sheet-ov{position:absolute;inset:0;z-index:300;background:rgba(15,23,42,0.55);backdrop-filter:blur(3px);display:none;}
+    .sheet-ov.open{display:block;}
+
+    /* Sheet */
+    .sheet{position:absolute;bottom:0;left:0;right:0;width:100%;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -20px 60px rgba(0,0,0,0.25);z-index:310;display:none;flex-direction:column;max-height:88%;}
+    .sheet.open{display:flex;}
+    .sheet-handle{width:36px;height:4px;border-radius:99px;background:var(--bd);margin:12px auto 0;flex-shrink:0;}
+    .sheet-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px 18px 32px;}
+    .sheet-scroll::-webkit-scrollbar{display:none;}
+
+    /* ── SEARCH BAR ── */
+    .search-zone{background:#fff;border-bottom:1px solid var(--bd);padding:12px 14px;position:relative;}
+    /* Note: no overflow:hidden on pill so autocomplete dropdown is not clipped */
+    .search-pill{display:flex;flex-direction:column;border:1px solid var(--bd);border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:10px;}
+    .search-row{display:flex;align-items:center;padding:10px 13px;gap:8px;border-bottom:1px solid var(--bdf);}
+    .search-row:last-of-type{border-bottom:none;}
+    .search-row svg{flex-shrink:0;color:var(--tt);}
+    .search-inp{flex:1;border:none;outline:none;font-size:14px;color:var(--tx);font-family:var(--sans);background:transparent;min-width:0;}
+    .search-inp::placeholder{color:var(--tt);}
+    .search-actions{display:flex;gap:7px;align-items:center;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
+    .search-actions::-webkit-scrollbar{display:none;}
+    .btn-search{padding:9px 18px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);white-space:nowrap;box-shadow:0 4px 12px -3px rgba(37,99,235,0.35);flex-shrink:0;}
+    .btn-best{display:flex;align-items:center;gap:5px;padding:8px 13px;border-radius:9px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);white-space:nowrap;box-shadow:0 3px 10px -2px rgba(109,40,217,0.35);flex-shrink:0;}
+    .btn-deep{display:flex;align-items:center;gap:5px;padding:8px 13px;border-radius:9px;background:#1e293b;color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);white-space:nowrap;flex-shrink:0;}
+    .btn-paste{display:flex;align-items:center;gap:5px;padding:8px 12px;border-radius:9px;background:#fff;color:var(--ts);border:1px solid var(--bd);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);white-space:nowrap;flex-shrink:0;}
+
+    /* Autocomplete dropdown */
+    .ac-dropdown{position:absolute;left:14px;right:14px;background:#fff;border:1.5px solid rgba(19,91,236,0.18);border-radius:12px;box-shadow:0 8px 28px rgba(15,23,42,0.13);z-index:200;display:none;overflow:hidden;}
+    .ac-item{padding:11px 14px;font-size:13.5px;color:var(--tx);display:flex;align-items:center;justify-content:space-between;cursor:pointer;border-top:1px solid var(--bdf);font-weight:500;gap:8px;user-select:none;}
+    .ac-item:first-child{border-top:none;}
+    .ac-item:active{background:var(--pl);}
+    .ac-item-icon{color:var(--tt);flex-shrink:0;}
+
+    /* Deep quota pill */
+    .quota-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;border-radius:99px;font-size:10.5px;font-weight:600;white-space:nowrap;margin-top:7px;}
+    .quota-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+
+    /* ── FILTER CHIPS ── */
+    .filter-bar{background:#fff;border-bottom:1px solid var(--bd);padding:9px 14px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;}
+    .filter-bar::-webkit-scrollbar{display:none;}
+    .fchip{padding:5px 12px;border-radius:99px;border:1px solid var(--bd);font-size:12px;font-weight:600;color:var(--ts);background:var(--alt);cursor:pointer;white-space:nowrap;flex-shrink:0;}
+    .fchip.on{background:var(--pl);border-color:rgba(19,91,236,0.25);color:var(--p);}
+
+    /* ── RESULTS HEADER ── */
+    .results-hd{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--alt);border-bottom:1px solid var(--bd);}
+    .results-ct{font-size:12px;font-weight:700;color:var(--tx);}
+    .date-filter{font-size:11.5px;font-weight:600;color:var(--p);cursor:pointer;}
+
+    /* ── JOB CARDS ── */
+    .job-card{background:#fff;border-bottom:1px solid var(--bd);padding:13px 14px;cursor:pointer;display:flex;gap:11px;align-items:flex-start;position:relative;}
+    .job-card.selected{background:var(--pl);border-left:3px solid var(--p);}
+    .co-av{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;letter-spacing:-0.02em;flex-shrink:0;}
+    .jbody{flex:1;min-width:0;}
+    .jco{font-size:11.5px;color:var(--ts);font-weight:500;margin-bottom:3px;display:flex;align-items:center;gap:6px;}
+    .jsrc{font-size:9.5px;padding:1px 6px;border-radius:4px;background:var(--alt);color:var(--tt);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}
+    .jtitle{font-size:13.5px;font-weight:700;color:var(--tx);line-height:1.3;margin-bottom:5px;letter-spacing:-0.01em;}
+    .jmeta{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px;}
+    .jloc{font-size:11px;color:var(--ts);display:flex;align-items:center;gap:3px;}
+    .lvbadge{padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;border:1px solid;letter-spacing:0.01em;}
+    .jsal{font-size:11px;color:#059669;font-weight:500;}
+    .jdate{font-size:10.5px;color:var(--tt);position:absolute;top:13px;right:14px;}
+    .leg-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:99px;font-size:9.5px;font-weight:700;}
+
+    /* Score ring (small, on card) */
+    .score-mini{position:relative;width:36px;height:36px;flex-shrink:0;align-self:center;}
+    .score-mini-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:800;}
+
+    /* ── STATUS BANNERS ── */
+    .banner{margin:10px 14px;border-radius:9px;padding:10px 12px;display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;}
+    .banner.blue{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;}
+    .banner.green{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;}
+    .banner.amber{background:#fffbeb;border:1px solid #fde68a;color:#92400e;}
+    .banner.red{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;}
+    .spinner{width:14px;height:14px;border:2px solid #93c5fd;border-top-color:#2563eb;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── EMPTY STATE ── */
+    .empty{padding:40px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;}
+    .empty-icon{width:70px;height:70px;border-radius:20px;background:linear-gradient(135deg,#60a5fa,#2563eb);display:flex;align-items:center;justify-content:center;box-shadow:0 14px 28px -10px rgba(37,99,235,0.5);margin-bottom:18px;}
+    .empty-title{font-size:16px;font-weight:700;color:var(--tx);letter-spacing:-0.02em;margin-bottom:6px;}
+    .empty-sub{font-size:13px;color:var(--ts);line-height:1.6;max-width:260px;margin-bottom:20px;}
+    .ex-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;}
+    .ex-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:99px;background:#fff;border:1px solid var(--bd);font-size:11.5px;color:#475569;font-weight:500;}
+
+    /* ── SEARCHING STATE ── */
+    .searching-state{padding:48px 24px;display:flex;flex-direction:column;align-items:center;text-align:center;}
+    .big-spin{width:52px;height:52px;border:3px solid var(--pl);border-top-color:var(--p);border-radius:50%;animation:spin .9s linear infinite;margin-bottom:16px;}
+
+    /* detail styles */
+    .d-co-row{display:flex;align-items:center;gap:9px;margin-bottom:12px;}
+    .d-src{font-size:9.5px;padding:2px 7px;border-radius:4px;background:var(--alt);color:var(--tt);border:1px solid var(--bd);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
+    .d-title{font-size:18px;font-weight:800;color:var(--tx);letter-spacing:-0.025em;line-height:1.2;margin-bottom:10px;}
+    .d-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;}
+    .d-chip{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:99px;font-size:11.5px;font-weight:500;}
+    .d-chip.loc{background:#dbeafe;border:1px solid #93c5fd;color:#2563eb;}
+    .d-chip.type{background:var(--alt);border:1px solid var(--bd);color:var(--ts);}
+    .d-chip.sal{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;}
+    .d-divider{height:1px;background:var(--bd);margin:12px 0;}
+    .d-section-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--tt);margin-bottom:9px;display:flex;align-items:center;gap:6px;}
+    .skill-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+    .sk{padding:4px 10px;border-radius:6px;background:#eff6ff;color:#2563eb;font-size:11.5px;font-weight:500;border:1px solid #bfdbfe;}
+    .d-desc p{font-size:13px;color:#374151;line-height:1.7;margin-bottom:8px;}
+    .d-desc ul{list-style:none;display:flex;flex-direction:column;gap:6px;}
+    .d-desc li{display:flex;gap:8px;font-size:13px;color:#374151;line-height:1.6;}
+    .d-desc li::before{content:'•';color:#2563eb;font-weight:700;flex-shrink:0;}
+    .d-desc h4{font-size:14px;font-weight:700;color:var(--tx);margin:12px 0 6px;}
+    .d-actions{display:flex;gap:8px;margin-bottom:10px;}
+    .d-score-btn{flex:1;padding:11px 8px;border:1px solid #bfdbfe;border-radius:10px;background:#fff;color:var(--p);font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;}
+    .d-apply-btn{flex:2;padding:11px 8px;border:none;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 14px -4px rgba(37,99,235,0.4);display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;}
+    .d-score-done{flex:1;padding:11px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;justify-content:center;gap:8px;}
+    .score-badge-inner{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:99px;background:rgba(255,255,255,0.22);font-size:12px;font-weight:800;padding:0 6px;}
+    .report-btn{background:none;border:none;cursor:pointer;font-family:var(--sans);font-size:11.5px;color:var(--tt);display:flex;align-items:center;gap:5px;padding:0;margin-top:4px;}
+
+    /* Responsive: fill screen on real mobile */
+    @media (max-width:430px){
+      body{padding:0;background:var(--bg);}
+      .phone{width:100%;height:100dvh;border-radius:0;box-shadow:none;}
+      .chrome{display:none;}
+    }
+  </style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- Chrome bar -->
+  <div class="chrome">
+    <button class="cbtn" style="opacity:.4"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></button>
+    <button class="cbtn" style="opacity:.4"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+    <div class="curl">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#188038" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      <span style="flex:1">jobscorer.vercel.app/dashboard/search</span>
+    </div>
+    <button class="cbtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="5" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="19" r="1.2" fill="currentColor"/></svg></button>
+  </div>
+
+  <!-- State switcher -->
+  <div class="sbar">
+    <button class="sbtn on" id="s-empty"     onclick="setS('empty')">Empty</button>
+    <button class="sbtn"    id="s-searching"  onclick="setS('searching')">Searching…</button>
+    <button class="sbtn"    id="s-results"   onclick="setS('results')">Results (247)</button>
+  </div>
+
+  <!-- ── DRAWER OVERLAY + DRAWER (inside phone, absolute) ── -->
+  <div class="ov" id="ov" onclick="closeD()"></div>
+  <div class="dr" id="dr">
+    <div class="drh">
+      <div style="display:flex;align-items:center;gap:8px;"><div class="nmark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18L9 12L13 15L20 6"/><path d="M15 6L20 6L20 11"/></svg></div><span class="nwm">Job<b>Scorer</b></span></div>
+      <button class="drc" onclick="closeD()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <nav class="drl">
+      <a href="#" class="dl"><div class="di"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>Dashboard</a>
+      <a href="#" class="dl"><div class="di"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>Upload Resume</a>
+      <a href="#" class="dl on"><div class="di"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>Search Jobs</a>
+      <a href="#" class="dl"><div class="di"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>AI Matches</a>
+      <a href="#" class="dl"><div class="di"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>AI Chat</a>
+      <a href="#" class="dl"><div class="di"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v14M21 7v14M9 3h6v4H9z"/></svg></div>Company Intel</a>
+      <a href="#" class="dl"><div class="di"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>Optimize Resume</a>
+      <a href="#" class="dl"><div class="di"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>Resumes</a>
+    </nav>
+    <div class="drf">
+      <div class="dru"><div class="nav" style="width:32px;height:32px;font-size:12px;">R</div><div><div style="font-size:13px;font-weight:600;color:var(--tx)">rahul</div><div style="font-size:11px;color:var(--ts)">rahul@gmail.com</div></div></div>
+      <button class="dso">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- ── JOB DETAIL SHEET (inside phone, absolute) ── -->
+  <div class="sheet-ov" id="sov" onclick="closeJob()"></div>
+  <div class="sheet" id="sjob">
+    <div class="sheet-handle"></div>
+
+    <!-- TCS Detail -->
+    <div class="sheet-scroll" id="jd-tcs">
+      <div class="d-co-row">
+        <div class="co-av" style="background:linear-gradient(135deg,#135bec,#0f4cc7);width:40px;height:40px;border-radius:10px;flex-shrink:0;">T</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:var(--ts);">Tata Consultancy Services</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:2px;"><span class="d-src">linkedin</span></div>
+        </div>
+      </div>
+      <div class="d-title">Junior React Developer</div>
+      <div class="d-chips">
+        <div class="d-chip loc"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Hyderabad, TS</div>
+        <div class="d-chip type"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>Full-time</div>
+        <div class="d-chip sal">🔥 ₹4–6 LPA</div>
+        <span class="lvbadge" style="background:#dbeafe;color:#2563eb;border-color:#93c5fd;padding:5px 10px;">Entry Level</span>
+        <span style="font-size:11px;color:var(--tt);align-self:center;">Posted 2d ago</span>
+      </div>
+      <div class="d-actions">
+        <button class="d-score-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>
+          Score this job
+        </button>
+        <button class="d-apply-btn">
+          Apply Now
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+      </div>
+      <button class="report-btn">⚑ <span style="text-decoration:underline;text-underline-offset:3px;text-decoration-color:#cbd5e1;">No longer accepting? Tell us</span></button>
+
+      <div class="d-divider"></div>
+      <div class="d-section-lbl"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Required Skills</div>
+      <div class="skill-chips">
+        <span class="sk">React</span><span class="sk">JavaScript</span><span class="sk">Node.js</span><span class="sk">REST APIs</span><span class="sk">Git</span><span class="sk">HTML/CSS</span><span class="sk">Redux</span>
+      </div>
+
+      <div class="d-section-lbl"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>Job Description</div>
+      <div class="d-desc">
+        <h4>About the Role</h4>
+        <p>TCS is hiring entry-level React Developers to join our digital engineering teams in Hyderabad. You will work on building scalable frontend applications for global enterprise clients.</p>
+        <h4>Responsibilities</h4>
+        <ul>
+          <li>Build and maintain responsive React.js web applications</li>
+          <li>Integrate RESTful APIs and manage state with Redux</li>
+          <li>Write clean, testable code with Jest/React Testing Library</li>
+          <li>Collaborate with backend teams in agile sprints</li>
+          <li>Participate in code reviews and technical discussions</li>
+        </ul>
+        <h4>Requirements</h4>
+        <ul>
+          <li>B.Tech/BE/MCA in Computer Science or related field</li>
+          <li>0–2 years experience with React.js</li>
+          <li>Strong understanding of JavaScript ES6+</li>
+          <li>Familiarity with Git, REST APIs and Agile methodology</li>
+        </ul>
+      </div>
+      <div class="d-divider"></div>
+      <button class="d-apply-btn" style="width:100%;border-radius:10px;">
+        Apply for this Role
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </button>
+    </div>
+
+    <!-- Infosys Detail -->
+    <div class="sheet-scroll" id="jd-infosys" style="display:none;">
+      <div class="d-co-row">
+        <div class="co-av" style="background:linear-gradient(135deg,#16a34a,#15803d);width:40px;height:40px;border-radius:10px;flex-shrink:0;">I</div>
+        <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--ts);">Infosys</div><span class="d-src">indeed</span></div>
+      </div>
+      <div class="d-title">React Developer — Digital Experience</div>
+      <div class="d-chips"><div class="d-chip loc">Bangalore, KA</div><div class="d-chip type">Full-time</div><div class="d-chip sal">🔥 ₹5–7 LPA</div><span class="lvbadge" style="background:#dbeafe;color:#2563eb;border-color:#93c5fd;padding:5px 10px;">Entry Level</span></div>
+      <div class="d-actions">
+        <button class="d-score-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>Score this job</button>
+        <button class="d-apply-btn">Apply Now <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+      </div>
+      <button class="report-btn">⚑ <span style="text-decoration:underline;text-underline-offset:3px;text-decoration-color:#cbd5e1;">No longer accepting? Tell us</span></button>
+      <div class="d-divider"></div>
+      <div class="d-section-lbl">Required Skills</div>
+      <div class="skill-chips"><span class="sk">React</span><span class="sk">TypeScript</span><span class="sk">Node.js</span><span class="sk">GraphQL</span><span class="sk">CSS Modules</span><span class="sk">Agile</span></div>
+      <div class="d-section-lbl">Job Description</div>
+      <div class="d-desc"><p>Infosys Digital Experience team is looking for fresher React developers to build next-gen portals for BFSI clients. Work with modern React 18, TypeScript and GraphQL.</p><ul><li>Build micro-frontend components in React 18 + TypeScript</li><li>Own feature delivery from design handoff to production</li><li>Write unit + integration tests using React Testing Library</li></ul></div>
+      <div class="d-divider"></div>
+      <button class="d-apply-btn" style="width:100%;border-radius:10px;">Apply for this Role <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+    </div>
+
+    <!-- Wipro Detail -->
+    <div class="sheet-scroll" id="jd-wipro" style="display:none;">
+      <div class="d-co-row">
+        <div class="co-av" style="background:linear-gradient(135deg,#d97706,#c2410c);width:40px;height:40px;border-radius:10px;flex-shrink:0;">W</div>
+        <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--ts);">Wipro Technologies</div><span class="d-src">serpapi</span></div>
+      </div>
+      <div class="d-title">Full Stack Developer (React + Node)</div>
+      <div class="d-chips"><div class="d-chip loc">Pune, MH</div><div class="d-chip type">Full-time</div></div>
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:12px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:11.5px;color:#92400e;font-weight:500;">⚠ Proceed with caution — some signals look unusual. Verify on company's official site.</div>
+      <div class="d-actions">
+        <button class="d-score-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>Score this job</button>
+        <button class="d-apply-btn">Apply Now <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+      </div>
+      <button class="report-btn">⚑ <span style="text-decoration:underline;text-underline-offset:3px;text-decoration-color:#cbd5e1;">No longer accepting? Tell us</span></button>
+      <div class="d-divider"></div>
+      <div class="d-section-lbl">Required Skills</div>
+      <div class="skill-chips"><span class="sk">React</span><span class="sk">Node.js</span><span class="sk">MongoDB</span><span class="sk">Express</span><span class="sk">Docker</span></div>
+      <div class="d-section-lbl">Job Description</div>
+      <div class="d-desc"><p>Full-stack role with Wipro's engineering division. Build end-to-end features using the MERN stack.</p><ul><li>Design and build RESTful APIs using Node.js + Express</li><li>Implement responsive UIs in React with hooks</li><li>Deploy using Docker on AWS EC2</li></ul></div>
+    </div>
+
+    <!-- HCL Detail -->
+    <div class="sheet-scroll" id="jd-hcl" style="display:none;">
+      <div class="d-co-row">
+        <div class="co-av" style="background:linear-gradient(135deg,#7c3aed,#5b21b6);width:40px;height:40px;border-radius:10px;flex-shrink:0;">H</div>
+        <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--ts);">HCL Technologies</div><span class="d-src">jobspy</span></div>
+      </div>
+      <div class="d-title">Associate Software Engineer — Frontend</div>
+      <div class="d-chips"><div class="d-chip loc">Noida, UP</div><div class="d-chip sal">🔥 ₹3.5–5 LPA</div></div>
+      <div class="d-actions">
+        <button class="d-score-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>Score this job</button>
+        <button class="d-apply-btn">Apply Now <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+      </div>
+      <button class="report-btn">⚑ <span style="text-decoration:underline;text-underline-offset:3px;text-decoration-color:#cbd5e1;">No longer accepting? Tell us</span></button>
+      <div class="d-divider"></div>
+      <div class="d-section-lbl">Required Skills</div>
+      <div class="skill-chips"><span class="sk">React</span><span class="sk">JavaScript</span><span class="sk">HTML5</span><span class="sk">SCSS</span></div>
+      <div class="d-section-lbl">Description</div>
+      <div class="d-desc"><p>HCL Technologies is hiring Associate Software Engineers with frontend focus for Noida office. Excellent growth track.</p></div>
+    </div>
+
+    <!-- Accenture Detail -->
+    <div class="sheet-scroll" id="jd-acc" style="display:none;">
+      <div class="d-co-row">
+        <div class="co-av" style="background:linear-gradient(135deg,#0891b2,#155e75);width:40px;height:40px;border-radius:10px;flex-shrink:0;">A</div>
+        <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--ts);">Accenture</div><span class="d-src">linkedin</span></div>
+      </div>
+      <div class="d-title">React JS Developer — Fresher</div>
+      <div class="d-chips"><div class="d-chip loc">Mumbai · Remote</div><div class="d-chip sal">🔥 ₹4–5.5 LPA</div></div>
+      <div class="d-actions">
+        <button class="d-score-btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>Score this job</button>
+        <button class="d-apply-btn">Apply Now <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+      </div>
+      <button class="report-btn">⚑ <span style="text-decoration:underline;text-underline-offset:3px;text-decoration-color:#cbd5e1;">No longer accepting? Tell us</span></button>
+      <div class="d-divider"></div>
+      <div class="d-section-lbl">Required Skills</div>
+      <div class="skill-chips"><span class="sk">React</span><span class="sk">JavaScript</span><span class="sk">TypeScript</span><span class="sk">REST API</span><span class="sk">Figma</span></div>
+      <div class="d-section-lbl">Description</div>
+      <div class="d-desc"><p>Accenture is expanding its digital product studio and looking for fresher React developers. Hybrid role — 3 days Mumbai office, 2 days remote.</p></div>
+    </div>
+  </div>
+
+  <!-- ── PASTE JD SHEET (inside phone, absolute) ── -->
+  <div class="sheet-ov" id="paste-ov" onclick="closePasteJD()"></div>
+  <div class="sheet" id="paste-sheet" style="max-height:92%;">
+    <div class="sheet-handle"></div>
+
+    <!-- PHASE: FORM -->
+    <div id="pp-form" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <div style="padding:14px 18px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:11px;flex-shrink:0;">
+        <div style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#135bec" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:15px;font-weight:700;color:var(--tx);letter-spacing:-0.02em;">Score any job, from anywhere</div>
+          <div style="font-size:11.5px;color:var(--ts);margin-top:1px;">Paste from LinkedIn, Naukri, a referral, or anywhere.</div>
+        </div>
+        <button onclick="closePasteJD()" style="width:28px;height:28px;border-radius:8px;background:var(--alt);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--ts);flex-shrink:0;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:12px;scrollbar-width:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label style="font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.1em;display:flex;align-items:center;gap:5px;margin-bottom:6px;">Company <span style="width:5px;height:5px;border-radius:50%;background:var(--p);display:inline-block;"></span></label>
+            <input id="pjd-co" style="width:100%;padding:9px 11px;border-radius:9px;border:1.5px solid var(--bd);font-size:13.5px;font-family:var(--sans);color:var(--tx);outline:none;box-sizing:border-box;" placeholder="e.g. Stripe" onfocus="this.style.borderColor='#135bec'" onblur="this.style.borderColor='#e2e8f0'">
+          </div>
+          <div>
+            <label style="font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:6px;">Job Title</label>
+            <input id="pjd-title" style="width:100%;padding:9px 11px;border-radius:9px;border:1.5px solid var(--bd);font-size:13.5px;font-family:var(--sans);color:var(--tx);outline:none;box-sizing:border-box;" placeholder="e.g. React Developer" onfocus="this.style.borderColor='#135bec'" onblur="this.style.borderColor='#e2e8f0'">
+          </div>
+        </div>
+        <div>
+          <label style="font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:6px;">Location <span style="font-family:var(--sans);text-transform:none;letter-spacing:0;font-weight:400;color:#cbd5e1;">(optional)</span></label>
+          <input id="pjd-loc" style="width:100%;padding:9px 11px;border-radius:9px;border:1.5px solid var(--bd);font-size:13.5px;font-family:var(--sans);color:var(--tx);outline:none;box-sizing:border-box;" placeholder="e.g. Bengaluru / Remote" onfocus="this.style.borderColor='#135bec'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <label style="font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.1em;display:flex;align-items:center;gap:5px;">Job Description <span style="width:5px;height:5px;border-radius:50%;background:var(--p);display:inline-block;"></span></label>
+            <span id="pjd-count" style="font-size:11px;font-weight:500;color:var(--tt);">0 / 8,000</span>
+          </div>
+          <textarea id="pjd-desc" rows="7" style="width:100%;padding:9px 11px;border-radius:9px;border:1.5px solid var(--bd);font-size:12.5px;font-family:var(--mono);color:var(--tx);outline:none;resize:vertical;min-height:120px;box-sizing:border-box;line-height:1.7;" placeholder="Paste the full job description here…" oninput="document.getElementById('pjd-count').textContent=(this.value.length.toLocaleString())+' / 8,000'" onfocus="this.style.borderColor='#135bec'" onblur="this.style.borderColor='#e2e8f0'"></textarea>
+        </div>
+        <div id="pjd-url-row" style="display:none;">
+          <label style="font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--tt);text-transform:uppercase;letter-spacing:0.1em;display:block;margin-bottom:6px;">Source URL <span style="font-family:var(--sans);text-transform:none;letter-spacing:0;font-weight:400;color:#cbd5e1;">(optional)</span></label>
+          <input id="pjd-url" style="width:100%;padding:9px 11px;border-radius:9px;border:1.5px solid var(--bd);font-size:13px;font-family:var(--sans);color:var(--tx);outline:none;box-sizing:border-box;" placeholder="https://linkedin.com/jobs/view/…" onfocus="this.style.borderColor='#135bec'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <button type="button" id="pjd-url-btn" onclick="document.getElementById('pjd-url-row').style.display='';this.style.display='none';" style="background:none;border:none;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--p);text-align:left;padding:0;display:flex;align-items:center;gap:5px;"><span style="font-size:18px;font-weight:300;line-height:1;">+</span> Add source URL (optional)</button>
+        <div style="background:#eff6ff;border:1px solid #dbeafe;border-radius:10px;padding:11px 13px;display:flex;gap:9px;align-items:flex-start;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#135bec" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><circle cx="12" cy="8" r="0.5" fill="#135bec" stroke="#135bec" stroke-width="1"/></svg>
+          <p style="font-size:12.5px;color:#2563eb;line-height:1.55;margin:0;">We'll run scoring, company research, and resume optimisation — same as any job in our database.</p>
+        </div>
+      </div>
+      <div style="padding:11px 18px 20px;border-top:1px solid var(--bd);display:flex;gap:8px;flex-shrink:0;">
+        <button onclick="closePasteJD()" style="flex:1;padding:11px;border:1px solid var(--bd);border-radius:99px;background:#fff;color:var(--ts);font-size:13.5px;font-weight:600;cursor:pointer;font-family:var(--sans);">Cancel</button>
+        <button onclick="setPastePhase('loading')" style="flex:2;padding:11px;border:none;border-radius:99px;background:linear-gradient(135deg,#3b82f6,#135bec);color:#fff;font-size:13.5px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 14px -3px rgba(19,91,236,0.4);">Analyze Job →</button>
+      </div>
+    </div>
+
+    <!-- PHASE: LOADING -->
+    <div id="pp-loading" style="display:none;padding:20px 20px 28px;flex-direction:column;">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:24px;">
+        <div style="width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#135bec" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1.5"/></svg>
+        </div>
+        <div><div style="font-size:16px;font-weight:700;color:var(--tx);letter-spacing:-0.02em;margin-bottom:3px;">Processing your job…</div><div style="font-size:12.5px;color:var(--ts);line-height:1.5;">Sit tight — this usually takes 10–30 seconds.</div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0;">
+        <div class="ls-step" style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--bdf);">
+          <div class="ls-dot" style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#f8fafc;border:1.5px solid #e2e8f0;transition:all .3s;"><div style="width:8px;height:8px;border-radius:50%;background:#cbd5e1;"></div></div>
+          <span class="ls-lbl" style="font-size:14.5px;color:#94a3b8;font-weight:400;">Saving job to your database</span>
+        </div>
+        <div class="ls-step" style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--bdf);">
+          <div class="ls-dot" style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#f8fafc;border:1.5px solid #e2e8f0;transition:all .3s;"><div style="width:8px;height:8px;border-radius:50%;background:#cbd5e1;"></div></div>
+          <span class="ls-lbl" style="font-size:14.5px;color:#94a3b8;font-weight:400;">Scoring against your resume</span>
+        </div>
+        <div class="ls-step" style="display:flex;align-items:center;gap:14px;padding:14px 0;">
+          <div class="ls-dot" style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:#f8fafc;border:1.5px solid #e2e8f0;transition:all .3s;"><div style="width:8px;height:8px;border-radius:50%;background:#cbd5e1;"></div></div>
+          <span class="ls-lbl" style="font-size:14.5px;color:#94a3b8;font-weight:400;">Researching the company</span>
+        </div>
+      </div>
+      <button onclick="closePasteJD()" style="margin-top:20px;background:none;border:none;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ts);align-self:center;">Cancel</button>
+    </div>
+
+    <!-- PHASE: SUCCESS -->
+    <div id="pp-success" style="display:none;padding:28px 22px 32px;flex-direction:column;align-items:center;text-align:center;gap:18px;">
+      <div style="width:68px;height:68px;border-radius:50%;background:#f0fdf4;border:2px solid #bbf7d0;display:flex;align-items:center;justify-content:center;">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div>
+        <div style="font-size:22px;font-weight:800;color:var(--tx);letter-spacing:-0.03em;margin-bottom:8px;">Job ready!</div>
+        <div style="font-size:13.5px;color:var(--ts);line-height:1.65;">Your job is scored at <strong style="color:var(--p);font-family:var(--mono);font-size:15px;">82/100</strong> and ready to act on.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
+        <button onclick="closePasteJD()" style="width:100%;padding:12px;border-radius:99px;background:var(--pl);color:var(--p);border:1.5px solid rgba(19,91,236,0.2);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans);">View Match Score</button>
+        <button onclick="closePasteJD()" style="width:100%;padding:12px;border-radius:99px;background:linear-gradient(135deg,#3b82f6,#135bec);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 14px -3px rgba(19,91,236,0.4);">Generate Tailored Resume →</button>
+      </div>
+    </div>
+
+    <!-- PHASE: ERROR -->
+    <div id="pp-error" style="display:none;padding:28px 22px 32px;flex-direction:column;align-items:center;text-align:center;gap:18px;">
+      <div style="width:68px;height:68px;border-radius:50%;background:#fef2f2;border:2px solid #fecaca;display:flex;align-items:center;justify-content:center;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </div>
+      <div>
+        <div style="font-size:20px;font-weight:800;color:var(--tx);letter-spacing:-0.025em;margin-bottom:8px;">Something went wrong</div>
+        <div style="font-size:13.5px;color:var(--ts);line-height:1.65;">Could not save the job. Please check your connection and try again.</div>
+      </div>
+      <div style="display:flex;gap:8px;width:100%;">
+        <button onclick="closePasteJD()" style="flex:1;padding:11px;border-radius:99px;background:var(--alt);color:var(--ts);border:none;font-size:13.5px;font-weight:600;cursor:pointer;font-family:var(--sans);">Close</button>
+        <button onclick="setPastePhase('form')" style="flex:1;padding:11px;border-radius:99px;background:linear-gradient(135deg,#3b82f6,#135bec);color:#fff;border:none;font-size:13.5px;font-weight:700;cursor:pointer;font-family:var(--sans);">Try again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MAIN SCROLL ── -->
+  <div class="scroll" id="pg">
+
+    <!-- Navbar -->
+    <nav class="nb">
+      <a href="#" class="nlogo">
+        <div class="nmark"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18L9 12L13 15L20 6"/><path d="M15 6L20 6L20 11"/></svg></div>
+        <span class="nwm">Job<b>Scorer</b></span>
+      </a>
+      <div class="nav">R</div>
+      <button class="hbg" onclick="openD()"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    </nav>
+
+    <!-- ── SEARCH BAR (scrolls with content, NOT sticky) ── -->
+    <div class="search-zone">
+      <!-- 3-row pill: role, location, level -->
+      <div class="search-pill">
+        <div class="search-row">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="search-inp" id="q-role" placeholder="Job title, company, or keyword…" value="React Developer"
+            oninput="showAC('role', this.value)"
+            onfocus="showAC('role', this.value)"
+            onblur="hideAC()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="color:var(--tt);cursor:pointer;" onclick="document.getElementById('q-role').value='';hideAC()"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </div>
+        <div class="search-row">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <input class="search-inp" id="q-loc" placeholder="City or location" value="Hyderabad"
+            oninput="showAC('loc', this.value)"
+            onfocus="showAC('loc', this.value)"
+            onblur="hideAC()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="color:var(--tt);cursor:pointer;" onclick="document.getElementById('q-loc').value='';hideAC()"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </div>
+        <div class="search-row" style="border-bottom:none;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:7px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 7H4M16 3H8M22 11v10a1 1 0 01-1 1H3a1 1 0 01-1-1V11l2-4h16l2 4z"/></svg>
+            <span style="font-size:13.5px;color:var(--ts);">Entry Level</span>
+            <span style="font-size:10.5px;color:var(--tt);">· 0–2 yrs</span>
+          </div>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--tt);"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+      </div>
+
+      <!-- Autocomplete dropdown -->
+      <div id="ac-dropdown" class="ac-dropdown"></div>
+
+      <!-- Action grid: 2×2 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+        <button class="btn-search" onclick="setS('searching')" style="justify-content:center;display:flex;align-items:center;gap:6px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Search DB
+        </button>
+        <button class="btn-best" style="justify-content:center;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>
+          Find Best Jobs
+        </button>
+        <button class="btn-deep" style="justify-content:center;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Deep Search
+        </button>
+        <button class="btn-paste" style="justify-content:center;" onclick="openPasteJD()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+          Paste JD
+        </button>
+      </div>
+
+      <!-- Deep Search quota -->
+      <div class="quota-pill" style="background:#f5f8ff;border:1px solid #dbeafe;color:#475569;">
+        <div class="quota-dot" style="background:var(--p);box-shadow:0 0 0 3px rgba(19,91,236,0.15);"></div>
+        <span><span style="color:var(--p);font-weight:800;">7</span><span style="color:var(--tt);font-weight:600;"> Deep Searches left · resets 1 Jul</span></span>
+      </div>
+    </div>
+
+    <!-- ── STATE: EMPTY ── -->
+    <div id="st-empty">
+      <div class="empty">
+        <div class="empty-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+        </div>
+        <div class="empty-title">Start your job hunt</div>
+        <div class="empty-sub">Search a role + location above to find openings. We'll score every result against your resume.</div>
+        <div class="ex-chips">
+          <span class="ex-chip"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>React Developer</span>
+          <span class="ex-chip"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>Data Analyst</span>
+          <span class="ex-chip"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>DevOps · Bengaluru</span>
+          <span class="ex-chip"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>Full Stack</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STATE: SEARCHING ── -->
+    <div id="st-searching" style="display:none;">
+      <div class="searching-state">
+        <div class="big-spin"></div>
+        <div style="font-size:14px;font-weight:700;color:var(--tx);margin-bottom:5px;">Looking up jobs…</div>
+        <div style="font-size:12.5px;color:var(--ts);">Searching saved jobs for React Developer in Hyderabad</div>
+      </div>
+    </div>
+
+    <!-- ── STATE: RESULTS ── -->
+    <div id="st-results" style="display:none;">
+      <!-- Status banner -->
+      <div class="banner green" style="margin-top:10px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M20 6L9 17l-5-5"/></svg>
+        <span>247 jobs found for React Developer · Hyderabad</span>
+        <button onclick="this.parentElement.style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--tt);margin-left:auto;flex-shrink:0;">×</button>
+      </div>
+
+      <!-- Date filter chips -->
+      <div class="filter-bar">
+        <div class="fchip on">All time</div>
+        <div class="fchip">Today</div>
+        <div class="fchip">Last 3 days</div>
+        <div class="fchip">Last week</div>
+        <div class="fchip">Last month</div>
+      </div>
+
+      <!-- Results header -->
+      <div class="results-hd">
+        <span class="results-ct">247 jobs found</span>
+        <span class="date-filter">Sort: Newest ↓</span>
+      </div>
+
+      <!-- Job 1 – TCS -->
+      <div class="job-card" onclick="openJob('tcs')">
+        <div class="co-av" style="background:linear-gradient(135deg,#135bec,#0f4cc7)">T</div>
+        <div class="jbody">
+          <div class="jco">Tata Consultancy Services <span class="jsrc">linkedin</span></div>
+          <div class="jtitle">Junior React Developer</div>
+          <div class="jmeta">
+            <span class="jloc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Hyderabad</span>
+            <span style="color:var(--tt);font-size:11px;">·</span>
+            <span class="lvbadge" style="background:#dbeafe;color:#2563eb;border-color:#93c5fd;">Entry Level</span>
+            <span class="leg-badge" style="background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;">✓ Verified</span>
+          </div>
+          <span class="jsal">🔥 ₹4–6 LPA</span>
+        </div>
+        <span class="jdate">2d ago</span>
+      </div>
+
+      <!-- Job 2 – Infosys -->
+      <div class="job-card" onclick="openJob('infosys')">
+        <div class="co-av" style="background:linear-gradient(135deg,#16a34a,#15803d)">I</div>
+        <div class="jbody">
+          <div class="jco">Infosys <span class="jsrc">indeed</span></div>
+          <div class="jtitle">React Developer — Digital Experience</div>
+          <div class="jmeta">
+            <span class="jloc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Bangalore</span>
+            <span style="color:var(--tt);font-size:11px;">·</span>
+            <span class="lvbadge" style="background:#dbeafe;color:#2563eb;border-color:#93c5fd;">Entry Level</span>
+          </div>
+          <span class="jsal">🔥 ₹5–7 LPA</span>
+        </div>
+        <span class="jdate">1d ago</span>
+      </div>
+
+      <!-- Job 3 – Wipro (caution) -->
+      <div class="job-card" onclick="openJob('wipro')">
+        <div class="co-av" style="background:linear-gradient(135deg,#d97706,#c2410c)">W</div>
+        <div class="jbody">
+          <div class="jco">Wipro Technologies <span class="jsrc">serpapi</span></div>
+          <div class="jtitle">Full Stack Developer (React + Node)</div>
+          <div class="jmeta">
+            <span class="jloc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Pune</span>
+            <span style="color:var(--tt);font-size:11px;">·</span>
+            <span class="lvbadge" style="background:#dbeafe;color:#2563eb;border-color:#93c5fd;">Entry Level</span>
+            <span class="leg-badge" style="background:#fffbeb;border:1px solid #fde68a;color:#a16207;">⚠ Caution</span>
+          </div>
+        </div>
+        <span class="jdate">4d ago</span>
+      </div>
+
+      <!-- Job 4 – HCL -->
+      <div class="job-card" onclick="openJob('hcl')">
+        <div class="co-av" style="background:linear-gradient(135deg,#7c3aed,#5b21b6)">H</div>
+        <div class="jbody">
+          <div class="jco">HCL Technologies <span class="jsrc">jobspy</span></div>
+          <div class="jtitle">Associate Software Engineer — Frontend</div>
+          <div class="jmeta">
+            <span class="jloc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Noida</span>
+            <span style="color:var(--tt);font-size:11px;">·</span>
+            <span class="lvbadge" style="background:#dbeafe;color:#2563eb;border-color:#93c5fd;">Entry Level</span>
+          </div>
+          <span class="jsal">🔥 ₹3.5–5 LPA</span>
+        </div>
+        <span class="jdate">1w ago</span>
+      </div>
+
+      <!-- Job 5 – Accenture -->
+      <div class="job-card" onclick="openJob('acc')">
+        <div class="co-av" style="background:linear-gradient(135deg,#0891b2,#155e75)">A</div>
+        <div class="jbody">
+          <div class="jco">Accenture <span class="jsrc">linkedin</span></div>
+          <div class="jtitle">React JS Developer — Fresher</div>
+          <div class="jmeta">
+            <span class="jloc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Mumbai · Remote</span>
+            <span style="color:var(--tt);font-size:11px;">·</span>
+            <span class="lvbadge" style="background:#dbeafe;color:#2563eb;border-color:#93c5fd;">Entry Level</span>
+          </div>
+          <span class="jsal">🔥 ₹4–5.5 LPA</span>
+        </div>
+        <span class="jdate">5h ago</span>
+      </div>
+
+      <!-- Score prompt card -->
+      <div style="margin:12px 14px;background:linear-gradient(135deg,#eff6ff,#f5f3ff);border:1px solid #c7d2fe;border-radius:12px;padding:14px;">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:4px;">… Score all 247 jobs against your resume?</div>
+        <div style="font-size:12px;color:#475569;margin-bottom:10px;line-height:1.5;">One click → AI ranks every result by how well your resume matches. Takes ~60 seconds.</div>
+        <button class="btn-best" style="width:100%;justify-content:center;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>
+          Find Best Jobs → AI Matches
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /scroll -->
+</div><!-- /phone -->
+
+<script>
+  /* ── Autocomplete ── */
+  const ROLE_SUGGESTIONS = [
+    'React Developer','React Native Developer','Full Stack Developer',
+    'Frontend Developer','Backend Developer','Node.js Developer',
+    'Python Developer','Data Analyst','Data Scientist','UI/UX Designer',
+    'DevOps Engineer','Cloud Engineer','Java Developer','Angular Developer',
+    'Vue.js Developer','Software Engineer','Machine Learning Engineer',
+    'QA Engineer','Mobile Developer','iOS Developer','Android Developer',
+    'Django Developer','Flask Developer','Spring Boot Developer',
+  ];
+
+  const LOC_SUGGESTIONS = [
+    'Bengaluru','Hyderabad','Mumbai','Delhi','Pune','Chennai',
+    'Noida','Gurugram','Kolkata','Ahmedabad','Jaipur','Kochi',
+    'Thiruvananthapuram','Coimbatore','Indore','Bhubaneswar',
+    'Remote','Hybrid – Bengaluru','Hybrid – Hyderabad','Hybrid – Pune',
+  ];
+
+  let acType = null;
+
+  function showAC(type, query) {
+    acType = type;
+    const list = type === 'role' ? ROLE_SUGGESTIONS : LOC_SUGGESTIONS;
+    const dropdown = document.getElementById('ac-dropdown');
+    const q = query.trim().toLowerCase();
+    const matches = q ? list.filter(s => s.toLowerCase().includes(q)).slice(0, 5) : list.slice(0, 4);
+
+    if (!matches.length) { dropdown.style.display = 'none'; return; }
+
+    // Position the dropdown below the search pill
+    const pill = document.querySelector('.search-pill');
+    const zone = document.querySelector('.search-zone');
+    const pillR = pill.getBoundingClientRect();
+    const zoneR = zone.getBoundingClientRect();
+    dropdown.style.top = (pillR.bottom - zoneR.top + 5) + 'px';
+
+    dropdown.innerHTML = matches.map(m =>
+      `<div class="ac-item" onmousedown="selectAC('${m.replace(/'/g,"\\'")}')">
+        <span>${m}</span>
+        <svg class="ac-item-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>`
+    ).join('');
+
+    dropdown.style.display = 'block';
+  }
+
+  function hideAC() {
+    setTimeout(() => {
+      document.getElementById('ac-dropdown').style.display = 'none';
+      acType = null;
+    }, 160);
+  }
+
+  function selectAC(value) {
+    if (acType === 'role') document.getElementById('q-role').value = value;
+    else if (acType === 'loc') document.getElementById('q-loc').value = value;
+    document.getElementById('ac-dropdown').style.display = 'none';
+    acType = null;
+  }
+
+  /* ── Paste JD ── */
+  function openPasteJD() {
+    setPastePhase('form');
+    document.getElementById('paste-sheet').classList.add('open');
+    document.getElementById('paste-ov').classList.add('open');
+  }
+  function closePasteJD() {
+    document.getElementById('paste-sheet').classList.remove('open');
+    document.getElementById('paste-ov').classList.remove('open');
+  }
+  function setPastePhase(ph) {
+    ['form','loading','success','error'].forEach(p => {
+      const el = document.getElementById('pp-'+p);
+      el.style.display = p === ph ? (p === 'form' ? 'flex' : 'flex') : 'none';
+    });
+    if (ph === 'loading') startLoadingSteps();
+  }
+  function startLoadingSteps() {
+    const steps = document.querySelectorAll('.ls-step');
+    function activate(i) {
+      steps.forEach((s, idx) => {
+        const dot = s.querySelector('.ls-dot');
+        const lbl = s.querySelector('.ls-lbl');
+        if (idx < i) {
+          dot.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+          dot.style.background='#f0fdf4'; dot.style.border='1.5px solid #bbf7d0';
+          lbl.style.color='#0f172a'; lbl.style.fontWeight='600';
+        } else if (idx === i) {
+          dot.innerHTML = '<div style="width:13px;height:13px;border-radius:50%;border:2.5px solid #bfdbfe;border-top-color:#135bec;animation:spin .75s linear infinite"></div>';
+          dot.style.background='#eff6ff'; dot.style.border='1.5px solid #bfdbfe';
+          lbl.style.color='#135bec'; lbl.style.fontWeight='600';
+        } else {
+          dot.innerHTML = '<div style="width:8px;height:8px;border-radius:50%;background:#cbd5e1"></div>';
+          dot.style.background='#f8fafc'; dot.style.border='1.5px solid #e2e8f0';
+          lbl.style.color='#94a3b8'; lbl.style.fontWeight='400';
+        }
+      });
+    }
+    activate(0);
+    setTimeout(() => activate(1), 1500);
+    setTimeout(() => activate(2), 3200);
+    setTimeout(() => {
+      steps.forEach(s => {
+        const dot = s.querySelector('.ls-dot');
+        const lbl = s.querySelector('.ls-lbl');
+        dot.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+        dot.style.background='#f0fdf4'; dot.style.border='1.5px solid #bbf7d0';
+        lbl.style.color='#0f172a'; lbl.style.fontWeight='600';
+      });
+      setPastePhase('success');
+    }, 5000);
+  }
+
+  /* ── State switcher ── */
+  const states = ['empty','searching','results'];
+  function setS(s) {
+    states.forEach(id => {
+      document.getElementById('st-'+id).style.display = id === s ? '' : 'none';
+      document.getElementById('s-'+id).classList.toggle('on', id === s);
+    });
+    document.getElementById('pg').scrollTop = 0;
+  }
+
+  /* ── Drawer ── */
+  function openD() {
+    document.getElementById('dr').classList.add('open');
+    document.getElementById('ov').classList.add('open');
+  }
+  function closeD() {
+    document.getElementById('dr').classList.remove('open');
+    document.getElementById('ov').classList.remove('open');
+  }
+
+  /* ── Job detail sheet ── */
+  const jobIds = ['tcs','infosys','wipro','hcl','acc'];
+  function openJob(id) {
+    jobIds.forEach(jid => document.getElementById('jd-'+jid).style.display = jid === id ? 'block' : 'none');
+    document.getElementById('sjob').classList.add('open');
+    document.getElementById('sov').classList.add('open');
+  }
+  function closeJob() {
+    document.getElementById('sjob').classList.remove('open');
+    document.getElementById('sov').classList.remove('open');
+  }
+</script>
+</body>
+</html>
