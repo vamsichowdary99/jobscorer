@@ -1760,8 +1760,8 @@ export default function UploadPage() {
                                                 .assess-card { animation: fade-in-up 0.5s ease both; }
                                                 .score-ring-fill { transition: stroke-dashoffset 1.4s cubic-bezier(0.34,1.56,0.64,1); }
                                                 .expand-btn:hover { background: #f8fafc !important; }
-                                                .assess-asset-card:hover { border-color: #6ee7b7 !important; }
-                                                .assess-action-card:hover { border-color: #135bec !important; }
+                                                .assess-asset-card:hover { border-top-color: #059669 !important; box-shadow: 0 2px 8px rgba(16,185,129,0.1); }
+                                                .assess-action-card:hover { border-top-color: #0f4cc7 !important; box-shadow: 0 2px 8px rgba(19,91,236,0.1); }
                                                 .pb-card:hover { border-color: #cbd5e1 !important; box-shadow: 0 2px 12px rgba(15,23,42,0.06); transform: translateY(-1px); }
                                             `}</style>
 
@@ -1809,9 +1809,9 @@ export default function UploadPage() {
                                                     </div>
 
                                                     {/* Main content */}
-                                                    <div style={{ padding: isMobile ? '12px 14px' : '24px 28px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: isMobile ? 10 : 28, alignItems: 'start' }}>
-                                                        {/* Score ring — 80px on mobile, 112px on desktop */}
-                                                        {(() => { const rs = isMobile ? 80 : 112; const rc = rs/2; const rr = isMobile ? 33 : 46; const rsw = isMobile ? 5 : 7; const circ = 2 * Math.PI * rr; return (
+                                                    <div style={{ padding: isMobile ? '12px 14px' : '24px 28px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: isMobile ? 12 : 28, alignItems: 'start' }}>
+                                                        {/* Score ring — 70px on mobile (matches design), 112px on desktop */}
+                                                        {(() => { const rs = isMobile ? 70 : 112; const rc = rs/2; const rr = isMobile ? 28 : 46; const rsw = isMobile ? 5 : 7; const circ = 2 * Math.PI * rr; return (
                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, justifySelf: 'start' }}>
                                                             <div style={{ position: 'relative', width: rs, height: rs }}>
                                                                 <svg width={rs} height={rs} viewBox={`0 0 ${rs} ${rs}`} style={{ transform: 'rotate(-90deg)' }}>
@@ -1825,7 +1825,7 @@ export default function UploadPage() {
                                                                     />
                                                                 </svg>
                                                                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                                                                    <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '1.2rem' : '1.6rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
+                                                                    <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '1.1rem' : '1.6rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
                                                                         {resumeAnalysis.market_readiness_score.toFixed(1)}
                                                                     </span>
                                                                     <span style={{ fontFamily: 'monospace', fontSize: '0.5rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>/10</span>
@@ -1840,19 +1840,19 @@ export default function UploadPage() {
                                                         {/* Right side content */}
                                                         <div>
                                                             {/* Headline */}
-                                                            <p style={{ fontFamily: "'Georgia', serif", fontSize: '1rem', fontWeight: 400, fontStyle: 'italic', color: '#374151', margin: '0 0 16px', lineHeight: 1.6, borderLeft: '3px solid #135bec', paddingLeft: 14 }}>
+                                                            <p style={{ fontFamily: "'Georgia', serif", fontSize: isMobile ? '0.88rem' : '1rem', fontWeight: 400, fontStyle: 'italic', color: '#374151', margin: '0 0 14px', lineHeight: 1.6, borderLeft: '3px solid #135bec', paddingLeft: 12 }}>
                                                                 {resumeAnalysis.headline}
                                                             </p>
 
-                                                            {/* Two column: asset + action */}
-                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-                                                                <div className="assess-asset-card" style={{ padding: isMobile ? '8px 10px' : '12px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', transition: 'border-color 0.15s' }}>
-                                                                    <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.13em', marginBottom: 6 }}>Your Biggest Asset</div>
-                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.72rem' : '0.775rem', color: '#15803d', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.biggest_asset}</p>
+                                                            {/* Asset + Action: stacked on mobile, side-by-side on desktop */}
+                                                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 8 : 10, marginBottom: 14 }}>
+                                                                <div className="assess-asset-card" style={{ padding: '10px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e2e8f0', borderTop: '2px solid #10b981', transition: 'border-color 0.15s' }}>
+                                                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Your Biggest Asset</div>
+                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.775rem', color: '#15803d', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.biggest_asset}</p>
                                                                 </div>
-                                                                <div className="assess-action-card" style={{ padding: isMobile ? '8px 10px' : '12px 14px', borderRadius: 8, background: '#eff6ff', border: '1px solid #bfdbfe', transition: 'border-color 0.15s' }}>
-                                                                    <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.13em', marginBottom: 6 }}>Top Action</div>
-                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.72rem' : '0.775rem', color: '#1e40af', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.top_action}</p>
+                                                                <div className="assess-action-card" style={{ padding: '10px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e2e8f0', borderTop: '2px solid #135bec', transition: 'border-color 0.15s' }}>
+                                                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Top Action</div>
+                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.775rem', color: '#1e40af', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.top_action}</p>
                                                                 </div>
                                                             </div>
 

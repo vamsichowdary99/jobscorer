@@ -409,11 +409,15 @@ export default function DashboardHomePage() {
                                         <div key={p.company_name + p.researched_at} style={S.itemRow} className="rs-compact-irow">
                                             <div style={{ ...S.itemIcon, background: companyGradient(p.company_name) }} className="rs-compact-iicon">{firstInitial(p.company_name)}</div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={S.itemName} className="rs-compact-iname">{p.company_name}</div>
-                                                <div style={S.itemMeta} className="rs-compact-imeta">{p.job_title ?? 'Research'}</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                                                    <div style={S.itemName} className="rs-compact-iname">{p.company_name}</div>
+                                                    <div style={S.itemTime}>{relativeTime(p.researched_at)}</div>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 1 }}>
+                                                    <div style={S.itemMeta} className="rs-compact-imeta">{p.job_title ?? 'Research'}</div>
+                                                    <div style={{ ...S.itemBadge, background: '#dbeafe', color: '#1d4ed8', flexShrink: 0 }} className="rs-compact-ibadge">Researched</div>
+                                                </div>
                                             </div>
-                                            <div style={{ ...S.itemBadge, background: '#dbeafe', color: '#1d4ed8' }} className="rs-compact-ibadge">Researched</div>
-                                            <div style={S.itemTime}>{relativeTime(p.researched_at)}</div>
                                         </div>
                                     ))}
                         </div>
@@ -432,12 +436,11 @@ export default function DashboardHomePage() {
                                         <Link href="/dashboard/resumes" key={r.name + r.updatedAt} style={{ ...S.itemRow, textDecoration: 'none', color: 'inherit' }} className="rs-compact-irow">
                                             <div style={{ ...S.itemIcon, background: '#eff6ff', color: '#135bec', fontSize: 18 }} className="rs-compact-iicon">📄</div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={S.itemName} className="rs-compact-iname">{r.name}</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                                                    <div style={S.itemName} className="rs-compact-iname">{r.name}</div>
+                                                    <div style={S.itemTime}>{relativeTime(r.updatedAt)}</div>
+                                                </div>
                                                 <div style={S.itemMeta} className="rs-compact-imeta">{r.jobTitle}</div>
-                                            </div>
-                                            <div style={S.itemTime}>{relativeTime(r.updatedAt)}</div>
-                                            <div style={S.iconBtn} title="Download">
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
                                             </div>
                                         </Link>
                                     ))}
