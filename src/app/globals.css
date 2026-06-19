@@ -385,3 +385,50 @@ h4 {
     padding-right: 0 !important;
   }
 }
+
+/* ── Company Intel — mobile fixes (≤767px) ─────────────────── */
+@media (max-width: 767px) {
+  /* 3 tiles stack to single column */
+  .wwj-cols-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Full border radius when stacked (inline style has 0 0 10px 10px) */
+  .wwj-cols-grid > div {
+    border-radius: 10px !important;
+    padding: 12px 13px !important;
+  }
+
+  /* Tile body text compact */
+  .wwj-cols-grid p {
+    font-size: 12.5px !important;
+    line-height: 1.65 !important;
+    margin: 5px 0 0 !important;
+    color: #374151 !important;
+  }
+
+  /* Verdict box tighter on mobile */
+  .wwj-verdict-box {
+    padding: 14px 14px 13px !important;
+  }
+
+  /* Verdict headline smaller on mobile */
+  .wwj-verdict-text {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+  }
+
+  /* Legacy wwj-cols class (alternate render path) */
+  .wwj-cols {
+    grid-template-columns: 1fr !important;
+  }
+  .wwj-col {
+    border-right: none !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    padding: 14px !important;
+  }
+  .wwj-col:last-child {
+    border-bottom: none !important;
+  }
+}

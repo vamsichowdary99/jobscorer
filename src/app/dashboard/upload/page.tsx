@@ -1763,6 +1763,11 @@ export default function UploadPage() {
                                                 .assess-asset-card:hover { border-top-color: #059669 !important; box-shadow: 0 2px 8px rgba(16,185,129,0.1); }
                                                 .assess-action-card:hover { border-top-color: #0f4cc7 !important; box-shadow: 0 2px 8px rgba(19,91,236,0.1); }
                                                 .pb-card:hover { border-color: #cbd5e1 !important; box-shadow: 0 2px 12px rgba(15,23,42,0.06); transform: translateY(-1px); }
+                                                @media (max-width: 767px) {
+                                                  .mob-assess-topasset { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+                                                  .mob-assess-grid { gap: 8px !important; }
+                                                  .mob-assess-grid > .pb-card { padding: 10px 11px !important; }
+                                                }
                                             `}</style>
 
                                             {analysisLoading && !resumeAnalysis ? (
@@ -1844,8 +1849,8 @@ export default function UploadPage() {
                                                                 {resumeAnalysis.headline}
                                                             </p>
 
-                                                            {/* Asset + Action: stacked on mobile, side-by-side on desktop */}
-                                                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 8 : 10, marginBottom: 14 }}>
+                                                            {/* Asset + Action: 2-column on all viewports */}
+                                                            <div className="mob-assess-topasset" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 8 : 10, marginBottom: 14 }}>
                                                                 <div className="assess-asset-card" style={{ padding: '10px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e2e8f0', borderTop: '2px solid #10b981', transition: 'border-color 0.15s' }}>
                                                                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Your Biggest Asset</div>
                                                                     <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.775rem', color: '#15803d', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.biggest_asset}</p>
@@ -1882,39 +1887,39 @@ export default function UploadPage() {
 
                                                     {/* Playbook — 4 concrete actions: roles, companies, cuts, certs */}
                                                     {(resumeAnalysis.recommended_roles?.length || resumeAnalysis.target_companies || resumeAnalysis.cut_or_condense?.length || resumeAnalysis.recommended_certifications?.length) ? (
-                                                        <div style={{ borderTop: '1px solid #f1f5f9', padding: isMobile ? '14px 14px 16px' : '20px 28px 22px', background: 'linear-gradient(180deg, #fafbfc 0%, #ffffff 100%)' }}>
+                                                        <div style={{ borderTop: '1px solid #f1f5f9', padding: isMobile ? '12px 13px 14px' : '20px 28px 22px', background: 'linear-gradient(180deg, #fafbfc 0%, #ffffff 100%)' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14 }}>
                                                                 <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#135bec' }} />
                                                                 <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.16em' }}>Your Playbook</span>
                                                                 <span style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, #e5e7eb 0%, transparent 80%)' }} />
                                                                 <span style={{ fontFamily: 'monospace', fontSize: '0.6rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>4 moves</span>
                                                             </div>
-                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                                            <div className="mob-assess-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 8 : 12 }}>
 
                                                                 {/* 1. Recommended roles */}
                                                                 {(resumeAnalysis.recommended_roles?.length ?? 0) > 0 && (
-                                                                    <div className="pb-card" style={{ padding: '14px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e5e7eb', transition: 'all 0.18s ease' }}>
+                                                                    <div className="pb-card" style={{ padding: isMobile ? '10px 11px' : '14px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e5e7eb', transition: 'all 0.18s ease' }}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7h-3V4a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v3H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.66rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Apply To These Roles</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.66rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Apply To These Roles</span>
                                                                         </div>
-                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 12 }}>
                                                                             {resumeAnalysis.recommended_roles!.map((r, i) => {
                                                                                 const fitDots = r.fit === 'strong' ? 3 : r.fit === 'okay' ? 2 : 1
                                                                                 const fitColor = r.fit === 'strong' ? '#10b981' : r.fit === 'okay' ? '#f59e0b' : '#94a3b8'
                                                                                 return (
                                                                                     <div key={i}>
                                                                                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
-                                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.95rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.35 }}>{r.role}</span>
+                                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.75rem' : '0.95rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.35 }}>{r.role}</span>
                                                                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }} title={r.fit + ' fit'}>
                                                                                                 {[0, 1, 2].map(d => (
                                                                                                     <span key={d} style={{ width: 6, height: 6, borderRadius: '50%', background: d < fitDots ? fitColor : '#e2e8f0' }} />
                                                                                                 ))}
                                                                                             </span>
                                                                                         </div>
-                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.85rem', color: '#475569', margin: 0, lineHeight: 1.55 }}>{r.why}</p>
+                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.6875rem' : '0.85rem', color: '#475569', margin: 0, lineHeight: 1.5 }}>{r.why}</p>
                                                                                     </div>
                                                                                 )
                                                                             })}
@@ -1924,24 +1929,24 @@ export default function UploadPage() {
 
                                                                 {/* 2. Target companies */}
                                                                 {resumeAnalysis.target_companies && (
-                                                                    <div className="pb-card" style={{ padding: '14px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e5e7eb', transition: 'all 0.18s ease' }}>
+                                                                    <div className="pb-card" style={{ padding: isMobile ? '10px 11px' : '14px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e5e7eb', transition: 'all 0.18s ease' }}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9"/><line x1="9" y1="13" x2="9" y2="13"/><line x1="9" y1="17" x2="9" y2="17"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.66rem', fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Target Companies</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.66rem', fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Target Companies</span>
                                                                         </div>
-                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 11 }}>
                                                                             {[
                                                                                 { label: 'Start here', value: resumeAnalysis.target_companies.start_here, color: '#10b981', labelColor: '#10b981', bg: '#f0fdf4', glyph: '▶' },
                                                                                 { label: 'Stretch for', value: resumeAnalysis.target_companies.stretch_for, color: '#d97706', labelColor: '#d97706', bg: '#fffbeb', glyph: '↗' },
                                                                                 { label: 'Skip for now', value: resumeAnalysis.target_companies.skip_for_now, color: '#64748b', labelColor: '#475569', bg: '#f1f5f9', glyph: '✕' },
                                                                             ].filter(t => t.value).map((tier, i) => (
-                                                                                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 5, background: tier.bg, color: tier.color, fontFamily: 'monospace', fontSize: 10, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>{tier.glyph}</span>
+                                                                                <div key={i} style={{ display: 'flex', gap: isMobile ? 7 : 10, alignItems: 'flex-start' }}>
+                                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: isMobile ? 16 : 20, height: isMobile ? 16 : 20, borderRadius: 5, background: tier.bg, color: tier.color, fontFamily: 'monospace', fontSize: isMobile ? 8 : 10, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>{tier.glyph}</span>
                                                                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                                                                        <div style={{ fontFamily: 'monospace', fontSize: '0.6rem', fontWeight: 700, color: tier.labelColor, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 2 }}>{tier.label}</div>
-                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.875rem', color: '#1e293b', margin: 0, lineHeight: 1.5 }}>{tier.value}</p>
+                                                                                        <div style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.6rem', fontWeight: 700, color: tier.labelColor, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 2 }}>{tier.label}</div>
+                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.6875rem' : '0.875rem', color: '#1e293b', margin: 0, lineHeight: 1.45 }}>{tier.value}</p>
                                                                                     </div>
                                                                                 </div>
                                                                             ))}
@@ -1951,18 +1956,18 @@ export default function UploadPage() {
 
                                                                 {/* 3. Cut or condense */}
                                                                 {(resumeAnalysis.cut_or_condense?.length ?? 0) > 0 && (
-                                                                    <div className="pb-card" style={{ padding: '14px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e5e7eb', transition: 'all 0.18s ease' }}>
+                                                                    <div className="pb-card" style={{ padding: isMobile ? '10px 11px' : '14px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e5e7eb', transition: 'all 0.18s ease' }}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.66rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Cut From Your Resume</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.66rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Cut From Your Resume</span>
                                                                         </div>
-                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 7 : 10 }}>
                                                                             {resumeAnalysis.cut_or_condense!.map((item, i) => (
-                                                                                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 5, background: '#fef2f2', color: '#dc2626', fontFamily: 'monospace', fontSize: 12, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>−</span>
-                                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.875rem', color: '#1e293b', margin: 0, lineHeight: 1.55 }}>{item}</p>
+                                                                                <div key={i} style={{ display: 'flex', gap: isMobile ? 7 : 10, alignItems: 'flex-start' }}>
+                                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: isMobile ? 16 : 20, height: isMobile ? 16 : 20, borderRadius: 5, background: '#fef2f2', color: '#dc2626', fontFamily: 'monospace', fontSize: isMobile ? 10 : 12, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>−</span>
+                                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.6875rem' : '0.875rem', color: '#1e293b', margin: 0, lineHeight: 1.45 }}>{item}</p>
                                                                                 </div>
                                                                             ))}
                                                                         </div>
@@ -1971,24 +1976,24 @@ export default function UploadPage() {
 
                                                                 {/* 4. Recommended certifications */}
                                                                 {(resumeAnalysis.recommended_certifications?.length ?? 0) > 0 && (
-                                                                    <div className="pb-card" style={{ padding: '14px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e5e7eb', transition: 'all 0.18s ease' }}>
+                                                                    <div className="pb-card" style={{ padding: isMobile ? '10px 11px' : '14px 16px', borderRadius: 10, background: '#fff', border: '1px solid #e5e7eb', transition: 'all 0.18s ease' }}>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.66rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Chase These Certifications</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.66rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Chase These Certifications</span>
                                                                         </div>
-                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 12 }}>
                                                                             {resumeAnalysis.recommended_certifications!.map((c, i) => {
                                                                                 const pColor = c.priority === 'high' ? '#059669' : c.priority === 'medium' ? '#d97706' : '#64748b'
                                                                                 const pBg = c.priority === 'high' ? '#ecfdf5' : c.priority === 'medium' ? '#fffbeb' : '#f1f5f9'
                                                                                 return (
                                                                                     <div key={i}>
-                                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4, flexWrap: 'wrap' }}>
-                                                                                            <span style={{ padding: '3px 8px', borderRadius: 4, background: pBg, color: pColor, fontFamily: 'monospace', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', lineHeight: 1.3 }}>{c.priority}</span>
-                                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.95rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>{c.name}</span>
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 9, marginBottom: 4, flexWrap: 'wrap' }}>
+                                                                                            <span style={{ padding: isMobile ? '2px 6px' : '3px 8px', borderRadius: 4, background: pBg, color: pColor, fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', lineHeight: 1.3 }}>{c.priority}</span>
+                                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.75rem' : '0.95rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>{c.name}</span>
                                                                                         </div>
-                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.85rem', color: '#475569', margin: 0, lineHeight: 1.55 }}>{c.reason}</p>
+                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.6875rem' : '0.85rem', color: '#475569', margin: 0, lineHeight: 1.45 }}>{c.reason}</p>
                                                                                     </div>
                                                                                 )
                                                                             })}

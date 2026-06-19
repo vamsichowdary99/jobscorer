@@ -272,6 +272,7 @@ function PasteJobModal({ onClose }: { onClose: () => void }) {
                 className="rs-paste-overlay"
             >
                 <div className="rs-paste-card" role="dialog" aria-modal="true" aria-label="Paste Job Description">
+                    <div className="rs-paste-handle" aria-hidden="true" />
                     <button onClick={handleClose} className="rs-paste-close" aria-label="Close">
                         <XIcon />
                     </button>
@@ -777,6 +778,8 @@ const MODAL_CSS = `
 }
 .rs-paste-btn-outline:hover { background: #DBEAFE; }
 
+.rs-paste-handle { display: none; }
+
 .rs-paste-steps { margin-top: 4px; }
 .rs-paste-step {
     display: flex; align-items: center; gap: 16px;
@@ -836,11 +839,98 @@ const MODAL_CSS = `
     display: flex; gap: 12px; margin-top: 4px; flex-wrap: wrap; justify-content: center;
 }
 
-@media (max-width: 640px) {
-    .rs-paste-card { padding: 24px 22px 22px; border-radius: 18px; }
-    .rs-paste-grid-2 { grid-template-columns: 1fr; }
-    .rs-paste-header { padding-right: 36px; margin-bottom: 22px; }
-    .rs-paste-actions { justify-content: stretch; flex-direction: column-reverse; }
-    .rs-paste-actions button { width: 100%; justify-content: center; }
+@keyframes rsPasteSlideUp {
+    from { transform: translateY(100%); opacity: 0.6; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+@media (max-width: 767px) {
+    /* Overlay: sit at bottom edge */
+    .rs-paste-overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+    /* Card becomes a bottom sheet */
+    .rs-paste-card {
+        width: 100%;
+        max-width: 100%;
+        border-radius: 22px 22px 0 0;
+        padding: 0 0 28px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 -20px 60px rgba(0,0,0,0.25);
+        animation: rsPasteSlideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    /* Handle bar */
+    .rs-paste-handle {
+        display: block;
+        width: 36px;
+        height: 4px;
+        border-radius: 99px;
+        background: #e2e8f0;
+        margin: 12px auto 0;
+    }
+    /* Close button */
+    .rs-paste-close { top: 14px; right: 18px; }
+    /* Header */
+    .rs-paste-header {
+        padding: 14px 56px 12px 18px;
+        margin-bottom: 0;
+    }
+    .rs-paste-header__title { font-size: 18px; margin-bottom: 5px; }
+    .rs-paste-header__sub { font-size: 12.5px; }
+    /* Form body */
+    .rs-paste-form { padding: 12px 18px 0; gap: 12px; }
+    /* 2-column grid stays 2-column on mobile */
+    .rs-paste-grid-2 { grid-template-columns: 1fr 1fr; gap: 10px; }
+    /* Inputs */
+    .rs-paste-input, .rs-paste-textarea {
+        padding: 9px 11px;
+        font-size: 13.5px;
+        border-radius: 9px;
+        border-width: 1px;
+    }
+    .rs-paste-textarea { min-height: 130px; }
+    /* Counter */
+    .rs-paste-counter { font-size: 11px; }
+    /* Source URL link */
+    .rs-paste-link { font-size: 13px; }
+    /* Info box */
+    .rs-paste-info { padding: 10px 12px; border-radius: 9px; }
+    .rs-paste-info__text { font-size: 11.5px; }
+    /* Footer actions */
+    .rs-paste-actions {
+        flex-direction: row;
+        justify-content: stretch;
+        padding-top: 12px;
+        margin: 12px 18px 0;
+        border-top: 1px solid #e2e8f0;
+    }
+    .rs-paste-btn-ghost {
+        flex: 1;
+        padding: 11px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        color: #64748b;
+        width: auto;
+    }
+    .rs-paste-btn-primary {
+        flex: 2;
+        padding: 11px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 700;
+        justify-content: center;
+        width: auto;
+    }
+    /* Loading steps */
+    .rs-paste-steps { padding: 0 18px; }
+    /* Success / error */
+    .rs-paste-success { padding: 16px 18px 8px; }
+    .rs-paste-success__actions { flex-direction: column; width: 100%; }
+    .rs-paste-success__actions button { width: 100%; justify-content: center; }
 }
 `

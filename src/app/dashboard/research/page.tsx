@@ -836,12 +836,6 @@ function V3AIVerdict({ quickIntel, matchingSkills, skillGaps }: {
                 }}>AI Analysis</span>
             </div>
 
-            {verdictDisplay && (
-                <h2 style={{
-                    fontFamily: V3_K_SANS, fontSize: 18, fontWeight: 700, color: '#0f172a',
-                    lineHeight: 1.35, margin: '0 0 8px', textWrap: 'balance',
-                }}>{verdictDisplay}</h2>
-            )}
             {quickIntel.fit_reason && (
                 <p style={{ fontSize: 15, color: '#4b5563', lineHeight: 1.65, margin: '0 0 14px' }}>
                     {quickIntel.fit_reason}
@@ -849,7 +843,7 @@ function V3AIVerdict({ quickIntel, matchingSkills, skillGaps }: {
             )}
 
             {(matchingSkills.length > 0 || skillGaps.length > 0) && (
-                <div className="ci-skills-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <div className="ci-skills-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14, overflow: 'hidden', minWidth: 0 }}>
                     {matchingSkills.length > 0 && (
                         <div>
                             <V3Label color="#16a34a" size={11}>Skills You Have</V3Label>
@@ -869,15 +863,16 @@ function V3AIVerdict({ quickIntel, matchingSkills, skillGaps }: {
                         </div>
                     )}
                     {skillGaps.length > 0 && (
-                        <div>
+                        <div style={{ overflow: 'hidden', minWidth: 0 }}>
                             <V3Label color="#dc2626" size={11}>Skills You&apos;re Missing</V3Label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7 }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7, overflow: 'hidden' }}>
                                 {skillGaps.map(s => (
                                     <span key={s} style={{
                                         display: 'inline-flex', alignItems: 'center', gap: 5,
                                         padding: '5px 11px', borderRadius: 99,
                                         background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca',
-                                        fontFamily: V3_K_MONO, fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+                                        fontFamily: V3_K_MONO, fontSize: 13, fontWeight: 700,
+                                        whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: '100%',
                                     }}>× {s}</span>
                                 ))}
                             </div>
@@ -1004,7 +999,7 @@ function V3WorthJoining({ wwj }: { wwj: WhyWorthJoiningData }) {
 
             {/* 3-col grid */}
             {cols.length > 0 && (
-                <div style={{
+                <div className="wwj-cols-grid" style={{
                     display: 'grid',
                     gridTemplateColumns: cols.length === 1 ? '1fr' : cols.length === 2 ? '1fr 1fr' : '1fr 1fr 1fr',
                     gap: 8,

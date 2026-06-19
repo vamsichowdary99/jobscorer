@@ -438,12 +438,12 @@ function JobCard({ match, selected, onClick, idx }: {
 }
 
 /* ── Large score ring (right panel) ── */
-function ScoreRing({ score }: { score: number }) {
+function ScoreRing({ score, showQualityLabel = false }: { score: number; showQualityLabel?: boolean }) {
     const color = getScoreColor(score)
     const r = 52, circ = 2 * Math.PI * r
     const offset = circ - (score / 100) * circ
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: showQualityLabel ? 3 : 8 }}>
             <svg width="130" height="130" viewBox="0 0 130 130">
                 <circle cx="65" cy="65" r={r} fill="none" stroke="#f3f4f6" strokeWidth="10" />
                 <circle
@@ -465,6 +465,14 @@ function ScoreRing({ score }: { score: number }) {
                     AI SCORE
                 </text>
             </svg>
+            {showQualityLabel && (
+                <span style={{
+                    fontSize: '10px', fontWeight: 700, color: '#94a3b8',
+                    textTransform: 'uppercase', letterSpacing: '0.08em',
+                }}>
+                    Match quality
+                </span>
+            )}
             <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#374151' }}>
                 {matchLabel(score)}
             </span>
@@ -646,6 +654,18 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                 />
                             )}
                         </div>
+                        {isMobile && job.legitimacy_tier === 'proceed_with_caution' && (
+                            <div style={{ marginTop: 7 }}>
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                    padding: '3px 10px', borderRadius: 99,
+                                    background: '#fff7ed', border: '1px solid #fed7aa',
+                                    color: '#c2410c', fontSize: 11, fontWeight: 700,
+                                }}>
+                                    ⚠ CAUTION
+                                </span>
+                            </div>
+                        )}
                         {!isMobile && job.legitimacy_tier === 'suspicious' && (
                             <div style={{ marginTop: 12, maxWidth: 520 }}>
                                 <LegitimacyBadge
@@ -748,6 +768,39 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                         )}
                     </div>
                 )}
+                {isMobile && (
+                    <button
+                        type="button"
+                        onClick={async () => {
+                            if (!match.job_id) return
+                            await reportJobStatus(match.job_id, 'closed')
+                            onReported?.(match.job_id)
+                        }}
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            marginTop: 7, padding: 0, border: 'none', background: 'none',
+                            color: '#94a3b8', fontSize: '11.5px', fontWeight: 500,
+                            cursor: 'pointer', fontFamily: "'Manrope', sans-serif",
+                        }}
+                    >
+                        <span aria-hidden style={{ fontSize: '0.85rem', lineHeight: 1 }}>⚑</span>
+                        <span style={{ color: '#64748b', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>
+                            No longer accepting applications? Tell us
+                        </span>
+                    </button>
+                )}
+                {isMobile && (
+                    <div style={{
+                        marginTop: 10, padding: '10px 12px',
+                        background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10,
+                        display: 'flex', alignItems: 'flex-start', gap: 8,
+                    }}>
+                        <span aria-hidden style={{ fontSize: '14px', lineHeight: 1.3, flexShrink: 0 }}>⚠️</span>
+                        <p style={{ fontSize: '12px', color: '#92400e', lineHeight: 1.55, fontWeight: 500, margin: 0 }}>
+                            Click <strong>Apply</strong> to confirm this job is still open before creating a tailored resume.
+                        </p>
+                    </div>
+                )}
             </div>
 
             {/* ── BODY ── */}
@@ -761,10 +814,15 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                         background: 'white', borderRadius: 14,
                         border: '1px solid #f3f4f6',
                         padding: '24px 20px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                     }}>
-                        <ScoreRing score={score} />
+                        <ScoreRing score={score} showQualityLabel={isMobile} />
+                        {isMobile && match.recommendation && (
+                            <div style={{ marginTop: 10 }}>
+                                <RecommendationBadge rec={match.recommendation} size="lg" />
+                            </div>
+                        )}
                     </div>
 
                     {/* Skills card */}
@@ -815,10 +873,11 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                     marginBottom: 10, gap: 10, flexWrap: 'wrap',
                                 }}>
                                     <p style={{
-                                        fontSize: '0.6rem', fontWeight: 800, color: '#c2410c',
+                                        fontSize: isMobile ? '9px' : '0.6rem', fontWeight: 800,
+                                        color: isMobile ? '#94a3b8' : '#c2410c',
                                         letterSpacing: '0.08em', textTransform: 'uppercase',
                                     }}>
-                                        What's Missing — and how to close it ({sortedGaps.length})
+                                        {isMobile ? "WHAT'S MISSING —" : `What's Missing — and how to close it (${sortedGaps.length})`}
                                     </p>
                                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                         {hardCount > 0 && (
@@ -864,13 +923,19 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                 </div>
                                 <Link href={`/dashboard/learning?jobId=${match.job_id}`}>
                                     <button style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                                        padding: '7px 14px', borderRadius: 8,
-                                        background: '#fff7ed', color: '#c2410c',
-                                        border: '1px solid #fed7aa', cursor: 'pointer',
-                                        fontSize: '0.8125rem', fontWeight: 700,
+                                        display: 'inline-flex', alignItems: 'center', gap: isMobile ? 5 : 6,
+                                        padding: isMobile ? '0' : '7px 14px',
+                                        borderRadius: isMobile ? 0 : 8,
+                                        background: isMobile ? 'none' : '#fff7ed',
+                                        color: isMobile ? '#135bec' : '#c2410c',
+                                        border: isMobile ? 'none' : '1px solid #fed7aa',
+                                        cursor: 'pointer',
+                                        fontSize: isMobile ? '12.5px' : '0.8125rem',
+                                        fontWeight: isMobile ? 600 : 700,
+                                        marginTop: isMobile ? 12 : 0,
+                                        fontFamily: "'Manrope', sans-serif",
                                     }}>
-                                        🗺️ Generate full learning plan →
+                                        {!isMobile && '🗺️ '}Generate full learning plan →
                                     </button>
                                 </Link>
                             </div>
@@ -894,13 +959,19 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                 </div>
                                 <Link href={`/dashboard/learning?jobId=${match.job_id}`}>
                                     <button style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                                        padding: '7px 14px', borderRadius: 8,
-                                        background: '#fff7ed', color: '#c2410c',
-                                        border: '1px solid #fed7aa', cursor: 'pointer',
-                                        fontSize: '0.8125rem', fontWeight: 700,
+                                        display: 'inline-flex', alignItems: 'center', gap: isMobile ? 5 : 6,
+                                        padding: isMobile ? '0' : '7px 14px',
+                                        borderRadius: isMobile ? 0 : 8,
+                                        background: isMobile ? 'none' : '#fff7ed',
+                                        color: isMobile ? '#135bec' : '#c2410c',
+                                        border: isMobile ? 'none' : '1px solid #fed7aa',
+                                        cursor: 'pointer',
+                                        fontSize: isMobile ? '12.5px' : '0.8125rem',
+                                        fontWeight: isMobile ? 600 : 700,
+                                        marginTop: isMobile ? 12 : 0,
+                                        fontFamily: "'Manrope', sans-serif",
                                     }}>
-                                        🗺️ View Learning Path →
+                                        {!isMobile && '🗺️ '}Generate full learning plan →
                                     </button>
                                 </Link>
                             </div>

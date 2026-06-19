@@ -186,7 +186,7 @@ function AutocompleteInput({
 
 // ── Level Dropdown ────────────────────────────────────────────
 
-function LevelDropdown({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function LevelDropdown({ value, onChange, mobile = false }: { value: string; onChange: (v: string) => void; mobile?: boolean }) {
     const [open, setOpen] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
     const selected = LEVEL_OPTIONS.find(o => o.value === value) ?? LEVEL_OPTIONS[0]
@@ -200,35 +200,47 @@ function LevelDropdown({ value, onChange }: { value: string; onChange: (v: strin
     }, [])
 
     return (
-        <div ref={ref} style={{ position: 'relative', padding: '8px 14px', borderRight: '1px solid #E2E8F0' }}>
+        <div ref={ref} style={mobile ? {
+            position: 'relative',
+            border: '1px solid #E2E8F0', borderRadius: 14,
+            background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+        } : { position: 'relative', padding: '8px 14px', borderRight: '1px solid #E2E8F0' }}>
             <button
                 type="button"
                 onClick={() => setOpen(o => !o)}
-                style={{
+                style={mobile ? {
+                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                    border: 'none', background: 'transparent', cursor: 'pointer',
+                    fontSize: '0.8125rem', color: value ? '#1E293B' : '#94A3B8',
+                    fontFamily: 'inherit', padding: '10px 14px', whiteSpace: 'nowrap',
+                } : {
                     display: 'flex', alignItems: 'center', gap: 6,
                     border: 'none', background: 'transparent', cursor: 'pointer',
                     fontSize: '0.8125rem', color: '#1E293B', fontFamily: 'inherit',
                     padding: 0, whiteSpace: 'nowrap',
                 }}
             >
-                {selected.label}
-                {selected.years && (
-                    <span style={{
-                        fontSize: '0.6875rem', fontWeight: 500,
-                        color: '#94A3B8',
-                        fontVariantNumeric: 'tabular-nums',
-                        letterSpacing: '0.01em',
-                    }}>
-                        · {selected.years}
-                    </span>
-                )}
-                <ChevronDown size={13} style={{ color: '#94A3B8', transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'none', marginLeft: 2 }} />
+                {mobile && <Briefcase size={13} style={{ color: '#94A3B8', marginRight: 1, flexShrink: 0 }} />}
+                <span style={mobile ? { flex: 1, textAlign: 'left' } : {}}>
+                    {selected.label}
+                    {selected.years && (
+                        <span style={{
+                            fontSize: '0.6875rem', fontWeight: 500,
+                            color: '#94A3B8',
+                            fontVariantNumeric: 'tabular-nums',
+                            letterSpacing: '0.01em',
+                        }}>
+                            {' · '}{selected.years}
+                        </span>
+                    )}
+                </span>
+                <ChevronDown size={13} style={{ color: '#94A3B8', transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'none', marginLeft: mobile ? 'auto' : 2 }} />
             </button>
 
             {open && (
                 <div style={{
-                    position: 'absolute', top: 'calc(100% + 8px)', left: '50%',
-                    transform: 'translateX(-50%)',
+                    position: 'absolute', top: 'calc(100% + 8px)',
+                    ...(mobile ? { left: 0, right: 0 } : { left: '50%', transform: 'translateX(-50%)' }),
                     background: '#fff', border: '1px solid #E2E8F0',
                     borderRadius: 12, boxShadow: '0 12px 32px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.06)',
                     zIndex: 200, overflow: 'hidden', minWidth: 220,
@@ -1728,6 +1740,9 @@ export default function SearchPage() {
                                 borderStyle={{}}
                             />
                         </div>
+
+                        {/* Experience level */}
+                        <LevelDropdown value={level} onChange={setLevel} mobile />
 
                         {/* 2×2 action grid */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
