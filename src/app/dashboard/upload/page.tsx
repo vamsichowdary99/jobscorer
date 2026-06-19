@@ -1852,11 +1852,11 @@ export default function UploadPage() {
                                                             {/* Asset + Action: 2-column on all viewports */}
                                                             <div className="mob-assess-topasset" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 8 : 10, marginBottom: 14 }}>
                                                                 <div className="assess-asset-card" style={{ padding: '10px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e2e8f0', borderTop: '2px solid #10b981', transition: 'border-color 0.15s' }}>
-                                                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Your Biggest Asset</div>
+                                                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: isMobile ? '0.05em' : '0.1em', marginBottom: 6 }}>Your Biggest Asset</div>
                                                                     <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.775rem', color: '#15803d', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.biggest_asset}</p>
                                                                 </div>
                                                                 <div className="assess-action-card" style={{ padding: '10px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e2e8f0', borderTop: '2px solid #135bec', transition: 'border-color 0.15s' }}>
-                                                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Top Action</div>
+                                                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: isMobile ? '0.05em' : '0.1em', marginBottom: 6 }}>Top Action</div>
                                                                     <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.775rem', color: '#1e40af', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.top_action}</p>
                                                                 </div>
                                                             </div>
@@ -1864,7 +1864,7 @@ export default function UploadPage() {
                                                             {/* Strengths + Gaps */}
                                                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 8 : 12 }}>
                                                                 <div>
-                                                                    <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>Strengths</div>
+                                                                    <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: isMobile ? '0.04em' : '0.12em', marginBottom: 8 }}>Strengths</div>
                                                                     {(resumeAnalysis.strengths || []).map((s, i) => (
                                                                         <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'flex-start', marginBottom: 5 }}>
                                                                             <span style={{ color: '#10b981', flexShrink: 0, marginTop: 2, fontSize: 9 }}>✓</span>
@@ -1873,7 +1873,7 @@ export default function UploadPage() {
                                                                     ))}
                                                                 </div>
                                                                 <div>
-                                                                    <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>Gaps to Close</div>
+                                                                    <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: isMobile ? '0.04em' : '0.12em', marginBottom: 8 }}>Gaps to Close</div>
                                                                     {(resumeAnalysis.gaps || []).map((g, i) => (
                                                                         <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'flex-start', marginBottom: 5 }}>
                                                                             <span style={{ color: '#ef4444', flexShrink: 0, marginTop: 2, fontSize: 9 }}>○</span>
@@ -1903,7 +1903,7 @@ export default function UploadPage() {
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7h-3V4a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v3H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.66rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Apply To These Roles</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.44rem' : '0.66rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Apply To These Roles</span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 12 }}>
                                                                             {resumeAnalysis.recommended_roles!.map((r, i) => {
@@ -1934,7 +1934,7 @@ export default function UploadPage() {
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9"/><line x1="9" y1="13" x2="9" y2="13"/><line x1="9" y1="17" x2="9" y2="17"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.66rem', fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Target Companies</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.44rem' : '0.66rem', fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Target Companies</span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 11 }}>
                                                                             {[
@@ -1961,7 +1961,7 @@ export default function UploadPage() {
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.66rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Cut From Your Resume</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.44rem' : '0.66rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Cut From Your Resume</span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 7 : 10 }}>
                                                                             {resumeAnalysis.cut_or_condense!.map((item, i) => (
@@ -1981,7 +1981,7 @@ export default function UploadPage() {
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.66rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Chase These Certifications</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.44rem' : '0.66rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Chase These Certifications</span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 12 }}>
                                                                             {resumeAnalysis.recommended_certifications!.map((c, i) => {

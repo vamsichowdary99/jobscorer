@@ -928,10 +928,13 @@ interface WhyWorthJoiningData {
 function V3WorthJoining({ wwj }: { wwj: WhyWorthJoiningData }) {
     const fv = wwj.fit_verdict || wwj.fresher_verdict || ''
     const parts = fv.split('—')
-    const badgeText = (parts[0] || '').trim().toUpperCase() || 'VERDICT'
-    const headline = (parts[1] || fv).trim()
-    const isGood = badgeText.includes('GOOD') || badgeText.includes('STRONG')
-    const isRisky = badgeText.includes('RISKY') || badgeText.includes('WEAK')
+    const hasDelimiter = parts.length > 1
+    const isGood = /good|strong/i.test(fv)
+    const isRisky = /risky|weak|avoid/i.test(fv)
+    const badgeText = hasDelimiter
+        ? (parts[0] || '').trim().toUpperCase()
+        : isGood ? 'GOOD FIT' : isRisky ? 'RISKY PICK' : 'VERDICT'
+    const headline = hasDelimiter ? (parts[1] || '').trim() : fv
 
     const badgeBg = isGood ? '#dcfce7' : isRisky ? '#fee2e2' : '#fef3c7'
     const badgeColor = isGood ? '#16a34a' : isRisky ? '#dc2626' : '#d97706'

@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Outfit, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
-import ChatPanel from '@/components/chat/ChatPanel'
 import ConsentBanner from '@/components/legal/ConsentBanner'
 import { AuthProvider } from '@/components/providers/AuthProvider'
 import { SITE_URL, SITE_NAME, SITE_TAGLINE, SITE_DESCRIPTION } from '@/lib/site'
@@ -76,7 +75,6 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           {children}
-          <ChatPanel />
           <ConsentBanner />
         </AuthProvider>
       </body>
