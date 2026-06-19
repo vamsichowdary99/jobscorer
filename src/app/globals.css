@@ -227,6 +227,37 @@ h4 {
   animation: fadeInUp 0.5s ease forwards;
 }
 
+/* ── Resumes page — mobile bottom sheet for section edit modals ── */
+@keyframes sheetSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@media (max-width: 767px) {
+  .mob-edit-overlay {
+    align-items: flex-end !important;
+    justify-content: flex-end !important;
+    padding: 0 !important;
+  }
+  .mob-edit-modal {
+    border-radius: 22px 22px 0 0 !important;
+    max-height: 88vh !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    animation: sheetSlideUp 0.28s cubic-bezier(0.32, 0.72, 0.2, 1) !important;
+  }
+  .mob-edit-modal::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 99px;
+    background: #e2e8f0;
+    margin: 12px auto 4px;
+    flex-shrink: 0;
+  }
+}
+
 .animate-slide-in-left {
   animation: slideInLeft 0.4s ease forwards;
 }
@@ -384,6 +415,17 @@ h4 {
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
+}
+
+/* ── Tracker — mobile: hide Kanban toggle and board ─────────── */
+@media (max-width: 767px) {
+  .mob-view-toggle { display: none !important; }
+  .mob-kanban-view { display: none !important; }
+}
+
+/* ── Learning page — mobile library card tap highlight ─────── */
+@media (max-width: 767px) {
+  .mob-lib-card:active { background: #eff6ff !important; }
 }
 
 /* ── Company Intel — mobile fixes (≤767px) ─────────────────── */

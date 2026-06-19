@@ -1583,6 +1583,7 @@ function LearningPage() {
     }, [paths])
 
     const activePath = orderedPaths.find(p => p.id === activeId) ?? orderedPaths[0] ?? null
+    const libProgress = useLibraryProgress(summaries)
 
     /* ─── MOBILE LAYOUT ─────────────────────────────────────────────────────── */
     if (isMobile) {
@@ -1667,22 +1668,64 @@ function LearningPage() {
         // ── History (library list) ──
         if (phase === 'history') {
             return (
-                <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', paddingBottom: 80 }}>
-                    <div style={{ background: '#fff', borderBottom: `1px solid ${T.line}`, padding: '12px 14px' }}>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, letterSpacing: '-0.025em' }}>Learning Paths</div>
-                        <div style={{ fontSize: 12, color: T.muted }}>{summaries.length} path{summaries.length !== 1 ? 's' : ''}</div>
+                <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+                    {/* Header */}
+                    <div style={{ background: '#fff', borderBottom: `1px solid ${T.line}`, padding: '18px 14px 14px', flexShrink: 0 }}>
+                        <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 5 }}>LEARNING PATHS</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: T.ink, letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 2 }}>My Learning Paths</div>
+                        <div style={{ fontSize: '12.5px', color: T.muted }}>{summaries.length} path{summaries.length !== 1 ? 's' : ''} · tap one to view your skill gaps</div>
                     </div>
-                    <div style={{ padding: '12px 13px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {summaries.map(s => (
-                            <div key={s.job_id} onClick={() => router.push(`/dashboard/learning?jobId=${s.job_id}`)} style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 11, padding: '12px 13px', cursor: 'pointer' }}>
-                                <div style={{ fontSize: '12.5px', color: T.muted, marginBottom: 2 }}>{s.job?.company ?? 'Unknown company'}</div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 6 }}>{s.job?.title ?? 'Untitled role'}</div>
-                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-                                    <span style={{ padding: '2px 8px', borderRadius: 99, background: T.blue50, color: T.blue, fontFamily: 'var(--font-mono,monospace)', fontSize: 10, fontWeight: 700 }}>{s.skill_count} skill{s.skill_count !== 1 ? 's' : ''}</span>
-                                    {s.critical_count > 0 && <span style={{ padding: '2px 8px', borderRadius: 99, background: T.redBg, color: T.redText, fontSize: 10, fontWeight: 700 }}>{s.critical_count} critical</span>}
+                    {/* Cards */}
+                    <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
+                        {summaries.map(s => {
+                            const spct = libProgress[s.job_id] ?? 0
+                            const sRingColor = spct < 20 ? '#dc2626' : spct < 60 ? '#f59e0b' : T.blue
+                            const sCirc = 88
+                            const sOffset = sCirc - (sCirc * spct / 100)
+                            return (
+                                <div key={s.job_id} className="mob-lib-card" onClick={() => router.push(`/dashboard/learning?jobId=${s.job_id}`)} style={{ padding: 14, borderBottom: '1px solid #eef2f7', background: '#fff', cursor: 'pointer', transition: 'background 0.12s' }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
+                                        {/* Left */}
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 4 }}>{s.job?.company ?? 'Unknown'}</div>
+                                            <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, letterSpacing: '-0.02em', marginBottom: 8, lineHeight: 1.25 }}>{s.job?.title ?? 'Untitled role'}</div>
+                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, background: '#f1f5f9', border: `1px solid ${T.line}`, fontSize: 11, fontWeight: 600, color: T.muted }}>
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                                                    {s.skill_count} skill{s.skill_count !== 1 ? 's' : ''}
+                                                </span>
+                                                {s.critical_count > 0 && (
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, background: T.redBg, border: '1px solid #fca5a5', fontSize: 11, fontWeight: 700, color: '#dc2626' }}>
+                                                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#dc2626', display: 'inline-block' }} />{s.critical_count} critical
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {/* Right: progress ring */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                                            <div style={{ position: 'relative', width: 38, height: 38 }}>
+                                                <svg width="38" height="38" viewBox="0 0 38 38">
+                                                    <circle cx="19" cy="19" r="14" fill="none" stroke="#e2e8f0" strokeWidth="3.5"/>
+                                                    <circle cx="19" cy="19" r="14" fill="none" stroke={sRingColor} strokeWidth="3.5" strokeLinecap="round" strokeDasharray={String(sCirc)} strokeDashoffset={String(sOffset)} transform="rotate(-90 19 19)"/>
+                                                </svg>
+                                                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono,monospace)', fontSize: 11, fontWeight: 800, color: sRingColor }}>{Math.round(spct)}</div>
+                                            </div>
+                                            <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.muted2 }}>done</div>
+                                        </div>
+                                    </div>
+                                    {/* Bottom progress bar */}
+                                    <div style={{ marginTop: 10, height: 3, borderRadius: 99, background: '#f1f5f9', overflow: 'hidden' }}>
+                                        <div style={{ width: `${spct}%`, height: '100%', background: sRingColor, borderRadius: 99 }} />
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
+                    </div>
+                    {/* Sticky footer */}
+                    <div style={{ position: 'sticky', bottom: 0, background: '#fff', borderTop: `1px solid ${T.line}`, padding: '11px 14px 16px', flexShrink: 0 }}>
+                        <button onClick={() => router.push('/dashboard/matches')} style={{ width: '100%', padding: '12px 0', background: '#135bec', color: '#fff', border: 'none', borderRadius: 10, fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 4px 14px -4px rgba(19,91,236,0.4)' }}>
+                            <Icon.Sparkles width={13} height={13} />Generate New Path
+                        </button>
                     </div>
                 </div>
             )
@@ -1708,23 +1751,33 @@ function LearningPage() {
             <>
             <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', background: T.bgAlt, fontFamily: "'Inter', system-ui, sans-serif", overflow: 'hidden' }}>
 
-                {/* ── Gaps bar ── */}
-                <div style={{ background: '#fff', borderBottom: `1px solid ${T.line}`, padding: '9px 13px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <button onClick={() => router.back()} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: T.muted, border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, flexShrink: 0 }}>
-                        <Icon.ArrowLeft />Back
-                    </button>
-                    <div style={{ width: 1, height: 16, background: T.line, flexShrink: 0 }} />
-                    <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                        Your skill gaps{job?.company ? <> · <span style={{ color: T.blue }}>{job.company}</span></> : ''}
+                {/* ── Gaps bar (2-row) ── */}
+                <div style={{ background: '#fff', borderBottom: `1px solid ${T.line}`, padding: '11px 13px 10px', flexShrink: 0 }}>
+                    {/* Row 1: breadcrumb */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'nowrap' as const, overflow: 'hidden' }}>
+                        <button onClick={() => router.push('/dashboard/learning')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: T.muted, border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, flexShrink: 0 }}>
+                            <Icon.ArrowLeft />Learning Paths
+                        </button>
+                        <div style={{ width: 1, height: 16, background: T.line, flexShrink: 0 }} />
+                        {job?.company && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 99, background: T.blue50, border: `1px solid ${T.blueLight}`, fontSize: '11.5px', fontWeight: 700, color: T.blue, flexShrink: 0, overflow: 'hidden', maxWidth: 140, textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                                <Icon.Building style={{ color: T.blue, flexShrink: 0 }} />{job.company}
+                            </span>
+                        )}
+                        {mLibCount > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 99, background: '#f0fdf4', border: '1px solid #bbf7d0', fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, color: '#15803d', flexShrink: 0, whiteSpace: 'nowrap' as const }}>
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                {mLibCount} saved
+                            </span>
+                        )}
                     </div>
-                    {mLibCount > 0 && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 99, background: T.blue50, border: `1px solid rgba(37,99,235,0.2)`, fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, color: T.blue, whiteSpace: 'nowrap' as const, flexShrink: 0 }}>
-                            LIBRARY · {mLibCount}
-                        </span>
-                    )}
-                    <button onClick={handleGenerate} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 8, border: `1px solid ${T.line}`, background: '#fff', fontSize: 11, fontWeight: 600, color: T.muted, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
-                        <Icon.Refresh width={11} height={11} />Regen
-                    </button>
+                    {/* Row 2: title + regenerate */}
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, letterSpacing: '-0.02em', flex: 1 }}>Your Skill Gaps</div>
+                        <button onClick={handleGenerate} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 11px', borderRadius: 8, border: `1.5px solid ${T.line}`, background: '#fff', fontSize: 11, fontWeight: 700, color: T.muted, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                            <Icon.Refresh width={11} height={11} />Regenerate
+                        </button>
+                    </div>
                 </div>
 
                 {/* ── Skill strip ── */}

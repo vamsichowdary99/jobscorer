@@ -62,6 +62,21 @@ export default function BuildPlanModal({
 
     const acceptedCount = [...decisions.values()].filter(d => d === 'accept').length
 
+    const totalLift = (() => {
+        if (!buildPlan) return 0
+        let lift = 0
+        for (const c of buildPlan.certifications) {
+            if (decisions.get(c.id) === 'accept') lift += c.impact_pct
+        }
+        for (const p of buildPlan.projects) {
+            if (decisions.get(p.id) === 'accept') lift += p.impact_pct
+        }
+        for (const l of buildPlan.learning_links) {
+            if (decisions.get(l.id) === 'accept') lift += l.impact_pct
+        }
+        return lift
+    })()
+
     function gotoLearning(skill: string) {
         onClose()
         router.push(`/dashboard/learning?jobId=${encodeURIComponent(jobId)}&skill=${encodeURIComponent(skill)}`)
@@ -96,6 +111,8 @@ export default function BuildPlanModal({
                 onClick={e => { if (e.target === e.currentTarget) onClose() }}
             >
                 <div className="bp-card" role="dialog" aria-modal="true" aria-label="Build plan recommendations">
+                    {/* Mobile drag handle */}
+                    <div className="bp-handle" aria-hidden="true" />
                     <button onClick={onClose} className="bp-close" aria-label="Close">
                         <XIcon />
                     </button>
@@ -206,19 +223,32 @@ export default function BuildPlanModal({
                     {/* Footer */}
                     {!loading && (
                         <div className="bp-footer">
-                            <button type="button" className="bp-btn-ghost" onClick={onSkipAll}>
-                                Skip all &amp; build
-                            </button>
-                            <button
-                                type="button"
-                                className="bp-btn-primary"
-                                disabled={!!error}
-                                onClick={() => onConfirm(collectAccepted())}
-                            >
-                                {acceptedCount > 0
-                                    ? `Build with ${acceptedCount} addition${acceptedCount > 1 ? 's' : ''} →`
-                                    : 'Build my resume →'}
-                            </button>
+                            {acceptedCount > 0 && (
+                                <div className="bp-counter-row">
+                                    <svg width="12" height="12" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    <span className="bp-counter-text">
+                                        {acceptedCount} item{acceptedCount > 1 ? 's' : ''} added
+                                    </span>
+                                    <span className="bp-counter-dot">·</span>
+                                    <span className="bp-counter-label">est. lift:</span>
+                                    <span className="bp-counter-lift">+{totalLift}%</span>
+                                </div>
+                            )}
+                            <div className="bp-footer-actions">
+                                <button type="button" className="bp-btn-ghost" onClick={onSkipAll}>
+                                    Skip all &amp; build
+                                </button>
+                                <button
+                                    type="button"
+                                    className="bp-btn-primary"
+                                    disabled={!!error}
+                                    onClick={() => onConfirm(collectAccepted())}
+                                >
+                                    Build my resume →
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -403,8 +433,12 @@ function BookIcon() {
 // ── CSS ───────────────────────────────────────────────────────
 
 const MODAL_CSS = `
-@keyframes bpFadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes bpSpin   { to { transform: rotate(360deg); } }
+@keyframes bpFadeUp   { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes bpSlideUp  { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes bpSpin     { to { transform: rotate(360deg); } }
+
+/* ── handle ── (hidden on desktop) */
+.bp-handle { display: none; }
 
 .bp-overlay {
     position: fixed; inset: 0; z-index: 300;
@@ -541,10 +575,26 @@ const MODAL_CSS = `
 .bp-btn-learn { background: none; color: #64748B; border: 1.5px solid transparent; padding: 7px 8px; }
 .bp-btn-learn:hover { color: #135bec; }
 
+/* footer — desktop */
 .bp-footer {
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; flex-direction: column;
     gap: 10px; padding: 16px 30px 22px; flex-shrink: 0;
     border-top: 1px solid #F1F5F9; margin-top: 4px;
+}
+.bp-footer-actions {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+}
+.bp-counter-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px; background: #f8fafc;
+    border-radius: 8px; border: 1px solid #e2e8f0;
+}
+.bp-counter-text { font-size: 12.5px; font-weight: 700; color: #0f172a; }
+.bp-counter-dot  { font-size: 12px; color: #cbd5e1; }
+.bp-counter-label { font-size: 12px; color: #64748b; }
+.bp-counter-lift {
+    font-family: var(--font-mono), 'JetBrains Mono', monospace;
+    font-size: 12.5px; font-weight: 800; color: #059669;
 }
 .bp-btn-ghost {
     padding: 11px 20px; border-radius: 9999px;
@@ -586,12 +636,90 @@ const MODAL_CSS = `
 }
 .bp-state__msg { font-size: 13.5px; color: #64748B; line-height: 1.65; margin: 0; max-width: 420px; }
 
-@media (max-width: 640px) {
-    .bp-card { border-radius: 18px; }
-    .bp-header { padding: 22px 20px 16px; padding-right: 46px; }
-    .bp-body { padding: 4px 20px 8px; }
-    .bp-footer { padding: 14px 20px 18px; }
-    .bp-item { flex-direction: column; }
-    .bp-item__actions { flex-direction: row; align-self: stretch; }
+/* ── Mobile bottom sheet (≤767px) ── */
+@media (max-width: 767px) {
+    .bp-handle {
+        display: block;
+        width: 36px; height: 4px; border-radius: 99px;
+        background: #e2e8f0;
+        margin: 12px auto 0; flex-shrink: 0;
+    }
+    .bp-overlay {
+        align-items: flex-end;
+        padding: 0;
+        background: rgba(15,23,42,0.52);
+        backdrop-filter: blur(4px);
+    }
+    .bp-card {
+        width: 100%; max-width: 100%;
+        border-radius: 22px 22px 0 0;
+        max-height: 88vh;
+        animation: bpSlideUp 0.3s cubic-bezier(0.32, 0.72, 0.2, 1);
+        box-shadow: 0 -20px 60px rgba(15,23,42,0.22);
+    }
+    .bp-close {
+        top: 14px; right: 14px;
+        width: 28px; height: 28px;
+    }
+    .bp-header {
+        padding: 14px 17px 13px;
+        padding-right: 46px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .bp-header__badge {
+        width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+    }
+    .bp-header__title { font-size: 17px; }
+    .bp-header__sub { font-size: 12px; }
+    .bp-body {
+        padding: 14px 17px 8px;
+        gap: 18px;
+        scrollbar-width: none;
+    }
+    .bp-body::-webkit-scrollbar { display: none; }
+    .bp-section__title { font-size: 9px; letter-spacing: 0.12em; color: #0f172a; }
+    .bp-item {
+        flex-direction: column;
+        padding: 13px;
+        border-radius: 12px;
+        margin-bottom: 0;
+    }
+    .bp-item__title { font-size: 14px; line-height: 1.3; }
+    .bp-item__body { font-size: 12.5px; line-height: 1.6; margin: 8px 0 12px; }
+    .bp-item__meta { font-size: 11px; }
+    .bp-impact { font-size: 10.5px; padding: 3px 9px; }
+    .bp-item__actions {
+        flex-direction: row; align-self: stretch; gap: 8px; flex-wrap: wrap;
+    }
+    .bp-btn-accept, .bp-btn-skip {
+        padding: 7px 16px; font-size: 13px;
+        border-radius: 8px;
+    }
+    .bp-btn-learn { font-size: 13px; padding: 7px 4px; }
+    .bp-repo { padding: 5px 9px; }
+    .bp-repo__name { font-size: 12px; }
+    .bp-repo__stars { font-size: 10.5px; }
+    .bp-repos__label { font-size: 9px; }
+    .bp-footer {
+        padding: 12px 17px 14px;
+        border-top: 1px solid #e2e8f0;
+        gap: 9px;
+    }
+    .bp-footer-actions { gap: 8px; }
+    .bp-btn-ghost {
+        flex: 1; padding: 11px;
+        border: 1.5px solid #e2e8f0; border-radius: 10px;
+        background: #fff; font-size: 13px;
+        text-align: center;
+    }
+    .bp-btn-primary {
+        flex: 2; padding: 11px;
+        border-radius: 10px; font-size: 13px;
+        box-shadow: 0 3px 10px rgba(19,91,236,0.3);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .bp-state { padding: 28px 20px 36px; gap: 14px; }
+    .bp-state__title { font-size: 16px; }
+    .bp-state__msg { font-size: 13px; }
 }
 `

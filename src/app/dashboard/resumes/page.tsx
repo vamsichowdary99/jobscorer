@@ -288,6 +288,47 @@ function sectionSummaryText(sectionKey: string, state: ResumeEditorState): strin
     return ''
 }
 
+function generateATSText(state: ResumeEditorState): string {
+    const lines: string[] = []
+    if (state.profile.name) lines.push(state.profile.name.toUpperCase())
+    const contact = [state.profile.email, state.profile.phone, state.profile.location, state.profile.linkedin, state.profile.github].filter(Boolean)
+    if (contact.length) lines.push(contact.join(' | '))
+    lines.push('')
+    if (state.summary) { lines.push('SUMMARY'); lines.push(state.summary); lines.push('') }
+    if (state.experience.length) {
+        lines.push('EXPERIENCE')
+        for (const exp of state.experience) {
+            lines.push(`${exp.title} | ${exp.company}`)
+            if (exp.startDate || exp.endDate) lines.push(`${exp.startDate || ''} – ${exp.endDate || 'Present'}`)
+            for (const b of exp.bullets) lines.push(`- ${b}`)
+            lines.push('')
+        }
+    }
+    if (state.education.length) {
+        lines.push('EDUCATION')
+        for (const edu of state.education) {
+            lines.push(`${edu.degree} | ${edu.school}`)
+            if (edu.date) lines.push(edu.date)
+            if (edu.gpa) lines.push(`GPA: ${edu.gpa}`)
+        }
+        lines.push('')
+    }
+    const allSkills = [state.skills.languages, state.skills.tools, state.skills.frameworks, state.skills.soft].filter(Boolean).join(', ')
+    if (allSkills) { lines.push('SKILLS'); lines.push(allSkills); lines.push('') }
+    if (state.projects.length) {
+        lines.push('PROJECTS')
+        for (const proj of state.projects) {
+            lines.push(proj.name)
+            if (proj.tech) lines.push(`Tech: ${proj.tech}`)
+            for (const b of proj.bullets) lines.push(`- ${b}`)
+            lines.push('')
+        }
+    }
+    if (state.certifications.length) { lines.push('CERTIFICATIONS'); lines.push(...state.certifications); lines.push('') }
+    if (state.achievements.length) { lines.push('ACHIEVEMENTS'); lines.push(...state.achievements); lines.push('') }
+    return lines.join('\n')
+}
+
 // ── Section Modal Shell ─────────────────────────────────────
 function SectionModal({
     title, subtitle, sectionKey, wide, onClose, onSave, children,
@@ -306,6 +347,7 @@ function SectionModal({
     return (
         <div
             ref={overlayRef}
+            className="mob-edit-overlay"
             onClick={e => { if (e.target === overlayRef.current) onClose() }}
             style={{
                 position: 'fixed', inset: 0, zIndex: 1000,
@@ -314,7 +356,7 @@ function SectionModal({
             }}
         >
             <style>{`@keyframes m-modal-in { from { opacity:0; transform:scale(0.96) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }`}</style>
-            <div style={{
+            <div className="mob-edit-modal" style={{
                 background: M.white, borderRadius: 16,
                 width: wide ? 640 : 520, maxWidth: '100%', maxHeight: '90vh',
                 display: 'flex', flexDirection: 'column',
@@ -2915,6 +2957,17 @@ const TEMPLATE_LABELS: Record<string, string> = {
     lapis: 'Lapis',
 }
 
+const TEMPLATE_IMAGES: Record<string, string> = {
+    'classic':       '/templates/aarav-sharma.png',
+    'cobalt':        '/templates/ananya-reddy.png',
+    'rezi':          '/templates/rohan-mehta.png',
+    'rezi-standard': '/templates/sneha-gupta.png',
+    'london':        '/templates/karthik-iyer.png',
+    'onyx':          '/templates/ishaan-verma.png',
+    'jade':          '/templates/priya-nair.png',
+    'lapis':         '/templates/vivek-menon.png',
+}
+
 async function loadPdfRenderer(templateId: string) {
     const [renderer, pdfDoc] = await Promise.all([
         import('@react-pdf/renderer'),
@@ -4053,6 +4106,8 @@ function MeridianPreviewPanel({
     onMoreTemplates: () => void
     downloadButton: React.ReactNode
 }) {
+    const [desktopPreviewTab, setDesktopPreviewTab] = useState<'recruiters' | 'ats'>('recruiters')
+
     const renderPreview = () => {
         switch (templateId) {
             case 'cobalt': return <CobaltResumePreview state={state} />
@@ -4118,19 +4173,34 @@ function MeridianPreviewPanel({
                 </div>
             </div>
 
-            {/* Paper */}
-            <div style={{
-                flex: 1, overflowY: 'auto', padding: '28px 28px 48px',
-                display: 'flex', flexDirection: 'column', alignItems: 'center',
-            }}>
-                <div style={{
-                    width: '100%', maxWidth: 700, minHeight: 880, background: '#fffffe',
-                    boxShadow: '0 4px 32px rgba(15,30,64,0.10), 0 1px 4px rgba(15,30,64,0.06), 0 12px 48px rgba(15,30,64,0.06)',
-                    borderRadius: 2,
-                }}>
-                    {renderPreview()}
-                </div>
+            {/* Recruiter / ATS tab bar */}
+            <div style={{ flexShrink: 0, background: M.white, borderBottom: `1px solid ${M.border}`, padding: '8px 20px', display: 'flex', gap: 6 }}>
+                <button onClick={() => setDesktopPreviewTab('recruiters')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: desktopPreviewTab === 'recruiters' ? '#0f172a' : 'transparent', color: desktopPreviewTab === 'recruiters' ? '#fff' : M.textMuted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What Recruiters See</button>
+                <button onClick={() => setDesktopPreviewTab('ats')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: desktopPreviewTab === 'ats' ? '#0f172a' : 'transparent', color: desktopPreviewTab === 'ats' ? '#fff' : M.textMuted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What ATS Sees</button>
             </div>
+
+            {/* Paper */}
+            {desktopPreviewTab === 'recruiters' ? (
+                <div style={{
+                    flex: 1, overflowY: 'auto', padding: '28px 28px 48px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                }}>
+                    <div style={{
+                        width: '100%', maxWidth: 700, minHeight: 880, background: '#fffffe',
+                        boxShadow: '0 4px 32px rgba(15,30,64,0.10), 0 1px 4px rgba(15,30,64,0.06), 0 12px 48px rgba(15,30,64,0.06)',
+                        borderRadius: 2,
+                    }}>
+                        {renderPreview()}
+                    </div>
+                </div>
+            ) : (
+                <div style={{ flex: 1, overflowY: 'auto', padding: '28px', background: M.surface }}>
+                    <div style={{ maxWidth: 700, margin: '0 auto', background: '#fff', borderRadius: 8, padding: 24, boxShadow: '0 2px 12px rgba(15,30,64,0.08)', fontFamily: M.fontBody }}>
+                        <div style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#94a3b8', marginBottom: 10 }}>ATS Plain Text Extract</div>
+                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, color: '#374151', lineHeight: 1.7, margin: 0 }}>{generateATSText(state)}</pre>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -4518,6 +4588,7 @@ export default function ResumesPage() {
     const [mobileTab, setMobileTab] = useState<'sections' | 'templates'>('sections')
     const [showAllResumesSheet, setShowAllResumesSheet] = useState(false)
     const [showMobilePreview, setShowMobilePreview] = useState(false)
+    const [previewTab, setPreviewTab] = useState<'recruiters' | 'ats'>('recruiters')
     const [mobileSrcDropOpen, setMobileSrcDropOpen] = useState(false)
     const mobileSrcDropRef = useRef<HTMLDivElement>(null)
 
@@ -4752,7 +4823,7 @@ export default function ResumesPage() {
                         {meridianScore > 0 && (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 99, background: meridianScoreBg, border: `1px solid ${meridianScoreColor}33`, fontFamily: M.fontMono, fontSize: 11, fontWeight: 800, color: meridianScoreColor }}>{meridianScore}% match</span>
                         )}
-                        <button onClick={() => setShowMobilePreview(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 9, background: M.white, border: `1.5px solid ${M.border}`, color: M.textMuted, fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: M.fontBody }}>
+                        <button onClick={() => { setShowMobilePreview(true); setPreviewTab('recruiters') }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 9, background: M.white, border: `1.5px solid ${M.border}`, color: M.textMuted, fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: M.fontBody }}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                             Preview
                         </button>
@@ -4813,8 +4884,8 @@ export default function ResumesPage() {
                         <span style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: M.textFaint }}>Source Resume</span>
                         <span style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, color: M.accent }}>{visibleSavedResumes.length} resume{visibleSavedResumes.length !== 1 ? 's' : ''}</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                        <div style={{ display: 'flex', gap: 7, overflowX: 'auto', flex: 1, paddingRight: 8, scrollbarWidth: 'none' as const }}>
+                    <div style={{ display: 'flex', alignItems: 'stretch', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', gap: 7, overflowX: 'auto', flex: 1, minWidth: 0, paddingRight: 8, scrollbarWidth: 'none' as const }}>
                             {visibleSavedResumes.slice(0, 6).map(entry => {
                                 const isSel = selectedId === entry.id
                                 const sc = entry.keyword_alignment_score ?? 0
@@ -4837,12 +4908,10 @@ export default function ResumesPage() {
                                 )
                             })}
                         </div>
-                        {visibleSavedResumes.length > 6 && (
-                            <div onClick={() => setShowAllResumesSheet(true)} style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '9px 10px', borderLeft: `1px solid ${M.border}`, background: M.surfaceAlt, cursor: 'pointer', width: 62, marginRight: 13 }}>
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: M.accent, textAlign: 'center', lineHeight: 1.3 }}>See all<br />{visibleSavedResumes.length} →</span>
-                            </div>
-                        )}
+                        <div onClick={() => setShowAllResumesSheet(true)} style={{ flexShrink: 0, alignSelf: 'stretch', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '9px 10px', borderLeft: `1px solid ${M.border}`, background: M.surfaceAlt, cursor: 'pointer', minWidth: 62, marginRight: 13 }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: M.accent, textAlign: 'center' as const, lineHeight: 1.3 }}>See all<br />{visibleSavedResumes.length} →</span>
+                        </div>
                     </div>
                 </div>
 
@@ -4926,34 +4995,37 @@ export default function ResumesPage() {
                                     const accent = TMPL_ACCENT[id] ?? '#0f1e40'
                                     return (
                                         <div key={id} onClick={() => { handleTemplateSelect(id as any) }} style={{ border: `2px solid ${isActive ? M.accent : M.border}`, borderRadius: 11, overflow: 'hidden', cursor: 'pointer', background: M.white, transition: 'border-color .13s', boxShadow: isActive ? `0 0 0 3px rgba(29,106,245,0.1)` : 'none' }}>
-                                            {/* Mini preview */}
-                                            <div style={{ height: 120, background: '#f8fafc', overflow: 'hidden', position: 'relative' }}>
-                                                <div style={{ padding: '8px 7px', fontSize: '5.5px', color: '#1a1a1a', lineHeight: 1.4 }}>
-                                                    {id === 'cobalt' || id === 'onyx' || id === 'jade' || id === 'lapis' ? (
-                                                        /* Two-col sidebar preview */
-                                                        <div style={{ display: 'flex', height: 104 }}>
-                                                            <div style={{ width: 28, background: accent, height: '100%', borderRadius: 2, marginRight: 4 }} />
-                                                            <div style={{ flex: 1 }}>
-                                                                <div style={{ height: 5, background: '#1a1a1a', borderRadius: 1, marginBottom: 3, width: '70%' }} />
+                                            {/* Template thumbnail */}
+                                            <div style={{ height: 160, background: '#f8fafc', overflow: 'hidden', position: 'relative' }}>
+                                                {TEMPLATE_IMAGES[id] ? (
+                                                    <img src={TEMPLATE_IMAGES[id]} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
+                                                ) : (
+                                                    /* Fallback hand-drawn preview for templates without a PNG */
+                                                    <div style={{ padding: '8px 7px', fontSize: '5.5px', color: '#1a1a1a', lineHeight: 1.4 }}>
+                                                        {id === 'cobalt' || id === 'onyx' || id === 'jade' || id === 'lapis' ? (
+                                                            <div style={{ display: 'flex', height: 104 }}>
+                                                                <div style={{ width: 28, background: accent, height: '100%', borderRadius: 2, marginRight: 4 }} />
+                                                                <div style={{ flex: 1 }}>
+                                                                    <div style={{ height: 5, background: '#1a1a1a', borderRadius: 1, marginBottom: 3, width: '70%' }} />
+                                                                    <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2 }} />
+                                                                    <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 6, width: '85%' }} />
+                                                                    {[1,2,3].map(i => <div key={i} style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2, width: `${90 - i * 8}%` }} />)}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                {(id === 'london' || id === 'cobalt') && <div style={{ height: 3, background: accent, borderRadius: 1, marginBottom: 4 }} />}
+                                                                <div style={{ fontSize: 8, fontWeight: 700, color: id === 'london' || id === 'rezi' ? accent : '#0f1e40', marginBottom: 2 }}>
+                                                                    {editorState.profile.name || 'Your Name'}
+                                                                </div>
                                                                 <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2 }} />
-                                                                <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 6, width: '85%' }} />
+                                                                <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 5, width: '60%' }} />
+                                                                <div style={{ height: 2, width: 40, borderRadius: 1, background: accent, margin: '4px 0 2px' }} />
                                                                 {[1,2,3].map(i => <div key={i} style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2, width: `${90 - i * 8}%` }} />)}
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        /* Single-col preview */
-                                                        <>
-                                                            {(id === 'london' || id === 'cobalt') && <div style={{ height: 3, background: accent, borderRadius: 1, marginBottom: 4 }} />}
-                                                            <div style={{ fontSize: 8, fontWeight: 700, color: id === 'london' || id === 'rezi' ? accent : '#0f1e40', marginBottom: 2 }}>
-                                                                {editorState.profile.name || 'Your Name'}
-                                                            </div>
-                                                            <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2 }} />
-                                                            <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 5, width: '60%' }} />
-                                                            <div style={{ height: 2, width: 40, borderRadius: 1, background: accent, margin: '4px 0 2px' }} />
-                                                            {[1,2,3].map(i => <div key={i} style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2, width: `${90 - i * 8}%` }} />)}
-                                                        </>
-                                                    )}
-                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 {isActive && (
                                                     <div style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: '50%', background: M.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(29,106,245,0.5)' }}>
                                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
@@ -5000,47 +5072,61 @@ export default function ResumesPage() {
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                                 </button>
                             </div>
-                            <div style={{ flex: 1, overflowY: 'auto', padding: '14px', background: '#f1f5f9' }}>
-                                <div style={{ background: '#fff', borderRadius: 8, padding: '16px', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
-                                    {/* Inline preview using editorState */}
-                                    <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: '#1a1a1a', lineHeight: 1.55 }}>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f1e40', letterSpacing: '-0.02em', marginBottom: 2 }}>{editorState.profile.name || 'Your Name'}</div>
-                                        <div style={{ fontSize: 8, color: '#555', marginBottom: 8, display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-                                            {editorState.profile.email && <span>{editorState.profile.email}</span>}
-                                            {editorState.profile.phone && <span>· {editorState.profile.phone}</span>}
-                                            {editorState.profile.location && <span>· {editorState.profile.location}</span>}
+                            {/* Recruiter / ATS tabs */}
+                            <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '8px 14px', display: 'flex', gap: 6, flexShrink: 0 }}>
+                                <button onClick={() => setPreviewTab('recruiters')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'recruiters' ? '#0f172a' : 'transparent', color: previewTab === 'recruiters' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What Recruiters See</button>
+                                <button onClick={() => setPreviewTab('ats')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'ats' ? '#0f172a' : 'transparent', color: previewTab === 'ats' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What ATS Sees</button>
+                            </div>
+                            {previewTab === 'recruiters' ? (
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '14px', background: '#f1f5f9' }}>
+                                    <div style={{ background: '#fff', borderRadius: 8, padding: '16px', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
+                                        {/* Inline preview using editorState */}
+                                        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: '#1a1a1a', lineHeight: 1.55 }}>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f1e40', letterSpacing: '-0.02em', marginBottom: 2 }}>{editorState.profile.name || 'Your Name'}</div>
+                                            <div style={{ fontSize: 8, color: '#555', marginBottom: 8, display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                                                {editorState.profile.email && <span>{editorState.profile.email}</span>}
+                                                {editorState.profile.phone && <span>· {editorState.profile.phone}</span>}
+                                                {editorState.profile.location && <span>· {editorState.profile.location}</span>}
+                                            </div>
+                                            {editorState.summary && <>
+                                                <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5 }}>Summary</div>
+                                                <div style={{ fontSize: 8, color: '#374151', lineHeight: 1.6, marginBottom: 8 }}>{editorState.summary}</div>
+                                            </>}
+                                            {editorState.experience.length > 0 && <>
+                                                <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Experience</div>
+                                                {editorState.experience.map((exp, i) => (
+                                                    <div key={i} style={{ marginBottom: 6 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><b style={{ fontSize: 9 }}>{exp.title}</b><span style={{ fontSize: 8, color: '#555' }}>{exp.startDate}{exp.endDate ? ` – ${exp.endDate}` : ''}</span></div>
+                                                        <div style={{ fontSize: 8, color: '#2563eb', fontWeight: 600, marginBottom: 2 }}>{exp.company}</div>
+                                                        <ul style={{ paddingLeft: 10, margin: 0 }}>{exp.bullets.slice(0, 3).map((b, j) => <li key={j} style={{ fontSize: 8, color: '#374151', lineHeight: 1.5 }}>{b}</li>)}</ul>
+                                                    </div>
+                                                ))}
+                                            </>}
+                                            {editorState.education.length > 0 && <>
+                                                <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Education</div>
+                                                {editorState.education.map((edu, i) => (
+                                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                        <div><b style={{ fontSize: 9 }}>{edu.degree} · {edu.school}</b></div>
+                                                        <span style={{ fontSize: 8, color: '#555', flexShrink: 0 }}>{edu.date}</span>
+                                                    </div>
+                                                ))}
+                                            </>}
+                                            {(editorState.skills.languages || editorState.skills.tools) && <>
+                                                <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Skills</div>
+                                                {editorState.skills.languages && <div style={{ fontSize: 8, color: '#374151', marginBottom: 2 }}><b>Languages:</b> {editorState.skills.languages}</div>}
+                                                {editorState.skills.tools && <div style={{ fontSize: 8, color: '#374151' }}><b>Tools:</b> {editorState.skills.tools}</div>}
+                                            </>}
                                         </div>
-                                        {editorState.summary && <>
-                                            <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5 }}>Summary</div>
-                                            <div style={{ fontSize: 8, color: '#374151', lineHeight: 1.6, marginBottom: 8 }}>{editorState.summary}</div>
-                                        </>}
-                                        {editorState.experience.length > 0 && <>
-                                            <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Experience</div>
-                                            {editorState.experience.map((exp, i) => (
-                                                <div key={i} style={{ marginBottom: 6 }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><b style={{ fontSize: 9 }}>{exp.title}</b><span style={{ fontSize: 8, color: '#555' }}>{exp.startDate}{exp.endDate ? ` – ${exp.endDate}` : ''}</span></div>
-                                                    <div style={{ fontSize: 8, color: '#2563eb', fontWeight: 600, marginBottom: 2 }}>{exp.company}</div>
-                                                    <ul style={{ paddingLeft: 10, margin: 0 }}>{exp.bullets.slice(0, 3).map((b, j) => <li key={j} style={{ fontSize: 8, color: '#374151', lineHeight: 1.5 }}>{b}</li>)}</ul>
-                                                </div>
-                                            ))}
-                                        </>}
-                                        {editorState.education.length > 0 && <>
-                                            <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Education</div>
-                                            {editorState.education.map((edu, i) => (
-                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                    <div><b style={{ fontSize: 9 }}>{edu.degree} · {edu.school}</b></div>
-                                                    <span style={{ fontSize: 8, color: '#555', flexShrink: 0 }}>{edu.date}</span>
-                                                </div>
-                                            ))}
-                                        </>}
-                                        {(editorState.skills.languages || editorState.skills.tools) && <>
-                                            <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Skills</div>
-                                            {editorState.skills.languages && <div style={{ fontSize: 8, color: '#374151', marginBottom: 2 }}><b>Languages:</b> {editorState.skills.languages}</div>}
-                                            {editorState.skills.tools && <div style={{ fontSize: 8, color: '#374151' }}><b>Tools:</b> {editorState.skills.tools}</div>}
-                                        </>}
                                     </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', background: '#f8fafc' }}>
+                                    <div style={{ background: '#fff', borderRadius: 8, padding: 14, boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
+                                        <div style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#94a3b8', marginBottom: 10 }}>ATS Plain Text Extract</div>
+                                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 11.5, color: '#374151', lineHeight: 1.7, margin: 0 }}>{generateATSText(editorState)}</pre>
+                                    </div>
+                                </div>
+                            )}
                             <div style={{ padding: '10px 14px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, flexShrink: 0 }}>
                                 <button onClick={() => { setShowMobilePreview(false); setShowTemplatePicker(true) }} style={{ flex: 1, padding: 10, border: `1.5px solid ${M.border}`, borderRadius: 9, background: '#fff', fontSize: '12.5px', fontWeight: 600, color: M.textMuted, cursor: 'pointer', fontFamily: M.fontBody }}>Change Template</button>
                                 <DownloadPdf state={editorState} templateId={templateId} companyName={meridianJob?.company ?? null} compact />

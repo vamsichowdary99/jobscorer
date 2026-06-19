@@ -165,6 +165,7 @@ export default function ApplicationsPage() {
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [isMobile, setIsMobile] = useState(false)
     const [mobileView, setMobileView] = useState<'list' | 'kanban'>('list')
+    const [mobileStatusFilter, setMobileStatusFilter] = useState<'all' | ApplicationStatus>('all')
 
     useEffect(() => {
         if (!user?.id) return
@@ -362,7 +363,7 @@ export default function ApplicationsPage() {
     /* ── MOBILE LAYOUT ─────────────────────────────────────── */
     if (isMobile) {
         const MobileAddModal = () => addModalOpen ? (
-            <AddModal
+            <MobileAddSheet
                 tab={addModalTab}
                 onTabChange={setAddModalTab}
                 matches={matches.filter(m => {
@@ -545,8 +546,27 @@ export default function ApplicationsPage() {
                         ))}
                     </div>
 
+                    {/* Status filter tabs */}
+                    <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '0 14px', display: 'flex', overflowX: 'auto', scrollbarWidth: 'none', flexShrink: 0, marginTop: 12 } as React.CSSProperties}>
+                        {([
+                            { key: 'all' as const, label: 'All', count: visibleApps.length, bg: '#f1f5f9', color: '#64748b' },
+                            { key: 'applied' as const, label: 'Applied', count: counts.applied, bg: '#eff6ff', color: '#135bec' },
+                            { key: 'interview' as const, label: 'Interview', count: counts.interview, bg: '#dcfce7', color: '#16a34a' },
+                            { key: 'offer' as const, label: 'Offer', count: counts.offer, bg: '#fef3c7', color: '#d97706' },
+                            { key: 'rejected' as const, label: 'Rejected', count: counts.rejected, bg: '#fee2e2', color: '#dc2626' },
+                        ]).map(({ key, label, count, bg, color }) => {
+                            const active = mobileStatusFilter === key
+                            return (
+                                <button key={key} onClick={() => setMobileStatusFilter(key)} style={{ padding: '9px 12px 7px', fontSize: 12, fontWeight: active ? 700 : 600, color: active ? '#135bec' : '#64748b', background: 'none', border: 'none', borderBottom: `2.5px solid ${active ? '#135bec' : 'transparent'}`, marginBottom: -1, whiteSpace: 'nowrap', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, fontFamily: 'inherit' }}>
+                                    {label}
+                                    <span style={{ minWidth: 16, height: 16, padding: '0 4px', borderRadius: 99, background: bg, color, fontFamily: "var(--font-mono), 'JetBrains Mono', monospace", fontSize: 9, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{count}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
+
                     {/* View tabs */}
-                    <div style={{ margin: '12px 16px 0', display: 'flex', alignItems: 'center', gap: 3, background: '#fff', borderRadius: 12, padding: 4, border: '1px solid #eef2f7' }}>
+                    <div className="mob-view-toggle" style={{ margin: '12px 16px 0', display: 'flex', alignItems: 'center', gap: 3, background: '#fff', borderRadius: 12, padding: 4, border: '1px solid #eef2f7' }}>
                         {(['kanban', 'list'] as const).map(v => (
                             <button key={v} onClick={() => setMobileView(v)} style={{ flex: 1, padding: '8px 12px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: mobileView === v ? '#eff6ff' : 'transparent', color: mobileView === v ? '#135bec' : '#64748b', border: 'none', cursor: 'pointer' }}>
                                 {v === 'kanban' ? 'Kanban' : 'List'}
@@ -560,7 +580,7 @@ export default function ApplicationsPage() {
                     {/* List view */}
                     {mobileView === 'list' && (
                         <div style={{ padding: '14px 16px 0' }}>
-                            {(['applied', 'interview', 'offer', 'rejected', 'withdrawn'] as ApplicationStatus[]).filter(s => grouped[s].length > 0).map(status => (
+                            {(['applied', 'interview', 'offer', 'rejected', 'withdrawn'] as ApplicationStatus[]).filter(s => grouped[s].length > 0).filter(s => mobileStatusFilter === 'all' || s === mobileStatusFilter).map(status => (
                                 <div key={status} style={{ marginBottom: 18 }}>
                                     {/* Group header */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -610,7 +630,7 @@ export default function ApplicationsPage() {
 
                     {/* Kanban view — horizontal scroll */}
                     {mobileView === 'kanban' && (
-                        <div style={{ marginTop: 14, paddingLeft: 16, display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+                        <div className="mob-kanban-view" style={{ marginTop: 14, paddingLeft: 16, display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
                             {(['applied', 'interview', 'offer', 'rejected'] as ApplicationStatus[]).map(status => (
                                 <div key={status} style={{ flexShrink: 0, width: 210, display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 4 }}>
                                     <div style={{ padding: '8px 12px', borderRadius: 10, background: STATUS_META[status].bg }}>
@@ -1266,6 +1286,10 @@ function OverviewTab({ app, onStatusChange, onDelete }: { app: Application; onSt
                             onClick={(e) => onStatusChange('interview', { x: e.clientX, y: e.clientY })}>
                             ✓ Mark as Interview
                         </button>
+                        <button style={{ ...S.btnGold, width: '100%', justifyContent: 'center', marginBottom: 8 }}
+                            onClick={(e) => onStatusChange('offer', { x: e.clientX, y: e.clientY })}>
+                            🏆 Mark as Offer
+                        </button>
                         <button style={{ ...S.btnRedOutline, width: '100%', justifyContent: 'center', marginBottom: 8 }}
                             onClick={(e) => onStatusChange('rejected', { x: e.clientX, y: e.clientY })}>
                             Mark as Rejected
@@ -1614,6 +1638,144 @@ function AddModal({ tab, onTabChange, matches, selectedResumeName, onClose, onAd
                 <style>{`@keyframes rsModalIn { from { opacity: 0; transform: scale(.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }`}</style>
             </div>
         </div>
+    )
+}
+
+function MobileAddSheet({ tab, onTabChange, matches, selectedResumeName, onClose, onAddFromMatch, onAddManual }: {
+    tab: 'matches' | 'manual'
+    onTabChange: (t: 'matches' | 'manual') => void
+    matches: FullMatch[]
+    selectedResumeName: string | null
+    onClose: () => void
+    onAddFromMatch: (m: FullMatch) => void
+    onAddManual: (payload: { company: string; role: string; url: string; status: ApplicationStatus; notes: string; applied_at: string }) => void
+}) {
+    const [filter, setFilter] = useState<'all' | '70' | '80'>('all')
+    const [form, setForm] = useState({
+        company: '', role: '', url: '',
+        status: 'applied' as ApplicationStatus,
+        notes: '',
+        applied_at: new Date().toISOString().slice(0, 10),
+    })
+    const filteredMatches = matches
+        .filter(m => filter === 'all' ? true : filter === '70' ? (m.relevance_score ?? 0) >= 70 : (m.relevance_score ?? 0) >= 80)
+        .slice(0, 8)
+
+    const fieldLabel: React.CSSProperties = {
+        fontFamily: "var(--font-mono), 'JetBrains Mono', monospace",
+        fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', color: '#64748b',
+        display: 'block', marginBottom: 5, letterSpacing: '0.06em',
+    }
+    const fieldInput: React.CSSProperties = {
+        width: '100%', padding: '9px 11px', borderRadius: 9,
+        border: '1px solid #e2e8f0', fontSize: 13.5, fontFamily: 'inherit',
+        color: '#0f172a', outline: 'none', background: '#fff',
+    }
+
+    return (
+        <>
+            <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)', zIndex: 48 }} />
+            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderRadius: '22px 22px 0 0', maxHeight: '88vh', display: 'flex', flexDirection: 'column', zIndex: 49, animation: 'mobSheetUp 0.28s cubic-bezier(.32,.72,.2,1)' }}>
+                {/* Handle */}
+                <div style={{ width: 36, height: 4, borderRadius: 99, background: '#e2e8f0', margin: '12px auto 0', flexShrink: 0 }} />
+                {/* Header */}
+                <div style={{ padding: '14px 18px 0', position: 'relative', flexShrink: 0 }}>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>Add application</div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                        {selectedResumeName
+                            ? <>Pulling matches scored with <b style={{ color: '#135bec' }}>{selectedResumeName}</b></>
+                            : 'Pull from your AI matches or enter one manually.'}
+                    </div>
+                    <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 16, width: 28, height: 28, borderRadius: 8, background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', cursor: 'pointer', fontSize: 18, lineHeight: 1, fontFamily: 'inherit' }}>×</button>
+                </div>
+                {/* Segment control */}
+                <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 4, margin: '12px 16px 0', gap: 3, flexShrink: 0 }}>
+                    {(['matches', 'manual'] as const).map(t => (
+                        <button key={t} onClick={() => onTabChange(t)} style={{ flex: 1, padding: 8, borderRadius: 7, border: 'none', fontSize: 12.5, fontWeight: tab === t ? 700 : 600, background: tab === t ? '#fff' : 'none', color: tab === t ? '#135bec' : '#64748b', boxShadow: tab === t ? '0 1px 3px rgba(15,23,42,0.1)' : 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                            {t === 'matches' ? 'From your matches' : 'Manually'}
+                        </button>
+                    ))}
+                </div>
+                {/* Matches tab */}
+                {tab === 'matches' && (
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px' }}>
+                        {/* Score filter chips */}
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                            {(['all', '70', '80'] as const).map(f => (
+                                <button key={f} onClick={() => setFilter(f)} style={{ padding: '5px 13px', borderRadius: 99, border: `1.5px solid ${filter === f ? '#135bec' : '#e2e8f0'}`, background: filter === f ? '#eff6ff' : '#fff', color: filter === f ? '#135bec' : '#64748b', fontSize: 11.5, fontWeight: filter === f ? 700 : 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    {f === 'all' ? 'All' : `≥${f}% match`}
+                                </button>
+                            ))}
+                        </div>
+                        {filteredMatches.length === 0 ? (
+                            <div style={{ padding: '24px 20px', textAlign: 'center', color: '#94a3b8', fontSize: 13, border: '1.5px dashed #e2e8f0', borderRadius: 10, lineHeight: 1.55 }}>
+                                {selectedResumeName ? (
+                                    <><div style={{ fontSize: 22, marginBottom: 6 }}>🎯</div><div style={{ color: '#475569', fontWeight: 600, marginBottom: 4 }}>No matches for <span style={{ color: '#135bec' }}>{selectedResumeName}</span> yet.</div><div>Score this resume in AI Matches first.</div></>
+                                ) : 'No unapplied matches at this threshold. Lower the filter or score more jobs.'}
+                            </div>
+                        ) : filteredMatches.map(m => {
+                            const [c1, c2] = paletteFor(m.job.company)
+                            const score = Math.round(m.relevance_score ?? 0)
+                            const scoreBg = score >= 80 ? '#dcfce7' : score >= 70 ? '#eff6ff' : '#fef3c7'
+                            const scoreColor = score >= 80 ? '#15803d' : score >= 70 ? '#135bec' : '#b45309'
+                            return (
+                                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 11px', border: '1px solid #e2e8f0', borderRadius: 11, background: '#fff', marginBottom: 8 }}>
+                                    <div style={{ width: 38, height: 38, borderRadius: 10, background: `linear-gradient(135deg, ${c1}, ${c2})`, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{initials(m.job.company)}</div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.job.title}</div>
+                                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{m.job.company}{m.job.location ? ` · ${m.job.location}` : ''}</div>
+                                    </div>
+                                    <div style={{ fontFamily: "var(--font-mono), 'JetBrains Mono', monospace", fontSize: 13, fontWeight: 800, padding: '5px 8px', borderRadius: 8, background: scoreBg, color: scoreColor, flexShrink: 0 }}>{score}</div>
+                                    <button onClick={() => onAddFromMatch(m)} style={{ padding: '6px 13px', borderRadius: 8, border: 'none', background: '#135bec', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Apply</button>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+                {/* Manual tab */}
+                {tab === 'manual' && (
+                    <>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px' }}>
+                            <div style={{ marginBottom: 10 }}>
+                                <label style={fieldLabel}>Company Name *</label>
+                                <input style={fieldInput} value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="e.g. SysCloud, Infosys, TCS…" />
+                            </div>
+                            <div style={{ marginBottom: 10 }}>
+                                <label style={fieldLabel}>Job Title *</label>
+                                <input style={fieldInput} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} placeholder="e.g. Junior DevOps Engineer" />
+                            </div>
+                            <div style={{ marginBottom: 10 }}>
+                                <label style={fieldLabel}>Job URL (optional)</label>
+                                <input style={fieldInput} value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://…" />
+                            </div>
+                            <div style={{ marginBottom: 10 }}>
+                                <label style={fieldLabel}>Status</label>
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    {STATUS_ORDER.map(s => (
+                                        <button key={s} onClick={() => setForm({ ...form, status: s })} style={{ padding: '7px 13px', borderRadius: 99, border: `1.5px solid ${form.status === s ? STATUS_META[s].dot : '#e2e8f0'}`, background: form.status === s ? STATUS_META[s].bg : '#fff', color: form.status === s ? STATUS_META[s].color : '#64748b', fontSize: 12, fontWeight: form.status === s ? 700 : 600, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_META[s].dot, flexShrink: 0 }} />{STATUS_META[s].label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div style={{ marginBottom: 10 }}>
+                                <label style={fieldLabel}>Applied Date</label>
+                                <input type="date" style={fieldInput} value={form.applied_at} onChange={e => setForm({ ...form, applied_at: e.target.value })} />
+                            </div>
+                            <div style={{ marginBottom: 10 }}>
+                                <label style={fieldLabel}>Notes (optional)</label>
+                                <textarea style={{ ...fieldInput, resize: 'vertical', minHeight: 64 } as React.CSSProperties} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Referral, job link, contact name…" />
+                            </div>
+                        </div>
+                        <div style={{ padding: '11px 16px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, flexShrink: 0 }}>
+                            <button onClick={onClose} style={{ flex: 1, padding: 11, borderRadius: 10, border: '1px solid #cfe2ff', background: '#fff', color: '#1e3a6e', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                            <button disabled={!form.company.trim() || !form.role.trim()} onClick={() => onAddManual({ company: form.company.trim(), role: form.role.trim(), url: form.url.trim(), status: form.status, notes: form.notes, applied_at: new Date(form.applied_at).toISOString() })} style={{ flex: 2, padding: 11, border: 'none', borderRadius: 10, background: '#135bec', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 3px 10px rgba(19,91,236,0.3)', opacity: (!form.company.trim() || !form.role.trim()) ? 0.5 : 1 }}>Save Application</button>
+                        </div>
+                    </>
+                )}
+            </div>
+            <style>{`@keyframes mobSheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+        </>
     )
 }
 

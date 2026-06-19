@@ -2302,6 +2302,13 @@ function OptimizePageInner() {
         setPendingGapData(null)
     }, [])
 
+    // On mobile, auto-select the first item when the list loads so the user sees
+    // their generated resumes immediately instead of the empty state.
+    useEffect(() => {
+        if (!isMobile || selected || loadingOptimized || optimizedList.length === 0 || autoJobId) return
+        handleSelectJob(optimizedList[0])
+    }, [isMobile, optimizedList, selected, loadingOptimized, autoJobId, handleSelectJob])
+
     const refreshOptimizedList = useCallback(() => {
         if (!user?.id || !selectedResumeId) return
         fetchOptimizedResumesByResume(user.id, selectedResumeId)
@@ -2629,8 +2636,8 @@ function OptimizePageInner() {
                                 <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Generated Resumes</span>
                                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: '#f1f5f9', color: '#64748b' }}>{optimizedList.length}</span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
-                                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingRight: 8, scrollbarWidth: 'none' as const, WebkitOverflowScrolling: 'touch' as any }}>
+                            <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, overflow: 'hidden' }}>
+                                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', flex: 1, minWidth: 0, padding: '0 8px 0 0', scrollbarWidth: 'none' as const, WebkitOverflowScrolling: 'touch' as any }}>
                                     {optimizedList.slice(0, 6).map((item) => {
                                         const isSel = selected?.id === item.id
                                         const date = item.updated_at ? new Date(item.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''
@@ -2661,16 +2668,14 @@ function OptimizePageInner() {
                                         )
                                     })}
                                 </div>
-                                {/* See all — pinned right */}
-                                {optimizedList.length > 6 && (
-                                    <div
-                                        onClick={() => setShowGenSheet(true)}
-                                        style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '9px 10px', borderLeft: '1px solid #e2e8f0', background: '#eff6ff', cursor: 'pointer', width: 62 }}
-                                    >
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-                                        <span style={{ fontSize: 10, fontWeight: 700, color: '#135bec', textAlign: 'center', lineHeight: 1.3 }}>See all<br />{optimizedList.length} →</span>
-                                    </div>
-                                )}
+                                {/* See all — always pinned right */}
+                                <div
+                                    onClick={() => setShowGenSheet(true)}
+                                    style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '9px 10px', borderLeft: '1px solid #e2e8f0', background: '#eff6ff', cursor: 'pointer', minWidth: 62 }}
+                                >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#135bec', textAlign: 'center', lineHeight: 1.3 }}>See all<br />{optimizedList.length} →</span>
+                                </div>
                             </div>
                         </div>
 
@@ -2739,7 +2744,7 @@ function OptimizePageInner() {
                                     Redo
                                 </button>
                                 <button
-                                    onClick={handleGenerateResume}
+                                    onClick={() => openBuildPlan()}
                                     style={{ flex: 1.4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '9px 8px', borderRadius: 9, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#135bec', color: '#fff', border: '1.5px solid #135bec', boxShadow: '0 4px 14px -4px rgba(19,91,236,0.4)', whiteSpace: 'nowrap' as const }}
                                 >
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
