@@ -2946,7 +2946,7 @@ async function loadPdfRenderer(templateId: string) {
 }
 
 // ── Download PDF ─────────────────────────────────────────────
-function DownloadPdf({ state, templateId, companyName }: { state: ResumeEditorState; templateId: string; companyName?: string | null }) {
+function DownloadPdf({ state, templateId, companyName, compact = false }: { state: ResumeEditorState; templateId: string; companyName?: string | null; compact?: boolean }) {
     const [loading, setLoading] = useState(false)
 
     async function handleDownload() {
@@ -2975,20 +2975,22 @@ function DownloadPdf({ state, templateId, companyName }: { state: ResumeEditorSt
             onClick={handleDownload}
             disabled={loading}
             style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7,
-                padding: '9px 18px', borderRadius: T.radiusSm,
+                display: 'inline-flex', alignItems: 'center', gap: compact ? 5 : 7,
+                padding: compact ? '8px 14px' : '9px 18px', borderRadius: T.radiusSm,
                 background: loading ? '#334155' : `linear-gradient(135deg, ${T.primary}, ${T.primaryDark})`,
-                color: 'white', fontWeight: 600, fontSize: '0.8125rem',
+                color: 'white', fontWeight: compact ? 700 : 600, fontSize: compact ? '0.75rem' : '0.8125rem',
                 border: 'none', cursor: loading ? 'wait' : 'pointer',
                 boxShadow: loading ? 'none' : T.primaryShadow,
                 transition: 'all 0.2s ease',
                 fontFamily: "'DM Sans', 'Inter', sans-serif",
+                whiteSpace: 'nowrap' as const,
+                flexShrink: 0,
             }}
         >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg width={compact ? 12 : 14} height={compact ? 12 : 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
             </svg>
-            {loading ? 'Generating...' : 'Download PDF'}
+            {loading ? (compact ? '…' : 'Generating...') : 'Download PDF'}
         </button>
     )
 }
@@ -4511,6 +4513,13 @@ export default function ResumesPage() {
     const [sourceResumeId, setSourceResumeId] = useState<string | null>(null)
     // ── Modal-based editor state ──
     const [openModalSection, setOpenModalSection] = useState<string | null>(null)
+    // ── Mobile state ──
+    const [isMobile, setIsMobile] = useState(false)
+    const [mobileTab, setMobileTab] = useState<'sections' | 'templates'>('sections')
+    const [showAllResumesSheet, setShowAllResumesSheet] = useState(false)
+    const [showMobilePreview, setShowMobilePreview] = useState(false)
+    const [mobileSrcDropOpen, setMobileSrcDropOpen] = useState(false)
+    const mobileSrcDropRef = useRef<HTMLDivElement>(null)
 
     const loadOptimizedResume = useCallback(async (entry: SavedResumeEntry) => {
         setSelectedId(entry.id)
@@ -4565,6 +4574,25 @@ export default function ResumesPage() {
         }
         init()
     }, [user?.id, loadOptimizedResume, loadRawResume])
+
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
+
+    useEffect(() => {
+        if (!mobileSrcDropOpen) return
+        function handle(e: MouseEvent) {
+            if (mobileSrcDropRef.current && !mobileSrcDropRef.current.contains(e.target as Node)) {
+                setMobileSrcDropOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handle)
+        return () => document.removeEventListener('mousedown', handle)
+    }, [mobileSrcDropOpen])
 
     // Filtered list of optimized resumes (sidebar shows these)
     const visibleSavedResumes = useMemo(() => {
@@ -4650,6 +4678,417 @@ export default function ResumesPage() {
     const meridianScore = meridianRawScore > 10 ? Math.round(meridianRawScore) : Math.round(meridianRawScore * 10)
     const meridianScoreColor = meridianScore >= 80 ? M.green : meridianScore >= 60 ? M.amber : M.red
     const meridianScoreBg = meridianScore >= 80 ? M.greenLight : meridianScore >= 60 ? M.amberLight : '#fee2e2'
+
+    /* ─── MOBILE LAYOUT ─────────────────────────────────────── */
+    if (isMobile) {
+        const hasContent = savedResumes.length > 0 || uploadedResumes.length > 0
+
+        // ── helpers ──
+        function mAvatarColor(str: string): string {
+            const palette = ['#1e293b', '#1a1a2e', '#4c1d95', '#5b21b6', '#0891b2', '#1e3a8a', '#be185d', '#065f46']
+            let h = 0; for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h)
+            return palette[Math.abs(h) % palette.length]
+        }
+        function mScoreColor(sc: number): string { return sc >= 80 ? '#15803d' : sc >= 65 ? M.accent : '#d97706' }
+        function mInitial(str: string) { return (str || '?').replace(/[^a-zA-Z]/g, '')[0]?.toUpperCase() || '?' }
+
+        // ── empty state (no content) ──
+        if (!hasContent) {
+            return (
+                <div style={{ fontFamily: M.fontBody, background: M.surface, minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                        <div style={{ width: 64, height: 64, borderRadius: 18, background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '2px dashed rgba(29,106,245,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="1.6" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </div>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: M.text, marginBottom: 7, letterSpacing: '-0.02em' }}>Resume Studio</div>
+                        <div style={{ fontSize: 13, color: M.textMuted, lineHeight: 1.65, maxWidth: 260, marginBottom: 22 }}>Optimise a resume for a job match to unlock Studio. AI builds your formatted resume ready to download as PDF.</div>
+                        <button onClick={() => router.push('/dashboard/matches')} style={{ padding: '11px 24px', background: M.accent, color: '#fff', border: 'none', borderRadius: 9, fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody, boxShadow: '0 4px 14px -4px rgba(29,106,245,0.4)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>
+                            Go to AI Matches
+                        </button>
+                    </div>
+                </div>
+            )
+        }
+
+        const MOBILE_TEMPLATES = Object.entries(TEMPLATE_LABELS)
+        const srcLabel = sourceResumeId
+            ? (uploadedResumes.find(r => r.id === sourceResumeId)?.original_filename ?? 'Selected resume')
+            : 'All resumes'
+        const srcSubLabel = sourceResumeId
+            ? `${optimizedCountsBySource[sourceResumeId] ?? 0} optimized variant${(optimizedCountsBySource[sourceResumeId] ?? 0) !== 1 ? 's' : ''}`
+            : `Showing ${uploadedResumes.length} uploaded resume${uploadedResumes.length !== 1 ? 's' : ''}`
+
+        // Template color accent for mini preview
+        const TMPL_ACCENT: Record<string, string> = {
+            classic: '#0f1e40', london: '#1d6af5', rezi: '#1e1e3f', 'rezi-standard': '#18181b',
+            stitch: '#166534', harvard: '#9b1c1c', sb2nov: '#1e3a5f', 'open-resume': '#374151',
+            cobalt: '#1d4ed8', onyx: '#18181b', jade: '#6d28d9', lapis: '#c2410c',
+        }
+
+        return (
+            <>
+            <style>{`@keyframes m-spin{to{transform:rotate(360deg)}}`}</style>
+
+            <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', background: M.surface, fontFamily: M.fontBody, overflow: 'hidden' }}>
+
+                {/* ── Studio bar ── */}
+                <div style={{ background: M.white, borderBottom: `1px solid ${M.border}`, padding: '10px 13px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
+                        <div style={{ width: 30, height: 30, borderRadius: 8, background: M.surfaceAlt, border: `1px solid ${M.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </div>
+                        <div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: M.text, letterSpacing: '-0.025em' }}>Resume Studio</div>
+                            {meridianJob && (
+                                <div style={{ fontSize: '11.5px', color: M.textMuted, display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+                                    {meridianJob.title} at {meridianJob.company}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' as const }}>
+                        {meridianScore > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 99, background: meridianScoreBg, border: `1px solid ${meridianScoreColor}33`, fontFamily: M.fontMono, fontSize: 11, fontWeight: 800, color: meridianScoreColor }}>{meridianScore}% match</span>
+                        )}
+                        <button onClick={() => setShowMobilePreview(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 14px', borderRadius: 9, background: M.white, border: `1.5px solid ${M.border}`, color: M.textMuted, fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: M.fontBody }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            Preview
+                        </button>
+                        <DownloadPdf state={editorState} templateId={templateId} companyName={meridianJob?.company ?? null} compact />
+                    </div>
+                </div>
+
+                {/* ── Source Resume dropdown ── */}
+                <div ref={mobileSrcDropRef} style={{ background: M.white, borderBottom: `1px solid ${M.border}`, padding: '9px 13px', flexShrink: 0, position: 'relative' }}>
+                    <div style={{ fontFamily: M.fontMono, fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: M.textFaint, marginBottom: 5 }}>Source Resume</div>
+                    <button type="button" onClick={() => uploadedResumes.length > 1 && setMobileSrcDropOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '9px 11px', background: M.surfaceAlt, border: `1.5px solid ${mobileSrcDropOpen ? M.accent : M.border}`, borderRadius: mobileSrcDropOpen ? '10px 10px 0 0' : 10, cursor: uploadedResumes.length > 1 ? 'pointer' : 'default', fontFamily: M.fontBody, transition: 'border-color .13s' }}>
+                        <div style={{ width: 30, height: 30, borderRadius: 8, background: M.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'left' as const }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: M.text }}>{srcLabel}</div>
+                            <div style={{ fontSize: 11, color: M.textMuted }}>{srcSubLabel}</div>
+                        </div>
+                        {uploadedResumes.length > 1 && (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.textMuted} strokeWidth="2.2" strokeLinecap="round" style={{ transform: mobileSrcDropOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                        )}
+                    </button>
+                    {mobileSrcDropOpen && (
+                        <div style={{ border: `1.5px solid ${M.accent}`, borderTop: 'none', borderRadius: '0 0 10px 10px', background: M.white, overflow: 'hidden' }}>
+                            <div onClick={() => { handleSourceChange(null); setMobileSrcDropOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', cursor: 'pointer', borderBottom: `1px solid ${M.borderLight}`, background: !sourceResumeId ? M.surfaceAlt : M.white }}>
+                                <div style={{ width: 30, height: 30, borderRadius: 8, background: M.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '12.5px', fontWeight: 700, color: !sourceResumeId ? M.accent : M.text }}>All resumes</div>
+                                    <div style={{ fontSize: 11, color: M.textMuted }}>Show everything you've optimized</div>
+                                </div>
+                                {!sourceResumeId && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2.8" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                            </div>
+                            {uploadedResumes.map(r => {
+                                const isSel = sourceResumeId === r.id
+                                const initial = mInitial(r.original_filename ?? '')
+                                const bg = mAvatarColor(r.original_filename ?? r.id)
+                                const cnt = optimizedCountsBySource[r.id] ?? 0
+                                return (
+                                    <div key={r.id} onClick={() => { handleSourceChange(r.id); setMobileSrcDropOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', cursor: 'pointer', borderBottom: `1px solid ${M.borderLight}`, background: isSel ? M.surfaceAlt : M.white }}>
+                                        <div style={{ width: 30, height: 30, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff', fontWeight: 700, fontSize: 13 }}>{initial}</div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: '12.5px', fontWeight: 700, color: isSel ? M.accent : M.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{r.original_filename ?? `Resume ${r.id.slice(0, 6)}`}</div>
+                                            <div style={{ fontSize: 11, color: M.textMuted }}>{cnt} optimized variant{cnt !== 1 ? 's' : ''}</div>
+                                        </div>
+                                        {isSel && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2.8" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Resume strip ── */}
+                <div style={{ background: M.white, borderBottom: `1px solid ${M.border}`, padding: '9px 0 9px 13px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 13, marginBottom: 7 }}>
+                        <span style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: M.textFaint }}>Source Resume</span>
+                        <span style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, color: M.accent }}>{visibleSavedResumes.length} resume{visibleSavedResumes.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                        <div style={{ display: 'flex', gap: 7, overflowX: 'auto', flex: 1, paddingRight: 8, scrollbarWidth: 'none' as const }}>
+                            {visibleSavedResumes.slice(0, 6).map(entry => {
+                                const isSel = selectedId === entry.id
+                                const sc = entry.keyword_alignment_score ?? 0
+                                const scNorm = sc > 10 ? Math.round(sc) : Math.round(sc * 10)
+                                const date = entry.updated_at ? new Date(entry.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''
+                                const initial = mInitial(entry.job?.company ?? entry.job?.title ?? '')
+                                const bg = mAvatarColor(entry.job?.company ?? '')
+                                return (
+                                    <div key={entry.id} onClick={() => loadOptimizedResume(entry)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 11px', borderRadius: 10, border: `1.5px solid ${isSel ? M.accent : M.border}`, background: isSel ? M.surfaceAlt : M.white, cursor: 'pointer', flexShrink: 0, maxWidth: 160, transition: 'border-color .13s' }}>
+                                        <div style={{ width: 28, height: 28, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff', fontWeight: 700, fontSize: 13 }}>{initial}</div>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: isSel ? M.accent : M.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{entry.job?.title ?? 'Unknown'}</div>
+                                            <div style={{ fontSize: 10, color: M.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{entry.job?.company ?? ''}</div>
+                                            <div style={{ display: 'flex', gap: 5, marginTop: 2 }}>
+                                                <span style={{ fontFamily: M.fontMono, fontSize: '10.5px', fontWeight: 800, color: mScoreColor(scNorm) }}>{scNorm}%</span>
+                                                {date && <span style={{ fontSize: 9, color: M.textFaint }}>{date}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                        {visibleSavedResumes.length > 6 && (
+                            <div onClick={() => setShowAllResumesSheet(true)} style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '9px 10px', borderLeft: `1px solid ${M.border}`, background: M.surfaceAlt, cursor: 'pointer', width: 62, marginRight: 13 }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: M.accent, textAlign: 'center', lineHeight: 1.3 }}>See all<br />{visibleSavedResumes.length} →</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* ── Tab bar ── */}
+                <div style={{ background: M.white, borderBottom: `1.5px solid ${M.border}`, padding: '0 13px', display: 'flex', gap: 0, flexShrink: 0 }}>
+                    {([
+                        { id: 'sections', label: 'Sections', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg> },
+                        { id: 'templates', label: 'Templates', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
+                    ] as { id: 'sections' | 'templates'; label: string; icon: React.ReactNode }[]).map(tab => (
+                        <div key={tab.id} onClick={() => setMobileTab(tab.id)} style={{ padding: '10px 11px 8px', fontSize: '12.5px', fontWeight: mobileTab === tab.id ? 700 : 600, color: mobileTab === tab.id ? M.accent : M.textMuted, cursor: 'pointer', borderBottom: `2.5px solid ${mobileTab === tab.id ? M.accent : 'transparent'}`, marginBottom: '-1.5px', display: 'flex', alignItems: 'center', gap: 5, userSelect: 'none' as const }}>
+                            {tab.icon}{tab.label}
+                        </div>
+                    ))}
+                </div>
+
+                {/* ── Tab content ── */}
+                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+
+                    {/* ─ Sections pane ─ */}
+                    {mobileTab === 'sections' && (
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: '13px 13px 0' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: M.text }}>Resume Sections</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 99, background: '#e0f2ff', border: '1.5px solid #7dd3fc', fontFamily: M.fontMono, fontSize: 10, fontWeight: 700, color: '#0369a1' }}>
+                                        {completionSections.filter(s => isFilled(s)).length}/{completionSections.length} complete
+                                    </span>
+                                </div>
+                                <div style={{ height: 5, background: M.surfaceAlt, borderRadius: 99, overflow: 'hidden', marginBottom: 14 }}>
+                                    <div style={{ height: '100%', borderRadius: 99, background: `linear-gradient(90deg, ${M.accent}, #60a5fa)`, width: `${completionPct}%`, transition: 'width 0.4s' }} />
+                                </div>
+                            </div>
+                            <div style={{ padding: '0 13px 8px' }}>
+                                {M_SECTION_DEFS.map(({ key, label }) => {
+                                    const filled = isFilled(key)
+                                    const summary = sectionSummaryText(key, editorState)
+                                    return (
+                                        <div key={key} onClick={() => setOpenModalSection(key)} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', background: filled ? M.white : '#fffbeb', border: `1px solid ${filled ? M.border : M.amberBorder}`, borderRadius: 11, marginBottom: 8, cursor: 'pointer', transition: 'border-color .13s' }}>
+                                            <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: filled ? M.accent : M.amberLight, border: filled ? 'none' : `2px solid ${M.amberBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                {filled
+                                                    ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                                    : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#92400e" strokeWidth="2.5" strokeLinecap="round"><path d="M12 9v4M12 17h.01"/></svg>}
+                                            </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
+                                                    <span style={{ fontSize: 13, fontWeight: 700, color: M.text }}>{label}</span>
+                                                    <span style={{ padding: '2px 7px', borderRadius: 4, background: filled ? M.greenLight : M.amberLight, border: `1px solid ${filled ? M.greenBorder : M.amberBorder}`, fontFamily: M.fontMono, fontSize: '8.5px', fontWeight: 700, color: filled ? '#15803d' : '#92400e', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>{filled ? 'DONE' : 'MISSING'}</span>
+                                                </div>
+                                                <div style={{ fontSize: '11.5px', color: filled ? M.textMuted : M.amber, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{summary}</div>
+                                            </div>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.textFaint} strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                        </div>
+                                    )
+                                })}
+                                {/* Tip for first missing section */}
+                                {completionPct < 100 && (
+                                    <div style={{ background: M.surfaceAlt, border: `1px solid ${M.border}`, borderRadius: 10, padding: '10px 12px', marginTop: 4, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                        <span style={{ fontSize: 12, color: M.textMid, lineHeight: 1.55 }}>Complete missing sections to boost your resume score and stand out to recruiters.</span>
+                                    </div>
+                                )}
+                            </div>
+                            {/* Sticky bottom CTA */}
+                            <div style={{ position: 'sticky', bottom: 0, background: M.white, borderTop: `1px solid ${M.border}`, padding: '10px 13px 14px', boxShadow: '0 -4px 16px rgba(15,23,42,0.06)' }}>
+                                <button onClick={() => router.push('/dashboard/matches')} style={{ width: '100%', padding: 11, background: M.accent, color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 4px 14px -4px rgba(29,106,245,0.4)' }}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/></svg>
+                                    + Optimise New Job
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ─ Templates pane ─ */}
+                    {mobileTab === 'templates' && (
+                        <div style={{ padding: '13px 13px 100px' }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: M.text, marginBottom: 4 }}>Choose a Template</div>
+                            <div style={{ fontSize: 12, color: M.textMuted, marginBottom: 13 }}>Tap to apply. Your resume updates instantly.</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                {MOBILE_TEMPLATES.map(([id, name]) => {
+                                    const isActive = templateId === id
+                                    const accent = TMPL_ACCENT[id] ?? '#0f1e40'
+                                    return (
+                                        <div key={id} onClick={() => { handleTemplateSelect(id as any) }} style={{ border: `2px solid ${isActive ? M.accent : M.border}`, borderRadius: 11, overflow: 'hidden', cursor: 'pointer', background: M.white, transition: 'border-color .13s', boxShadow: isActive ? `0 0 0 3px rgba(29,106,245,0.1)` : 'none' }}>
+                                            {/* Mini preview */}
+                                            <div style={{ height: 120, background: '#f8fafc', overflow: 'hidden', position: 'relative' }}>
+                                                <div style={{ padding: '8px 7px', fontSize: '5.5px', color: '#1a1a1a', lineHeight: 1.4 }}>
+                                                    {id === 'cobalt' || id === 'onyx' || id === 'jade' || id === 'lapis' ? (
+                                                        /* Two-col sidebar preview */
+                                                        <div style={{ display: 'flex', height: 104 }}>
+                                                            <div style={{ width: 28, background: accent, height: '100%', borderRadius: 2, marginRight: 4 }} />
+                                                            <div style={{ flex: 1 }}>
+                                                                <div style={{ height: 5, background: '#1a1a1a', borderRadius: 1, marginBottom: 3, width: '70%' }} />
+                                                                <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2 }} />
+                                                                <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 6, width: '85%' }} />
+                                                                {[1,2,3].map(i => <div key={i} style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2, width: `${90 - i * 8}%` }} />)}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        /* Single-col preview */
+                                                        <>
+                                                            {(id === 'london' || id === 'cobalt') && <div style={{ height: 3, background: accent, borderRadius: 1, marginBottom: 4 }} />}
+                                                            <div style={{ fontSize: 8, fontWeight: 700, color: id === 'london' || id === 'rezi' ? accent : '#0f1e40', marginBottom: 2 }}>
+                                                                {editorState.profile.name || 'Your Name'}
+                                                            </div>
+                                                            <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2 }} />
+                                                            <div style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 5, width: '60%' }} />
+                                                            <div style={{ height: 2, width: 40, borderRadius: 1, background: accent, margin: '4px 0 2px' }} />
+                                                            {[1,2,3].map(i => <div key={i} style={{ height: 2, background: '#e2e8f0', borderRadius: 1, marginBottom: 2, width: `${90 - i * 8}%` }} />)}
+                                                        </>
+                                                    )}
+                                                </div>
+                                                {isActive && (
+                                                    <div style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: '50%', background: M.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(29,106,245,0.5)' }}>
+                                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <span style={{ fontSize: 12, fontWeight: 700, color: M.text }}>{name}</span>
+                                                <span style={{ fontSize: 10, fontWeight: 600, color: M.green, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                                    ATS
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ── Section editor modal ── */}
+            {openModalSection && (
+                <ActiveModal key={openModalSection} sectionKey={openModalSection} state={editorState} update={setEditorState} onClose={() => setOpenModalSection(null)} />
+            )}
+
+            {/* ── Template picker modal ── */}
+            {showTemplatePicker && (
+                <TemplatePickerModal onSelect={handleTemplateSelect} onClose={() => setShowTemplatePicker(false)} />
+            )}
+
+            {/* ── Mobile preview overlay ── */}
+            {showMobilePreview && (
+                <>
+                    <div onClick={() => setShowMobilePreview(false)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(15,23,42,0.78)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 10px' }}>
+                        <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 366, height: '88vh', maxHeight: 720, background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 28px 70px rgba(0,0,0,0.55)', display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ background: '#fff', padding: '12px 14px 11px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                                <div>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>Resume Preview</div>
+                                    <div style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: 1 }}>{TEMPLATE_LABELS[templateId] ?? 'Classic'} template</div>
+                                </div>
+                                <button onClick={() => setShowMobilePreview(false)} style={{ width: 28, height: 28, borderRadius: 99, background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '14px', background: '#f1f5f9' }}>
+                                <div style={{ background: '#fff', borderRadius: 8, padding: '16px', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
+                                    {/* Inline preview using editorState */}
+                                    <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: '#1a1a1a', lineHeight: 1.55 }}>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f1e40', letterSpacing: '-0.02em', marginBottom: 2 }}>{editorState.profile.name || 'Your Name'}</div>
+                                        <div style={{ fontSize: 8, color: '#555', marginBottom: 8, display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                                            {editorState.profile.email && <span>{editorState.profile.email}</span>}
+                                            {editorState.profile.phone && <span>· {editorState.profile.phone}</span>}
+                                            {editorState.profile.location && <span>· {editorState.profile.location}</span>}
+                                        </div>
+                                        {editorState.summary && <>
+                                            <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5 }}>Summary</div>
+                                            <div style={{ fontSize: 8, color: '#374151', lineHeight: 1.6, marginBottom: 8 }}>{editorState.summary}</div>
+                                        </>}
+                                        {editorState.experience.length > 0 && <>
+                                            <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Experience</div>
+                                            {editorState.experience.map((exp, i) => (
+                                                <div key={i} style={{ marginBottom: 6 }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><b style={{ fontSize: 9 }}>{exp.title}</b><span style={{ fontSize: 8, color: '#555' }}>{exp.startDate}{exp.endDate ? ` – ${exp.endDate}` : ''}</span></div>
+                                                    <div style={{ fontSize: 8, color: '#2563eb', fontWeight: 600, marginBottom: 2 }}>{exp.company}</div>
+                                                    <ul style={{ paddingLeft: 10, margin: 0 }}>{exp.bullets.slice(0, 3).map((b, j) => <li key={j} style={{ fontSize: 8, color: '#374151', lineHeight: 1.5 }}>{b}</li>)}</ul>
+                                                </div>
+                                            ))}
+                                        </>}
+                                        {editorState.education.length > 0 && <>
+                                            <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Education</div>
+                                            {editorState.education.map((edu, i) => (
+                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                    <div><b style={{ fontSize: 9 }}>{edu.degree} · {edu.school}</b></div>
+                                                    <span style={{ fontSize: 8, color: '#555', flexShrink: 0 }}>{edu.date}</span>
+                                                </div>
+                                            ))}
+                                        </>}
+                                        {(editorState.skills.languages || editorState.skills.tools) && <>
+                                            <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Skills</div>
+                                            {editorState.skills.languages && <div style={{ fontSize: 8, color: '#374151', marginBottom: 2 }}><b>Languages:</b> {editorState.skills.languages}</div>}
+                                            {editorState.skills.tools && <div style={{ fontSize: 8, color: '#374151' }}><b>Tools:</b> {editorState.skills.tools}</div>}
+                                        </>}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ padding: '10px 14px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, flexShrink: 0 }}>
+                                <button onClick={() => { setShowMobilePreview(false); setShowTemplatePicker(true) }} style={{ flex: 1, padding: 10, border: `1.5px solid ${M.border}`, borderRadius: 9, background: '#fff', fontSize: '12.5px', fontWeight: 600, color: M.textMuted, cursor: 'pointer', fontFamily: M.fontBody }}>Change Template</button>
+                                <DownloadPdf state={editorState} templateId={templateId} companyName={meridianJob?.company ?? null} compact />
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* ── See all resumes sheet ── */}
+            {showAllResumesSheet && (
+                <>
+                    <div onClick={() => setShowAllResumesSheet(false)} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)' }} />
+                    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderRadius: '22px 22px 0 0', boxShadow: '0 -20px 60px rgba(0,0,0,0.2)', zIndex: 55, display: 'flex', flexDirection: 'column', maxHeight: '78vh' }}>
+                        <div style={{ width: 36, height: 4, borderRadius: 99, background: M.border, margin: '12px auto 0', flexShrink: 0 }} />
+                        <div style={{ padding: '12px 16px 10px', borderBottom: `1px solid ${M.border}`, display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: M.text, flex: 1 }}>All Resumes</span>
+                            <span style={{ fontFamily: M.fontMono, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: M.surfaceAlt, color: M.textMuted }}>{visibleSavedResumes.length}</span>
+                            <button onClick={() => setShowAllResumesSheet(false)} style={{ width: 27, height: 27, borderRadius: 8, background: M.surfaceAlt, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: M.textMuted }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 32px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {visibleSavedResumes.map(entry => {
+                                const isSel = selectedId === entry.id
+                                const sc = entry.keyword_alignment_score ?? 0
+                                const scNorm = sc > 10 ? Math.round(sc) : Math.round(sc * 10)
+                                const date = entry.updated_at ? new Date(entry.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+                                const initial = mInitial(entry.job?.company ?? entry.job?.title ?? '')
+                                const bg = mAvatarColor(entry.job?.company ?? '')
+                                return (
+                                    <div key={entry.id} onClick={() => { loadOptimizedResume(entry); setShowAllResumesSheet(false) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 11px', borderRadius: 10, border: `1.5px solid ${isSel ? M.accent : M.border}`, background: isSel ? M.surfaceAlt : '#fff', cursor: 'pointer' }}>
+                                        <div style={{ width: 36, height: 36, borderRadius: 9, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>{initial}</div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? M.accent : M.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{entry.job?.title ?? 'Unknown Role'}</div>
+                                            <div style={{ fontSize: 11, color: M.textMuted }}>{entry.job?.company ?? ''}{date ? ` · ${date}` : ''}</div>
+                                        </div>
+                                        <span style={{ fontFamily: M.fontMono, fontSize: 13, fontWeight: 800, color: mScoreColor(scNorm), flexShrink: 0 }}>{scNorm}%</span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </>
+            )}
+            </>
+        )
+    }
 
     return (
         <>

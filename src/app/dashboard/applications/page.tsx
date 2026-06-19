@@ -163,6 +163,8 @@ export default function ApplicationsPage() {
     const [dragOverStatus, setDragOverStatus] = useState<ApplicationStatus | null>(null)
     const [toast, setToast] = useState<{ msg: string; gold?: boolean; id: number } | null>(null)
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const [isMobile, setIsMobile] = useState(false)
+    const [mobileView, setMobileView] = useState<'list' | 'kanban'>('list')
 
     useEffect(() => {
         if (!user?.id) return
@@ -190,6 +192,14 @@ export default function ApplicationsPage() {
         })()
         return () => { cancelled = true }
     }, [user?.id])
+
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const h = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', h)
+        return () => mq.removeEventListener('change', h)
+    }, [])
 
     /**
      * Resolve which resume an application belongs to. We try (in order):
@@ -348,6 +358,332 @@ export default function ApplicationsPage() {
 
     const drawerApp = drawerId ? apps.find(a => a.id === drawerId) ?? null : null
     const selectedResume = resumeFilter === ALL_RESUMES ? null : resumes.find(r => r.id === resumeFilter) ?? null
+
+    /* ── MOBILE LAYOUT ─────────────────────────────────────── */
+    if (isMobile) {
+        const MobileAddModal = () => addModalOpen ? (
+            <AddModal
+                tab={addModalTab}
+                onTabChange={setAddModalTab}
+                matches={matches.filter(m => {
+                    if (apps.some(a => a.job_id === m.job_id)) return false
+                    if (resumeFilter !== ALL_RESUMES && m.resume_id !== resumeFilter) return false
+                    return true
+                })}
+                selectedResumeName={selectedResume ? resumeDisplayName(selectedResume) : null}
+                onClose={() => setAddModalOpen(false)}
+                onAddFromMatch={async (m) => {
+                    if (!user?.id) return
+                    const created = await createApplication({ user_id: user.id, job_id: m.job_id, status: 'applied' })
+                    if (created) {
+                        const refreshed = await fetchApplications(user.id)
+                        setApps(refreshed)
+                        showToast(`📨 Applied to ${m.job.company} · ${m.job.title}`)
+                        setAddModalOpen(false)
+                    }
+                }}
+                onAddManual={async (payload) => {
+                    if (!user?.id) return
+                    const created = await createApplication({ user_id: user.id, external_company: payload.company, external_role: payload.role, external_url: payload.url || null, status: payload.status, notes: payload.notes || null, applied_at: payload.applied_at })
+                    if (created) {
+                        const refreshed = await fetchApplications(user.id)
+                        setApps(refreshed)
+                        showToast(`📨 Added · ${payload.company}`)
+                        setAddModalOpen(false)
+                    }
+                }}
+            />
+        ) : null
+
+        const MobileToast = () => toast ? (
+            <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 80, background: toast.gold ? 'linear-gradient(135deg, #d97706, #b45309)' : '#0f172a', color: '#fff', padding: '14px 22px', borderRadius: 12, fontSize: 14, fontWeight: 600, boxShadow: '0 24px 48px -12px rgba(15,23,42,.18)', maxWidth: 'min(94vw, 480px)', whiteSpace: 'nowrap' }}>
+                {toast.msg}
+            </div>
+        ) : null
+
+        const mobileHd: React.CSSProperties = {
+            padding: '20px 16px 0', background: '#fff', borderBottom: '1px solid #eef2f7',
+        }
+        const mobileHdInner: React.CSSProperties = {
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16,
+        }
+        const mobileEyebrow: React.CSSProperties = {
+            fontFamily: "var(--font-mono), 'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700,
+            letterSpacing: '0.16em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 4,
+        }
+        const mobileH1: React.CSSProperties = {
+            fontSize: 21, fontWeight: 800, letterSpacing: '-0.02em', color: '#0f172a', marginBottom: 2,
+        }
+        const mobileSubtitle: React.CSSProperties = { fontSize: 13, color: '#64748b', marginBottom: 0 }
+        const mobileAddBtn: React.CSSProperties = {
+            background: '#135bec', color: '#fff', border: 'none', borderRadius: 10,
+            padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', flexShrink: 0, marginTop: 4,
+        }
+
+        /* ── Loading ── */
+        if (loading) return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 12 }}>
+                <div style={{ width: 36, height: 36, border: '3px solid #e2e8f0', borderTopColor: '#135bec', borderRadius: '50%', animation: 'mtrSpin 0.8s linear infinite' }} />
+                <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600 }}>Loading tracker…</div>
+                <style>{`@keyframes mtrSpin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+        )
+
+        /* ── Empty state ── */
+        if (apps.length === 0) return (
+            <>
+                <div style={{ minHeight: 'calc(100vh - 64px)', background: '#f6f8fb', display: 'flex', flexDirection: 'column' }}>
+                    <div style={mobileHd}>
+                        <div style={mobileHdInner}>
+                            <div>
+                                <div style={mobileEyebrow}>TRACKER</div>
+                                <div style={mobileH1}>Application Pipeline</div>
+                                <div style={mobileSubtitle}>Track every application from sent to signed.</div>
+                            </div>
+                            <button style={mobileAddBtn} onClick={() => { setAddModalTab('matches'); setAddModalOpen(true) }}>+ Add</button>
+                        </div>
+                    </div>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 32px', textAlign: 'center', gap: 16 }}>
+                        <div style={{ width: 72, height: 72, borderRadius: '50%', border: '2px dashed #135bec', background: '#eff6ff', display: 'grid', placeItems: 'center' }}>
+                            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                                <circle cx="8" cy="14" r=".5" fill="#135bec" /><circle cx="12" cy="14" r=".5" fill="#135bec" /><circle cx="16" cy="14" r=".5" fill="#135bec" />
+                                <circle cx="8" cy="17" r=".5" fill="#135bec" /><circle cx="12" cy="17" r=".5" fill="#135bec" />
+                            </svg>
+                        </div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.015em' }}>No applications yet</div>
+                        <div style={{ fontSize: 14, color: '#64748b', lineHeight: 1.6, maxWidth: 280 }}>
+                            Add your first application and track it through every stage — Applied → Interview → Offer
+                        </div>
+                        <button style={{ background: '#135bec', color: '#fff', border: 'none', borderRadius: 12, padding: '14px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 8 }}
+                            onClick={() => { setAddModalTab('matches'); setAddModalOpen(true) }}>
+                            + Add Application
+                        </button>
+                    </div>
+                </div>
+                <MobileAddModal />
+                <MobileToast />
+            </>
+        )
+
+        /* ── Active state ── */
+        return (
+            <>
+                <div style={{ minHeight: 'calc(100vh - 64px)', background: '#f6f8fb', display: 'flex', flexDirection: 'column', paddingBottom: 28 }}>
+
+                    {/* Header */}
+                    <div style={mobileHd}>
+                        <div style={mobileHdInner}>
+                            <div>
+                                <div style={mobileEyebrow}>TRACKER</div>
+                                <div style={mobileH1}>Application Pipeline</div>
+                                <div style={mobileSubtitle}>Track every application from sent to signed.</div>
+                            </div>
+                            <button style={mobileAddBtn} onClick={() => { setAddModalTab('matches'); setAddModalOpen(true) }}>+ Add</button>
+                        </div>
+                    </div>
+
+                    {/* Scope bar */}
+                    <div style={{ padding: '12px 16px 0', background: '#fff' }}>
+                        <ResumeFilterBar
+                            resumes={resumes}
+                            selectedId={resumeFilter}
+                            onSelect={handleResumeSelect}
+                            primaryResumeId={primaryResumeId}
+                            countByResume={appCountByResume}
+                            totalApps={apps.length}
+                            visibleCount={visibleApps.length}
+                            loading={loading}
+                        />
+                    </div>
+
+                    {/* Pipeline funnel */}
+                    <div style={{ margin: '12px 16px 0', background: '#fff', borderRadius: 14, padding: 14, border: '1px solid #eef2f7' }}>
+                        {/* Stage row */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            {(['applied', 'interview', 'offer', 'rejected'] as ApplicationStatus[]).map((s, i) => (
+                                <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    {i > 0 && <span style={{ color: '#cbd5e1', fontSize: 14, marginRight: 4 }}>›</span>}
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                                        <span style={{ fontSize: 20, fontWeight: 800, color: STATUS_META[s].color, lineHeight: 1 }}>{counts[s]}</span>
+                                        <span style={{ fontSize: 9.5, fontWeight: 600, color: '#64748b', letterSpacing: '-0.01em' }}>{STATUS_META[s].label}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        {/* Progress bar */}
+                        <div style={{ height: 6, borderRadius: 99, background: '#f1f5f9', display: 'flex', overflow: 'hidden', marginBottom: 8 }}>
+                            {(['applied', 'interview', 'offer', 'rejected', 'withdrawn'] as ApplicationStatus[]).filter(s => counts[s] > 0).map((s, i, arr) => (
+                                <div key={s} style={{ background: STATUS_META[s].color, width: `${(counts[s] / Math.max(1, total)) * 100}%`, minWidth: 4, borderRadius: i === 0 ? '99px 0 0 99px' : i === arr.length - 1 ? '0 99px 99px 0' : 0 }} />
+                            ))}
+                        </div>
+                        {/* Bar labels */}
+                        <div style={{ display: 'flex', gap: 8, fontSize: 11, flexWrap: 'wrap' }}>
+                            {counts.applied > 0 && <span style={{ color: '#135bec', fontWeight: 700 }}>{counts.applied} Applied</span>}
+                            {counts.interview > 0 && <span style={{ color: '#16a34a', fontWeight: 700 }}>/ {counts.interview} Interview</span>}
+                            {counts.offer > 0 && <span style={{ color: '#d97706', fontWeight: 700 }}>/ {counts.offer} Offer</span>}
+                            {counts.rejected > 0 && <span style={{ color: '#dc2626', fontWeight: 700 }}>/ {counts.rejected} Rejected</span>}
+                        </div>
+                    </div>
+
+                    {/* Stats 2×3 grid */}
+                    <div style={{ margin: '10px 16px 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                        {([
+                            { label: 'Total', value: String(total), mono: false },
+                            { label: 'Applied', value: String(counts.applied), mono: false },
+                            { label: 'Interview', value: String(counts.interview), mono: false, color: counts.interview > 0 ? '#16a34a' : undefined },
+                            { label: 'Offer', value: String(counts.offer), mono: false, color: counts.offer > 0 ? '#d97706' : undefined },
+                            { label: 'Response %', value: `${responseRate}%`, mono: true },
+                            { label: 'To Interview', value: avgTimeToInterview > 0 ? `${avgTimeToInterview}d` : '—', mono: false },
+                        ] as { label: string; value: string; mono: boolean; color?: string }[]).map(({ label, value, mono, color }) => (
+                            <div key={label} style={{ background: '#fff', border: '1px solid #eef2f7', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                                <div style={{ fontSize: mono ? 15 : 20, fontWeight: 800, color: color ?? '#0f172a', letterSpacing: '-0.02em', lineHeight: 1, fontFamily: mono ? "var(--font-mono), 'JetBrains Mono', monospace" : 'inherit' }}>
+                                    {value}
+                                </div>
+                                <div style={{ fontSize: 9.5, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>{label}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* View tabs */}
+                    <div style={{ margin: '12px 16px 0', display: 'flex', alignItems: 'center', gap: 3, background: '#fff', borderRadius: 12, padding: 4, border: '1px solid #eef2f7' }}>
+                        {(['kanban', 'list'] as const).map(v => (
+                            <button key={v} onClick={() => setMobileView(v)} style={{ flex: 1, padding: '8px 12px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: mobileView === v ? '#eff6ff' : 'transparent', color: mobileView === v ? '#135bec' : '#64748b', border: 'none', cursor: 'pointer' }}>
+                                {v === 'kanban' ? 'Kanban' : 'List'}
+                            </button>
+                        ))}
+                        {mobileView === 'kanban' && (
+                            <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, paddingRight: 8, flexShrink: 0, letterSpacing: '-0.01em' }}>swipe →</span>
+                        )}
+                    </div>
+
+                    {/* List view */}
+                    {mobileView === 'list' && (
+                        <div style={{ padding: '14px 16px 0' }}>
+                            {(['applied', 'interview', 'offer', 'rejected', 'withdrawn'] as ApplicationStatus[]).filter(s => grouped[s].length > 0).map(status => (
+                                <div key={status} style={{ marginBottom: 18 }}>
+                                    {/* Group header */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                        <span style={{ fontFamily: "var(--font-mono), 'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: STATUS_META[status].color, flexShrink: 0 }}>
+                                            {STATUS_META[status].label} · {grouped[status].length}
+                                        </span>
+                                        <div style={{ flex: 1, height: 1, background: '#eef2f7' }} />
+                                    </div>
+                                    {/* App cards */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                        {grouped[status].map(a => {
+                                            const company = displayCompany(a)
+                                            const role = displayRole(a)
+                                            const location = displayLocation(a)
+                                            const salary = displaySalary(a)
+                                            const [c1, c2] = paletteFor(company)
+                                            const ini = initials(company)
+                                            return (
+                                                <div key={a.id} onClick={() => { setDrawerId(a.id); setDrawerTab('overview') }} style={{ background: '#fff', border: '1px solid #eef2f7', borderRadius: 12, padding: '12px 14px', display: 'flex', gap: 11, alignItems: 'flex-start', cursor: 'pointer' }}>
+                                                    <div style={{ width: 40, height: 40, borderRadius: 10, background: `linear-gradient(135deg, ${c1}, ${c2})`, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{ini}</div>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{role}</div>
+                                                        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{company}{location ? ` · ${location}` : ''}</div>
+                                                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: 11, color: '#94a3b8' }}>{fmtRelDay(a.applied_at)}</span>
+                                                            {salary && <span style={{ fontSize: 11, color: '#94a3b8' }}>· {salary}</span>}
+                                                            {a.optimized_resume && <span style={{ fontSize: 10, fontWeight: 700, color: '#135bec', background: '#eff6ff', padding: '1px 6px', borderRadius: 6 }}>tailored</span>}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 99, background: STATUS_META[status].pillBg, flexShrink: 0, marginTop: 2 }}>
+                                                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_META[status].dot, flexShrink: 0 }} />
+                                                        <span style={{ fontSize: 10.5, fontWeight: 600, color: STATUS_META[status].pillText }}>{STATUS_META[status].label}</span>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                            {visibleApps.length === 0 && (
+                                <div style={{ padding: '32px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                                    No applications for this resume filter.
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Kanban view — horizontal scroll */}
+                    {mobileView === 'kanban' && (
+                        <div style={{ marginTop: 14, paddingLeft: 16, display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+                            {(['applied', 'interview', 'offer', 'rejected'] as ApplicationStatus[]).map(status => (
+                                <div key={status} style={{ flexShrink: 0, width: 210, display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 4 }}>
+                                    <div style={{ padding: '8px 12px', borderRadius: 10, background: STATUS_META[status].bg }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_META[status].dot, flexShrink: 0 }} />
+                                            <span style={{ fontSize: 12.5, fontWeight: 700, color: STATUS_META[status].color }}>{STATUS_META[status].label}</span>
+                                            <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginLeft: 'auto', fontFamily: "var(--font-mono), 'JetBrains Mono', monospace" }}>{grouped[status].length}</span>
+                                        </div>
+                                    </div>
+                                    {grouped[status].length === 0 ? (
+                                        <div style={{ border: '1.5px dashed #e2e8f0', borderRadius: 10, padding: '20px 10px', textAlign: 'center', color: '#94a3b8', fontSize: 12, fontWeight: 500 }}>
+                                            Drop here
+                                        </div>
+                                    ) : grouped[status].map(a => {
+                                        const company = displayCompany(a)
+                                        const role = displayRole(a)
+                                        const [c1, c2] = paletteFor(company)
+                                        const ini = initials(company)
+                                        return (
+                                            <div key={a.id} onClick={() => { setDrawerId(a.id); setDrawerTab('overview') }} style={{ background: '#fff', border: '1px solid #eef2f7', borderRadius: 10, padding: 12, cursor: 'pointer' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                                    <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg, ${c1}, ${c2})`, display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800, fontSize: 11, flexShrink: 0 }}>{ini}</div>
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{company}</span>
+                                                </div>
+                                                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 6, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>{role}</div>
+                                                <div style={{ fontSize: 11, color: '#94a3b8' }}>{fmtRelDay(a.applied_at)}</div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            ))}
+                            {/* Right padding sentinel */}
+                            <div style={{ flexShrink: 0, width: 16 }} />
+                        </div>
+                    )}
+                </div>
+
+                {/* Detail drawer — reused as-is (full-screen on mobile) */}
+                {drawerApp && (
+                    <DetailDrawer
+                        app={drawerApp}
+                        tab={drawerTab}
+                        onTabChange={setDrawerTab}
+                        onClose={() => setDrawerId(null)}
+                        onStatusChange={(newStatus, anchor) => moveApp(drawerApp.id, newStatus, anchor)}
+                        onDelete={() => handleDeleteApplication(drawerApp.id)}
+                        onNotesChange={async (notes) => {
+                            setApps(curr => curr.map(x => x.id === drawerApp.id ? { ...x, notes } : x))
+                            await updateApplication(drawerApp.id, { notes })
+                        }}
+                        onInterviewDateChange={async (iso) => {
+                            setApps(curr => curr.map(x => x.id === drawerApp.id ? { ...x, interview_at: iso } : x))
+                            await updateApplication(drawerApp.id, { interview_at: iso })
+                        }}
+                    />
+                )}
+
+                <MobileAddModal />
+
+                {rejectPopover && (
+                    <RejectionPopover
+                        anchor={rejectPopover.anchor}
+                        onSave={handleRejectionSave}
+                        onSkip={handleRejectionSkip}
+                        onClose={() => setRejectPopover(null)}
+                    />
+                )}
+
+                <MobileToast />
+                <style>{`@keyframes mtrSpin { to { transform: rotate(360deg); } }`}</style>
+            </>
+        )
+    }
 
     return (
         <>

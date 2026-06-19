@@ -1403,10 +1403,11 @@ function AIChatPanel({ optimizedData, job, score, cached }: {
 /* ─── Review Tabs (3-tab panel replacing AIChatPanel) ─── */
 type ReviewTab = 'overview' | 'before-after' | 'action-plan'
 
-function ReviewTabs({ optimizedData, job, cached }: {
+function ReviewTabs({ optimizedData, job, cached, compact = false }: {
     optimizedData: OptimizedResumeData
     job: { title: string | null; company: string | null }
     cached: boolean
+    compact?: boolean
 }) {
     const [activeTab, setActiveTab] = useState<ReviewTab>('overview')
 
@@ -1468,7 +1469,7 @@ function ReviewTabs({ optimizedData, job, cached }: {
 
                 {/* ── OVERVIEW TAB ── */}
                 {activeTab === 'overview' && (
-                    <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 28, animation: 'optSlideUp 0.3s ease both' }}>
+                    <div style={{ padding: compact ? '14px 14px 100px' : '24px 28px', display: 'flex', flexDirection: 'column', gap: compact ? 20 : 28, animation: 'optSlideUp 0.3s ease both' }}>
                         {/* Intro paragraph — plain prose, no bubble */}
                         <p style={{
                             margin: 0,
@@ -1638,7 +1639,7 @@ function ReviewTabs({ optimizedData, job, cached }: {
 
                 {/* ── BEFORE vs AFTER TAB ── */}
                 {activeTab === 'before-after' && (
-                    <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 24, animation: 'optSlideUp 0.3s ease both' }}>
+                    <div style={{ padding: compact ? '14px 14px 100px' : '24px 28px', display: 'flex', flexDirection: 'column', gap: compact ? 16 : 24, animation: 'optSlideUp 0.3s ease both' }}>
                         {beforeAfter.length === 0 ? (
                             <div style={{
                                 display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -1805,7 +1806,7 @@ function ReviewTabs({ optimizedData, job, cached }: {
 
                 {/* ── ACTION PLAN TAB ── */}
                 {activeTab === 'action-plan' && (
-                    <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 28, animation: 'optSlideUp 0.3s ease both' }}>
+                    <div style={{ padding: compact ? '14px 14px 100px' : '24px 28px', display: 'flex', flexDirection: 'column', gap: compact ? 20 : 28, animation: 'optSlideUp 0.3s ease both' }}>
                         {!actionPlan ? (
                             <div style={{
                                 display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -2158,6 +2159,9 @@ function OptimizePageInner() {
     const [buildPlanError, setBuildPlanError] = useState<string | null>(null)
     const autoTriggeredRef = useRef(false)
     const [isMobile, setIsMobile] = useState(false)
+    const [showGenSheet, setShowGenSheet] = useState(false)
+    const [resumeDropOpen, setResumeDropOpen] = useState(false)
+    const resumeDropdownRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         const mq = window.matchMedia('(max-width: 767px)')
@@ -2166,6 +2170,17 @@ function OptimizePageInner() {
         mq.addEventListener('change', handler)
         return () => mq.removeEventListener('change', handler)
     }, [])
+
+    useEffect(() => {
+        if (!resumeDropOpen) return
+        function handle(e: MouseEvent) {
+            if (resumeDropdownRef.current && !resumeDropdownRef.current.contains(e.target as Node)) {
+                setResumeDropOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handle)
+        return () => document.removeEventListener('mousedown', handle)
+    }, [resumeDropOpen])
 
     // Load all user resumes on mount, default to primary resume
     useEffect(() => {
@@ -2420,6 +2435,375 @@ function OptimizePageInner() {
             setPhase('error')
         }
     }, [selected, resumeId, pendingGapData, user?.id, refreshOptimizedList])
+
+    /* ─── MOBILE LAYOUT ─── */
+    if (isMobile) {
+        const score = optimizedData?.keyword_alignment_score ?? 0
+        const tier = scoreTier(score)
+        const changeCount = optimizedData?.optimization_notes?.length ?? 0
+        const skillCount = (optimizedData?.optimized_skills?.technical?.length ?? 0) + (optimizedData?.optimized_skills?.tools?.length ?? 0)
+        const cap = (optimizedData as any)?.career_action_plan
+        const gapCount = (cap?.suggested_certifications?.length ?? 0) + (cap?.suggested_projects?.length ?? 0)
+        const currentResumeName = resumes.find(r => r.id === selectedResumeId)?.file_name ?? 'Select Resume'
+
+        return (
+            <div style={{ fontFamily: "'DM Sans', sans-serif", background: '#f8fafc', minHeight: 'calc(100vh - 64px)' }}>
+                {/* Modals */}
+                {showTemplatePicker && (
+                    <TemplatePickerModal onSelect={handleTemplateSelect} onClose={() => setShowTemplatePicker(false)} />
+                )}
+                {showBuildPlan && selected && (
+                    <BuildPlanModal
+                        buildPlan={buildPlan} loading={buildPlanLoading} error={buildPlanError}
+                        jobId={selected.job.id} onConfirm={runOptimizer}
+                        onSkipAll={() => runOptimizer([])} onClose={() => setShowBuildPlan(false)}
+                    />
+                )}
+
+                {/* ── Page Header ── */}
+                <div style={{ padding: '14px 14px 10px', background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.03em', marginBottom: 2 }}>Resume Optimizer</div>
+                    <div style={{ fontSize: '12.5px', color: '#64748b' }}>Generate a tailored, ATS-optimized resume for any matched job</div>
+                </div>
+
+                {/* ── Resume Selector ── */}
+                <div ref={resumeDropdownRef} style={{ padding: '11px 14px', background: '#fff', borderBottom: '1px solid #e2e8f0', position: 'relative' }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: '#94a3b8', marginBottom: 6 }}>
+                        Resume
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => resumes.length > 1 && setResumeDropOpen(o => !o)}
+                        style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 7,
+                            padding: '8px 11px', background: '#f1f5f9',
+                            border: `1.5px solid ${resumeDropOpen ? '#135bec' : '#e2e8f0'}`,
+                            borderRadius: 9, cursor: resumes.length > 1 ? 'pointer' : 'default',
+                            fontFamily: 'inherit', textAlign: 'left' as const,
+                        }}
+                    >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round">
+                            <path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6"/>
+                        </svg>
+                        <span style={{ flex: 1, fontSize: '12.5px', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                            {currentResumeName}
+                        </span>
+                        {resumes.length > 1 && (
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"
+                                style={{ transform: resumeDropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        )}
+                    </button>
+                    {resumeDropOpen && resumes.length > 1 && (
+                        <div style={{
+                            position: 'absolute', top: 'calc(100% - 2px)', left: 14, right: 14,
+                            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.1)', zIndex: 50, overflow: 'hidden',
+                        }}>
+                            {resumes.map(r => (
+                                <button
+                                    key={r.id}
+                                    type="button"
+                                    onClick={() => { handleResumeSwitch(r.id); setResumeDropOpen(false) }}
+                                    style={{
+                                        width: '100%', padding: '10px 13px', border: 'none',
+                                        background: r.id === selectedResumeId ? '#eff6ff' : '#fff',
+                                        color: r.id === selectedResumeId ? '#135bec' : '#0f172a',
+                                        fontFamily: 'inherit', fontSize: '13px', fontWeight: r.id === selectedResumeId ? 700 : 500,
+                                        cursor: 'pointer', textAlign: 'left' as const,
+                                        borderBottom: '1px solid #f1f5f9',
+                                        display: 'flex', alignItems: 'center', gap: 8,
+                                    }}
+                                >
+                                    {r.id === selectedResumeId && (
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                    )}
+                                    {r.file_name ?? `Resume ${r.id.slice(0, 6)}`}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* ── EMPTY STATE (no selection) ── */}
+                {phase === 'idle' && !selected && (
+                    <div style={{ padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                        <div style={{ width: 68, height: 68, borderRadius: 18, background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '2px dashed rgba(19,91,236,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+                            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                            </svg>
+                        </div>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a', marginBottom: 7, letterSpacing: '-0.02em' }}>No Optimised Resumes Yet</div>
+                        <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.65, maxWidth: 270, marginBottom: 20 }}>
+                            Select a resume above, pick a matched job, and tap <strong style={{ color: '#0f172a' }}>Optimise</strong>. AI rewrites your bullets in ~30 seconds.
+                        </div>
+                        <button
+                            onClick={() => router.push('/dashboard/matches')}
+                            style={{ padding: '11px 24px', background: '#135bec', color: '#fff', border: 'none', borderRadius: 9, fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 14px -4px rgba(19,91,236,0.4)', display: 'flex', alignItems: 'center', gap: 7 }}
+                        >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/>
+                            </svg>
+                            Browse AI Matches
+                        </button>
+                    </div>
+                )}
+
+                {/* ── IDLE WITH SELECTION ── */}
+                {phase === 'idle' && selected && (
+                    <div style={{ padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                        <CompanyIcon company={selected.job.company} size={56} />
+                        <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginTop: 16, marginBottom: 4, letterSpacing: '-0.02em' }}>{selected.job.title}</div>
+                        <div style={{ fontSize: 13, color: '#135bec', fontWeight: 600, marginBottom: 16 }}>{selected.job.company}</div>
+                        <button
+                            onClick={() => openBuildPlan()}
+                            disabled={!resumeId}
+                            style={{ padding: '12px 28px', background: '#135bec', color: '#fff', border: 'none', borderRadius: 9, fontSize: '14px', fontWeight: 700, cursor: resumeId ? 'pointer' : 'not-allowed', fontFamily: 'inherit', boxShadow: '0 4px 14px -4px rgba(19,91,236,0.4)', opacity: resumeId ? 1 : 0.6 }}
+                        >
+                            Optimise Resume
+                        </button>
+                    </div>
+                )}
+
+                {/* ── LOADING STATE ── */}
+                {phase === 'loading' && (
+                    <div style={{ padding: '32px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                        <div style={{ width: 72, height: 72, borderRadius: '50%', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18, animation: 'optGlow 1.8s ease-in-out infinite' }}>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/>
+                            </svg>
+                        </div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Optimising Resume…</div>
+                        <div style={{ fontSize: '12.5px', color: '#64748b', marginBottom: 16 }}>
+                            Tailoring bullets for {selected?.job.title}{selected?.job.company ? ` · ${selected.job.company}` : ''}
+                        </div>
+                        <div style={{ width: '100%', maxWidth: 280, height: 6, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden', marginBottom: 18 }}>
+                            <div style={{ height: '100%', borderRadius: 99, background: 'linear-gradient(90deg, #135bec, #60a5fa)', width: `${Math.min((elapsed / 30000) * 100, 90)}%`, transition: 'width 0.5s ease-out' }} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, width: '100%', textAlign: 'left' }}>
+                            {LOADING_MSGS.map((msg, i) => {
+                                const stepDone = elapsed > (i + 1) * 5000
+                                const stepActive = !stepDone && elapsed > i * 5000
+                                return (
+                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                        <div style={{ width: 18, height: 18, borderRadius: 5, background: stepDone ? '#dcfce7' : stepActive ? '#eff6ff' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.3s' }}>
+                                            {stepDone ? (
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                            ) : stepActive ? (
+                                                <svg style={{ animation: 'qsb-spin 0.8s linear infinite' }} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3"/></svg>
+                                            ) : null}
+                                        </div>
+                                        <span style={{ fontSize: 12, color: stepDone ? '#374151' : stepActive ? '#374151' : '#94a3b8', fontWeight: stepActive ? 600 : 400 }}>{msg.text}</span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                        <button onClick={() => { setPhase('idle'); setError(null) }} style={{ marginTop: 20, padding: '9px 16px', border: '1.5px solid #fecaca', borderRadius: 8, background: '#fff', color: '#b91c1c', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    </div>
+                )}
+
+                {/* ── ERROR STATE ── */}
+                {phase === 'error' && (
+                    <div style={{ padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                        <div style={{ width: 56, height: 56, borderRadius: 16, background: '#fef2f2', border: '2px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>
+                        </div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>Optimization Failed</div>
+                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: 20, lineHeight: 1.5 }}>{error || 'Something went wrong. Please try again.'}</div>
+                        <button onClick={() => openBuildPlan()} style={{ padding: '10px 24px', borderRadius: 9, background: '#135bec', color: '#fff', fontWeight: 700, fontSize: '0.875rem', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Try Again</button>
+                    </div>
+                )}
+
+                {/* ── DONE STATE ── */}
+                {phase === 'done' && optimizedData && (
+                    <>
+                        {/* Generated Resumes Strip */}
+                        <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '9px 0 9px 14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingRight: 14 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Generated Resumes</span>
+                                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: '#f1f5f9', color: '#64748b' }}>{optimizedList.length}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
+                                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingRight: 8, scrollbarWidth: 'none' as const, WebkitOverflowScrolling: 'touch' as any }}>
+                                    {optimizedList.slice(0, 6).map((item) => {
+                                        const isSel = selected?.id === item.id
+                                        const date = item.updated_at ? new Date(item.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''
+                                        const sc = item.keyword_alignment_score ?? 0
+                                        const scColor = sc >= 80 ? '#15803d' : sc >= 65 ? '#135bec' : '#d97706'
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                onClick={() => handleSelectJob(item)}
+                                                style={{
+                                                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                                                    padding: '9px 10px', borderRadius: 11,
+                                                    border: `1.5px solid ${isSel ? '#135bec' : '#e2e8f0'}`,
+                                                    background: isSel ? '#eff6ff' : '#fff',
+                                                    cursor: 'pointer', flexShrink: 0, width: 100, textAlign: 'center',
+                                                    position: 'relative',
+                                                }}
+                                            >
+                                                {isSel && <div style={{ position: 'absolute', top: 6, right: 6, width: 6, height: 6, borderRadius: '50%', background: '#135bec' }} />}
+                                                <CompanyIcon company={item.job?.company ?? null} size={36} />
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: isSel ? '#135bec' : '#0f172a', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', width: '100%' }}>
+                                                    {item.job?.title ?? 'Unknown'}
+                                                </div>
+                                                <div style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{item.job?.company ?? ''}</div>
+                                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 800, color: scColor }}>{sc}%</div>
+                                                {date && <div style={{ fontSize: 9, color: '#94a3b8' }}>{date}</div>}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                                {/* See all — pinned right */}
+                                {optimizedList.length > 6 && (
+                                    <div
+                                        onClick={() => setShowGenSheet(true)}
+                                        style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '9px 10px', borderLeft: '1px solid #e2e8f0', background: '#eff6ff', cursor: 'pointer', width: 62 }}
+                                    >
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                                        <span style={{ fontSize: 10, fontWeight: 700, color: '#135bec', textAlign: 'center', lineHeight: 1.3 }}>See all<br />{optimizedList.length} →</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Score Hero Card */}
+                        <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 14px 0' }}>
+                            <div style={{ background: 'linear-gradient(135deg, #f0f7ff 0%, #e8f3ff 60%, #f5f0ff 100%)', border: '1px solid #dbeafe', borderRadius: 14, padding: 16, marginBottom: 13, position: 'relative', overflow: 'hidden' }}>
+                                <div style={{ position: 'absolute', top: -30, right: -30, width: 130, height: 130, borderRadius: '50%', background: 'radial-gradient(circle, rgba(19,91,236,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
+                                {/* Ring + info row */}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 13 }}>
+                                    <div style={{ position: 'relative', width: 76, height: 76, flexShrink: 0 }}>
+                                        <ScoreRing score={score} size={76} />
+                                        <div style={{ position: 'absolute', bottom: 4, left: 0, right: 0, textAlign: 'center' }}>
+                                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7.5, fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase' as const }}>/100</span>
+                                        </div>
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' as const }}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 99, background: '#dcfce7', border: '1px solid #86efac', fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 700, color: '#15803d', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
+                                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                                Optimized
+                                            </span>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 99, background: tier.bg, border: `1px solid ${tier.border}`, fontFamily: "'JetBrains Mono', monospace", fontSize: 8.5, fontWeight: 700, color: tier.fg, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
+                                                {tier.label}
+                                            </span>
+                                            {cached && <span style={{ display: 'inline-flex', padding: '3px 9px', borderRadius: 5, fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', letterSpacing: '0.04em' }}>Cached</span>}
+                                        </div>
+                                        <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 4 }}>Resume Optimized</div>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' as const }}>
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+                                            {selected?.job.title}
+                                            <span style={{ color: '#e2e8f0' }}>·</span>
+                                            <span style={{ color: '#135bec', fontWeight: 700 }}>{selected?.job.company}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* 4 Stats Pills */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                                    {[
+                                        { num: `${score}%`, lbl: 'ATS Score', color: tier.fg },
+                                        { num: `+${changeCount}`, lbl: 'Changes', color: '#10b981' },
+                                        { num: `${skillCount}`, lbl: 'Skills', color: '#0f172a' },
+                                        { num: `${gapCount}`, lbl: 'Gaps', color: '#d97706' },
+                                    ].map(stat => (
+                                        <div key={stat.lbl} style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.9)', borderRadius: 8, padding: '7px 4px', textAlign: 'center', backdropFilter: 'blur(4px)' }}>
+                                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, color: stat.color, lineHeight: 1, marginBottom: 2 }}>{stat.num}</div>
+                                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 7, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' as const, color: '#94a3b8' }}>{stat.lbl}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div style={{ display: 'flex', gap: 7, paddingBottom: 14 }}>
+                                <button
+                                    onClick={() => openBuildPlan()}
+                                    style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '9px 8px', borderRadius: 9, fontSize: '11.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', whiteSpace: 'nowrap' as const }}
+                                >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>
+                                    Build Plan
+                                </button>
+                                <button
+                                    onClick={() => handleGenerate(true)}
+                                    style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '9px 8px', borderRadius: 9, fontSize: '11.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', whiteSpace: 'nowrap' as const }}
+                                >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3"/></svg>
+                                    Redo
+                                </button>
+                                <button
+                                    onClick={handleGenerateResume}
+                                    style={{ flex: 1.4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '9px 8px', borderRadius: 9, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#135bec', color: '#fff', border: '1.5px solid #135bec', boxShadow: '0 4px 14px -4px rgba(19,91,236,0.4)', whiteSpace: 'nowrap' as const }}
+                                >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Build My Resume
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Review Tabs (compact mobile mode) */}
+                        <div style={{ background: '#fff' }}>
+                            <ReviewTabs
+                                optimizedData={optimizedData}
+                                job={{ title: selected?.job.title ?? null, company: selected?.job.company ?? null }}
+                                cached={cached}
+                                compact
+                            />
+                        </div>
+                    </>
+                )}
+
+                {/* ── See All bottom sheet ── */}
+                {showGenSheet && (
+                    <>
+                        <div
+                            style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)' }}
+                            onClick={() => setShowGenSheet(false)}
+                        />
+                        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderRadius: '22px 22px 0 0', boxShadow: '0 -20px 60px rgba(0,0,0,0.2)', zIndex: 55, display: 'flex', flexDirection: 'column', maxHeight: '78vh' }}>
+                            <div style={{ width: 36, height: 4, borderRadius: 99, background: '#e2e8f0', margin: '12px auto 0', flexShrink: 0 }} />
+                            <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                                <span style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', flex: 1 }}>All Generated Resumes</span>
+                                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: '#f1f5f9', color: '#64748b' }}>{optimizedList.length}</span>
+                                <button onClick={() => setShowGenSheet(false)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 32px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {optimizedList.map((item) => {
+                                    const isSel = selected?.id === item.id
+                                    const sc = item.keyword_alignment_score ?? 0
+                                    const scColor = sc >= 80 ? '#15803d' : sc >= 65 ? '#135bec' : '#d97706'
+                                    const date = item.updated_at ? new Date(item.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            onClick={() => { handleSelectJob(item); setShowGenSheet(false) }}
+                                            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 11px', borderRadius: 10, border: `1.5px solid ${isSel ? '#135bec' : '#e2e8f0'}`, background: isSel ? '#eff6ff' : '#fff', cursor: 'pointer' }}
+                                        >
+                                            <CompanyIcon company={item.job?.company ?? null} size={36} />
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? '#135bec' : '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.job?.title ?? 'Unknown Role'}</div>
+                                                <div style={{ fontSize: 11, color: '#64748b' }}>{item.job?.company ?? ''}{date ? ` · ${date}` : ''}</div>
+                                            </div>
+                                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 800, color: scColor }}>{sc}%</div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+        )
+    }
 
     return (
         <div style={{ fontFamily: "'DM Sans', sans-serif", padding: isMobile ? '16px 14px' : '24px 28px' }}>

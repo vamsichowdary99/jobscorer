@@ -1408,6 +1408,17 @@ function LearningPage() {
 
     const { progress, toggle } = useProgress(jobId)
 
+    // ── Mobile state ──
+    const [isMobile, setIsMobile] = useState(false)
+    const [showAllSkillsSheet, setShowAllSkillsSheet] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 767px)')
+        setIsMobile(mq.matches)
+        const h = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+        mq.addEventListener('change', h)
+        return () => mq.removeEventListener('change', h)
+    }, [])
+
     // Always-on summaries fetch — feeds the "Library · N" pill on detail pages.
     useEffect(() => {
         if (!user?.id) return
@@ -1572,6 +1583,416 @@ function LearningPage() {
     }, [paths])
 
     const activePath = orderedPaths.find(p => p.id === activeId) ?? orderedPaths[0] ?? null
+
+    /* ─── MOBILE LAYOUT ─────────────────────────────────────────────────────── */
+    if (isMobile) {
+        const RTYPE_COLOR: Record<string, string> = { youtube: '#DC2626', article: '#0891B2', course: '#7C3AED', lab: '#059669' }
+        const RTYPE_BG: Record<string, string>    = { youtube: '#FEF2F2', article: '#ECFEFF', course: '#F5F3FF', lab: '#ECFDF5' }
+        const RTYPE_LABEL: Record<string, string> = { youtube: 'VIDEO',   article: 'ARTICLE', course: 'COURSE', lab: 'LAB' }
+        const RTYPE_CTA: Record<string, string>   = { youtube: 'Watch',   article: 'Read',    course: 'Start',  lab: 'Open' }
+
+        // ── Spinner ──
+        if (phase === 'loading') {
+            return (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 64px)', background: T.bgAlt }}>
+                    <div style={{ width: 28, height: 28, border: `2px solid ${T.line2}`, borderTopColor: T.blue, borderRadius: '50%', animation: 'lp-spin 0.8s linear infinite' }} />
+                </div>
+            )
+        }
+
+        // ── Empty ──
+        const isEmptyState = (phase === 'history' && summaries.length === 0) || phase === 'idle'
+        if (isEmptyState) {
+            return (
+                <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                        <div style={{ width: 64, height: 64, borderRadius: 18, background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '2px dashed rgba(37,99,235,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v4c3 3 9 3 12 0v-4"/></svg>
+                        </div>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: T.ink, marginBottom: 7, letterSpacing: '-0.02em' }}>No Learning Paths Yet</div>
+                        <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.65, maxWidth: 260, marginBottom: 22 }}>
+                            Go to AI Matches, pick a job you like, and tap <strong style={{ color: T.ink }}>Generate Learning Path</strong>. AI finds your skill gaps and builds a step-by-step roadmap.
+                        </div>
+                        <button onClick={() => router.push('/dashboard/matches')} style={{ padding: '11px 22px', background: T.blue, color: '#fff', border: 'none', borderRadius: 9, fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 14px -4px rgba(37,99,235,0.4)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <Icon.Sparkles width={13} height={13} />
+                            Go to AI Matches
+                        </button>
+                    </div>
+                </div>
+            )
+        }
+
+        // ── Generating ──
+        if (phase === 'generating') {
+            return (
+                <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)' }}>
+                    <div style={{ padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                        <div style={{ width: 72, height: 72, borderRadius: '50%', background: T.blue50, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v4c3 3 9 3 12 0v-4"/></svg>
+                        </div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: T.ink, marginBottom: 4 }}>Generating Learning Path…</div>
+                        {job && <div style={{ fontSize: '12.5px', color: T.muted, marginBottom: 16 }}>{job.title} · {job.company}</div>}
+                        <div style={{ width: '100%', maxWidth: 280, height: 5, background: T.sand, borderRadius: 99, overflow: 'hidden', marginBottom: 8 }}>
+                            <div style={{ height: '100%', borderRadius: 99, background: `linear-gradient(90deg,${T.blue},#60a5fa)`, animation: 'lp-bar 3s ease-in-out infinite' }} />
+                        </div>
+                        <div style={{ fontSize: 11, color: T.muted2, marginBottom: 20 }}>Mapping learning resources…</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, width: '100%', textAlign: 'left' }}>
+                            {LOADING_STEPS.map((step, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                    <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, background: i < 2 ? T.greenBg : i === 2 ? T.blue50 : T.sand, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {i < 2 && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                                        {i === 2 && <Icon.Refresh width={10} height={10} style={{ color: T.blue, animation: 'lp-spin 0.8s linear infinite' }} />}
+                                    </div>
+                                    <span style={{ fontSize: 12, color: i < 3 ? '#374151' : T.muted2, fontWeight: i === 2 ? 600 : 400 }}>{step}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
+        // ── Error ──
+        if (phase === 'error') {
+            return (
+                <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 20px' }}>
+                    <div style={{ width: '100%', maxWidth: 360, padding: '16px 20px', borderRadius: 12, background: T.redBg, border: '1px solid #FCA5A5' }}>
+                        <div style={{ fontSize: '0.875rem', color: T.redText, fontWeight: 600, marginBottom: 10 }}>{error}</div>
+                        <button onClick={handleGenerate} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${T.redText}`, background: '#fff', color: T.redText, cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600, fontFamily: 'inherit' }}>Retry</button>
+                    </div>
+                </div>
+            )
+        }
+
+        // ── History (library list) ──
+        if (phase === 'history') {
+            return (
+                <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', paddingBottom: 80 }}>
+                    <div style={{ background: '#fff', borderBottom: `1px solid ${T.line}`, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, letterSpacing: '-0.025em' }}>Learning Paths</div>
+                        <div style={{ fontSize: 12, color: T.muted }}>{summaries.length} path{summaries.length !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div style={{ padding: '12px 13px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {summaries.map(s => (
+                            <div key={s.job_id} onClick={() => router.push(`/dashboard/learning?jobId=${s.job_id}`)} style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 11, padding: '12px 13px', cursor: 'pointer' }}>
+                                <div style={{ fontSize: '12.5px', color: T.muted, marginBottom: 2 }}>{s.job?.company ?? 'Unknown company'}</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 6 }}>{s.job?.title ?? 'Untitled role'}</div>
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                                    <span style={{ padding: '2px 8px', borderRadius: 99, background: T.blue50, color: T.blue, fontFamily: 'var(--font-mono,monospace)', fontSize: 10, fontWeight: 700 }}>{s.skill_count} skill{s.skill_count !== 1 ? 's' : ''}</span>
+                                    {s.critical_count > 0 && <span style={{ padding: '2px 8px', borderRadius: 99, background: T.redBg, color: T.redText, fontSize: 10, fontWeight: 700 }}>{s.critical_count} critical</span>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )
+        }
+
+        // ── Active / Done ──
+        if (phase !== 'done' || !activePath) return null
+
+        const mPri = (activePath.importance ?? 'medium') as keyof typeof PRIORITY
+        const mP  = PRIORITY[mPri]
+        const mResources = (Array.isArray(activePath.resources) ? activePath.resources : []) as LearningResource[]
+        const mTotal = mResources.length
+        const mDone  = progress.get(activePath.skill_name)?.size ?? 0
+        const mPct   = mTotal > 0 ? Math.round((mDone / mTotal) * 100) : 0
+        const mCirc  = 87.96
+        const mOffset = mCirc * (1 - mPct / 100)
+        const mHours  = parseHours(activePath.time_estimate)
+        const mAllFree = mResources.length > 0 && mResources.every(r => r.free)
+        const mSevLabel = activePath.severity === 'hard_blocker' ? 'HARD BLOCKER' : activePath.severity === 'nice_to_have' ? 'NICE TO HAVE' : null
+        const mLibCount = summaries.length > 0 ? summaries.length : orderedPaths.length
+
+        return (
+            <>
+            <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', background: T.bgAlt, fontFamily: "'Inter', system-ui, sans-serif", overflow: 'hidden' }}>
+
+                {/* ── Gaps bar ── */}
+                <div style={{ background: '#fff', borderBottom: `1px solid ${T.line}`, padding: '9px 13px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <button onClick={() => router.back()} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: T.muted, border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, flexShrink: 0 }}>
+                        <Icon.ArrowLeft />Back
+                    </button>
+                    <div style={{ width: 1, height: 16, background: T.line, flexShrink: 0 }} />
+                    <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                        Your skill gaps{job?.company ? <> · <span style={{ color: T.blue }}>{job.company}</span></> : ''}
+                    </div>
+                    {mLibCount > 0 && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 99, background: T.blue50, border: `1px solid rgba(37,99,235,0.2)`, fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, color: T.blue, whiteSpace: 'nowrap' as const, flexShrink: 0 }}>
+                            LIBRARY · {mLibCount}
+                        </span>
+                    )}
+                    <button onClick={handleGenerate} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 8, border: `1px solid ${T.line}`, background: '#fff', fontSize: 11, fontWeight: 600, color: T.muted, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                        <Icon.Refresh width={11} height={11} />Regen
+                    </button>
+                </div>
+
+                {/* ── Skill strip ── */}
+                <div style={{ background: '#fff', borderBottom: `1px solid ${T.line}`, display: 'flex', alignItems: 'stretch', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '8px 13px', flex: 1, minWidth: 0, scrollbarWidth: 'none' as const }}>
+                        {orderedPaths.map((p, idx) => {
+                            const isSel = p.id === activePath.id
+                            const dotColor = PRIORITY[(p.importance ?? 'medium') as keyof typeof PRIORITY].dot
+                            const pRes = Array.isArray(p.resources) ? p.resources.length : 0
+                            const pDone = progress.get(p.skill_name)?.size ?? 0
+                            return (
+                                <div key={p.id} onClick={() => setActiveId(p.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', borderRadius: 9, border: `1.5px solid ${isSel ? T.blue : T.line}`, background: isSel ? T.blue50 : '#fff', cursor: 'pointer', flexShrink: 0, transition: 'border-color .13s,background .13s' }}>
+                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                                    <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, color: T.muted2, flexShrink: 0 }}>{String(idx + 1).padStart(2, '0')}</span>
+                                    <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: '11.5px', fontWeight: 700, color: isSel ? T.blue : T.ink, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>{p.skill_name}</div>
+                                        <div style={{ fontSize: 10, color: T.muted, fontFamily: 'var(--font-mono,monospace)' }}>{pDone}/{pRes}</div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                    <div onClick={() => setShowAllSkillsSheet(true)} style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, padding: '8px 10px', borderLeft: `1px solid ${T.line}`, background: T.blue50, cursor: 'pointer', minWidth: 58 }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                        <span style={{ fontSize: '9.5px', fontWeight: 700, color: T.blue, textAlign: 'center', lineHeight: 1.3 }}>All {orderedPaths.length}</span>
+                    </div>
+                </div>
+
+                {/* ── Scrollable detail ── */}
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                    <div style={{ padding: '14px 13px 100px' }}>
+
+                        {/* Priority badge */}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 99, background: mP.bg, border: `1px solid ${mP.dot}66`, fontFamily: 'var(--font-mono,monospace)', fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: mP.color, marginBottom: 9 }}>
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill={mP.dot}><circle cx="12" cy="12" r="10"/></svg>
+                            {mP.label} SKILL{activePath.time_estimate ? ` · ${activePath.time_estimate}` : ''}
+                        </div>
+
+                        {/* Title */}
+                        <div style={{ fontSize: 21, fontWeight: 800, color: T.ink, letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 6 }}>{activePath.skill_name}</div>
+
+                        {/* Meta */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.muted, marginBottom: 13, flexWrap: 'wrap' as const }}>
+                            <Icon.Briefcase />
+                            {job?.title && <span>{job.title}</span>}
+                            {job?.company && <>
+                                <span>·</span>
+                                <Icon.Building />
+                                <span style={{ color: T.blue, fontWeight: 600 }}>{job.company}</span>
+                            </>}
+                        </div>
+
+                        {/* Progress block */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', background: '#fff', border: `1px solid ${T.line}`, borderRadius: 10, marginBottom: 13, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                            <div style={{ position: 'relative', width: 38, height: 38, flexShrink: 0 }}>
+                                <svg width="38" height="38" viewBox="0 0 38 38">
+                                    <circle cx="19" cy="19" r="14" fill="none" stroke="#e2e8f0" strokeWidth="3.5"/>
+                                    <circle cx="19" cy="19" r="14" fill="none" stroke={T.blue} strokeWidth="3.5" strokeLinecap="round" strokeDasharray={String(mCirc)} strokeDashoffset={String(mOffset)} transform="rotate(-90 19 19)"/>
+                                </svg>
+                                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono,monospace)', fontSize: 11, fontWeight: 800, color: T.blue }}>{mPct}</div>
+                            </div>
+                            <div>
+                                <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 2 }}>Progress</div>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, letterSpacing: '-0.02em' }}>{mDone} <span style={{ fontSize: 12, color: T.muted, fontWeight: 500 }}>/ {mTotal} resources</span></div>
+                            </div>
+                            <div style={{ marginLeft: 'auto', textAlign: 'right' as const }}>
+                                <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 2 }}>Est. Time</div>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{mHours > 0 ? `~${mHours}h` : (activePath.time_estimate ?? 'TBD')}</div>
+                                <div style={{ fontSize: '10.5px', color: T.muted }}>{mAllFree ? 'all free' : 'mixed cost'}</div>
+                            </div>
+                        </div>
+
+                        {/* Why This Skill Matters Now */}
+                        {(activePath.why_it_matters || activePath.prerequisites) && (
+                            <div style={{ marginBottom: 12 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <Icon.Lightbulb width={13} height={13} style={{ color: T.blue }} />
+                                    </div>
+                                    <span style={{ fontSize: '13.5px', fontWeight: 800, color: T.ink, letterSpacing: '-0.01em' }}>Why This Skill Matters Now</span>
+                                </div>
+                                {(job || activePath.prerequisites) && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, marginBottom: 10 }}>
+                                        {job && (
+                                            <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 9, padding: '9px 11px' }}>
+                                                <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 4 }}>For This Role</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '11.5px', fontWeight: 600, color: T.ink }}>
+                                                    <Icon.Briefcase style={{ color: T.blue }} />{job.title}
+                                                </div>
+                                                {job.company && <div style={{ fontSize: '10.5px', color: T.blue, fontWeight: 600, marginTop: 1 }}>{job.company}</div>}
+                                            </div>
+                                        )}
+                                        {activePath.prerequisites && (
+                                            <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 9, padding: '9px 11px' }}>
+                                                <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 4 }}>Pre-Req</div>
+                                                <div style={{ fontSize: '11.5px', color: '#374151', lineHeight: 1.5 }}>{activePath.prerequisites}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {activePath.why_it_matters && (
+                                    <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderLeft: `3px solid ${T.blue}`, borderRadius: '0 10px 10px 0', padding: '12px 13px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                        <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.blue, marginBottom: 6 }}>AI Analysis</div>
+                                        <p style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.7, margin: 0 }}>{activePath.why_it_matters}</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Info card */}
+                        {(mSevLabel || activePath.next_step_action || activePath.milestone_check) && (
+                            <div style={{ border: '1px solid #fecaca', borderLeft: '3px solid #dc2626', borderRadius: '0 10px 10px 0', background: '#fff8f8', padding: '12px 13px', marginBottom: 14 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <div>
+                                        <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 5 }}>Severity</div>
+                                        {mSevLabel && <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 9px', borderRadius: 99, background: T.redBg, border: '1px solid #fca5a5', fontFamily: 'var(--font-mono,monospace)', fontSize: '9.5px', fontWeight: 800, color: T.redText, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>{mSevLabel}</span>}
+                                        {activePath.rationale && <div style={{ fontSize: '11.5px', color: '#374151', lineHeight: 1.55, marginTop: 6 }}>{activePath.rationale}</div>}
+                                    </div>
+                                    <div>
+                                        <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 5 }}>Today&apos;s Next Step</div>
+                                        <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.55 }}>{activePath.next_step_action ?? 'Complete the first resource below.'}</div>
+                                    </div>
+                                </div>
+                                {activePath.milestone_check && (
+                                    <>
+                                        <div style={{ height: 1, background: '#fecaca', margin: '10px 0' }} />
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                            <div>
+                                                <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 5 }}>Done When</div>
+                                                <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.55 }}>{activePath.milestone_check}</div>
+                                            </div>
+                                            {mResources[0] && (
+                                                <div>
+                                                    <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 5 }}>Top Resource</div>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5, marginTop: 5 }}>
+                                                        <span style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600, background: RTYPE_BG[mResources[0].type] ?? T.sand, color: RTYPE_COLOR[mResources[0].type] ?? T.muted }}>{RTYPE_LABEL[mResources[0].type] ?? mResources[0].type.toUpperCase()}</span>
+                                                        {mResources[0].free && <span style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600, background: T.greenBg, color: T.greenText }}>FREE</span>}
+                                                        {activePath.time_estimate && <span style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600, background: T.sand, color: T.muted, fontFamily: 'var(--font-mono,monospace)' }}>{activePath.time_estimate.replace(' weeks', 'w').replace(' week', 'w')}</span>}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Curated resources */}
+                        {mResources.length > 0 && (
+                            <>
+                                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, letterSpacing: '-0.015em' }}>Curated resources · {mTotal}</span>
+                                    <span style={{ fontSize: 11, color: T.muted }}>{mHours > 0 ? `~${mHours}h` : ''}{mAllFree ? ' · all free' : ''}</span>
+                                </div>
+                                <div style={{ fontSize: 12, color: T.muted, marginBottom: 12, fontStyle: 'italic' }}>Sequence them in order for best results</div>
+                                {mResources.map((r, idx) => {
+                                    const isDone = progress.get(activePath.skill_name)?.has(idx) ?? false
+                                    const rColor = RTYPE_COLOR[r.type] ?? '#64748b'
+                                    const rBg    = RTYPE_BG[r.type]    ?? T.sand
+                                    const rLabel = RTYPE_LABEL[r.type] ?? r.type.toUpperCase()
+                                    const rCta   = RTYPE_CTA[r.type]   ?? 'Open'
+                                    return (
+                                        <div key={idx} style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 11, overflow: 'hidden', marginBottom: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', opacity: isDone ? 0.75 : 1 }}>
+                                            {/* Thumbnail */}
+                                            <div style={{ height: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', background: rBg, position: 'relative', cursor: 'pointer' }} onClick={() => window.open(r.url, '_blank', 'noopener')}>
+                                                <div style={{ position: 'absolute', top: 8, left: 10, fontFamily: 'var(--font-mono,monospace)', fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(255,255,255,0.85)', background: 'rgba(0,0,0,0.28)', padding: '3px 8px', borderRadius: 4 }}>STEP {String(idx + 1).padStart(2, '0')}</div>
+                                                <div style={{ position: 'absolute', top: 8, right: 10, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 99, background: 'rgba(255,255,255,0.92)', fontSize: '10.5px', fontWeight: 700, color: rColor }}>
+                                                    {r.type === 'youtube' && <svg width="10" height="10" viewBox="0 0 24 24" fill={rColor}><polygon points="5 3 19 12 5 21 5 3"/></svg>}
+                                                    {rLabel}
+                                                </div>
+                                                <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+                                                    {r.type === 'youtube'
+                                                        ? <svg width="18" height="18" viewBox="0 0 24 24" fill={rColor}><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                                        : <Icon.FileText width={18} height={18} style={{ color: rColor }} />
+                                                    }
+                                                </div>
+                                            </div>
+                                            {/* Body */}
+                                            <div style={{ padding: '11px 13px 12px' }}>
+                                                <div style={{ fontSize: 11, color: T.muted, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                    <span style={{ fontWeight: 700, color: T.ink2 }}>{r.platform}</span>
+                                                    {r.channel && <><span>·</span><span>{r.channel}</span></>}
+                                                </div>
+                                                <div style={{ fontSize: '13.5px', fontWeight: 700, color: T.ink, lineHeight: 1.4, marginBottom: 5, letterSpacing: '-0.01em', textDecoration: isDone ? 'line-through' : 'none' }}>{r.title}</div>
+                                                {r.summary && <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginBottom: 9 }}>{r.summary}</div>}
+                                                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5, marginBottom: 10 }}>
+                                                    <span style={{ fontSize: '0.6875rem', color: '#334155', background: T.sand, padding: '3px 8px', borderRadius: 6, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                        <Icon.Clock width={10} height={10} />{r.duration}
+                                                    </span>
+                                                    {r.difficulty && <span style={{ fontSize: '0.6875rem', color: '#334155', background: T.sand, padding: '3px 8px', borderRadius: 6, fontWeight: 600 }}>{DIFF[r.difficulty] ?? r.difficulty}</span>}
+                                                    {r.free && <span style={{ fontSize: '0.6875rem', color: T.greenText, background: T.greenBg, padding: '3px 8px', borderRadius: 6, fontWeight: 700 }}>Free</span>}
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 10, borderTop: `1px solid ${T.line2}` }}>
+                                                    <button onClick={() => toggle(activePath.skill_name, idx)} style={{ width: 22, height: 22, borderRadius: 6, background: isDone ? T.green : '#fff', border: `1.5px solid ${isDone ? T.green : T.line}`, display: 'grid', placeItems: 'center', color: '#fff', cursor: 'pointer', padding: 0, flexShrink: 0 }}>
+                                                        {isDone && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                                    </button>
+                                                    <span style={{ fontSize: '0.75rem', color: T.muted, fontWeight: 500 }}>{isDone ? 'Completed ✓' : 'Mark complete'}</span>
+                                                    <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', fontSize: '0.8125rem', fontWeight: 700, color: '#fff', background: T.blue, padding: '7px 13px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 5, textDecoration: 'none', boxShadow: '0 3px 8px -3px rgba(37,99,235,0.4)' }}>
+                                                        {rCta}<Icon.External width={10} height={10} />
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </>
+                        )}
+
+                        {/* What You'll Be Able To Do */}
+                        {activePath.key_takeaways && activePath.key_takeaways.length > 0 && (
+                            <div style={{ marginTop: 6, background: '#fff', border: `1px solid ${T.line}`, borderRadius: 11, padding: 13, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 11 }}>
+                                    <Icon.Lightbulb width={12} height={12} style={{ color: T.blue }} />
+                                    <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase' as const, color: T.blue }}>What You&apos;ll Be Able To Do</span>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                                    {activePath.key_takeaways.map((kw, i) => (
+                                        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                            <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 15, fontWeight: 800, color: T.blue, flexShrink: 0, lineHeight: 1 }}>{String(i + 1).padStart(2, '0')}</span>
+                                            <span style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.6 }}>{kw}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
+                </div>
+            </div>
+
+            {/* ── All Skills sheet ── */}
+            {showAllSkillsSheet && (
+                <>
+                    <div onClick={() => setShowAllSkillsSheet(false)} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)' }} />
+                    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderRadius: '22px 22px 0 0', boxShadow: '0 -20px 60px rgba(0,0,0,0.25)', zIndex: 55, display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
+                        <div style={{ width: 36, height: 4, borderRadius: 99, background: T.line, margin: '12px auto 0', flexShrink: 0 }} />
+                        <div style={{ padding: '12px 16px 10px', borderBottom: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, flex: 1 }}>All Skill Gaps</span>
+                            <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: T.sand, color: T.muted }}>{orderedPaths.length}</span>
+                            <button onClick={() => setShowAllSkillsSheet(false)} style={{ width: 27, height: 27, borderRadius: 8, background: T.sand, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 24px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+                            {orderedPaths.map((p, idx) => {
+                                const isOn = p.id === activePath.id
+                                const sp = PRIORITY[(p.importance ?? 'medium') as keyof typeof PRIORITY]
+                                const pRes = Array.isArray(p.resources) ? p.resources.length : 0
+                                const pDone = progress.get(p.skill_name)?.size ?? 0
+                                return (
+                                    <div key={p.id} onClick={() => { setActiveId(p.id); setShowAllSkillsSheet(false) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 10, border: `1.5px solid ${isOn ? T.blue : T.line}`, background: isOn ? T.blue50 : '#fff', cursor: 'pointer' }}>
+                                        <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '9.5px', fontWeight: 700, color: T.muted2, flexShrink: 0, minWidth: 18 }}>{String(idx + 1).padStart(2, '0')}</span>
+                                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: sp.dot, flexShrink: 0 }} />
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: isOn ? T.blue : T.ink }}>{p.skill_name}</div>
+                                            <div style={{ fontSize: 11, color: T.muted }}>{sp.label} · {p.time_estimate ?? ''}</div>
+                                        </div>
+                                        <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '10.5px', fontWeight: 700, color: T.muted, flexShrink: 0 }}>{pDone}/{pRes}</span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </>
+            )}
+            </>
+        )
+    }
 
     /* ─── Non-split (centered) view for loading / empty / generating / error ─── */
     const renderCenteredState = (content: ReactElement) => (
