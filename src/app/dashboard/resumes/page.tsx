@@ -442,12 +442,13 @@ function SectionModal({
 // ── Active Modal Dispatcher ────────────────────────────────
 // Clones state on open; commits on Save.
 function ActiveModal({
-    sectionKey, state, update, onClose,
+    sectionKey, state, update, onClose, isMobile,
 }: {
     sectionKey: string
     state: ResumeEditorState
     update: (s: ResumeEditorState) => void
     onClose: () => void
+    isMobile?: boolean
 }) {
     // Deep snapshot so Cancel discards changes
     const [local, setLocal] = useState<ResumeEditorState>(() => JSON.parse(JSON.stringify(state)))
@@ -485,9 +486,9 @@ function ActiveModal({
             case 'experience':     return <ExperienceSection state={local} update={setLocal} />
             case 'projects':       return <ProjectsSection state={local} update={setLocal} />
             case 'skills':         return <SkillsSection state={local} update={setLocal} />
-            case 'certifications': return <CertificationsSection state={local} update={setLocal} />
-            case 'achievements':   return <AchievementsSection state={local} update={setLocal} />
-            case 'leadership':     return <LeadershipSection state={local} update={setLocal} />
+            case 'certifications': return <CertificationsSection state={local} update={setLocal} isMobile={isMobile} />
+            case 'achievements':   return <AchievementsSection state={local} update={setLocal} isMobile={isMobile} />
+            case 'leadership':     return <LeadershipSection state={local} update={setLocal} isMobile={isMobile} />
             default: return null
         }
     })()
@@ -2798,7 +2799,7 @@ function SkillsSection({ state, update }: { state: ResumeEditorState; update: (s
 }
 
 // ── Section: Leadership ──────────────────────────────────────
-function LeadershipSection({ state, update }: { state: ResumeEditorState; update: (s: ResumeEditorState) => void }) {
+function LeadershipSection({ state, update, isMobile }: { state: ResumeEditorState; update: (s: ResumeEditorState) => void; isMobile?: boolean }) {
     const entries = state.leadership
     const setEntries = (e: LeadershipEntry[]) => update({ ...state, leadership: e })
 
@@ -2808,6 +2809,44 @@ function LeadershipSection({ state, update }: { state: ResumeEditorState; update
         const next = [...entries]
         next[i] = { ...next[i], ...patch }
         setEntries(next)
+    }
+
+    if (isMobile) {
+        const mInput: React.CSSProperties = { width: '100%', padding: '9px 11px', borderRadius: 9, border: '1px solid #e2e8f0', fontSize: '13.5px', color: '#0f172a', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+        const mLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 5 }
+        return (
+            <div>
+                {entries.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: 20, paddingBottom: i < entries.length - 1 ? 20 : 0, borderBottom: i < entries.length - 1 ? '1px solid #f1f5f9' : 'none', position: 'relative' }}>
+                        {entries.length > 1 && (
+                            <button onClick={() => removeEntry(i)} style={{ position: 'absolute', top: 0, right: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 2 }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                            </button>
+                        )}
+                        <div style={{ marginBottom: 12 }}>
+                            <label style={mLabel}>Role / Title</label>
+                            <input type="text" value={lead.role} onChange={e => updateEntry(i, { role: e.target.value })} placeholder="e.g. President, Tech Lead" style={mInput} />
+                        </div>
+                        <div style={{ marginBottom: 12 }}>
+                            <label style={mLabel}>Organisation</label>
+                            <input type="text" value={lead.org} onChange={e => updateEntry(i, { org: e.target.value })} placeholder="e.g. ACM Student Chapter" style={mInput} />
+                        </div>
+                        <div style={{ marginBottom: 12 }}>
+                            <label style={mLabel}>Description</label>
+                            <textarea value={lead.bullets.join('\n')} onChange={e => updateEntry(i, { bullets: e.target.value ? e.target.value.split('\n') : [] })} placeholder="Describe your role and key contributions..." style={{ ...mInput, resize: 'vertical', minHeight: 72 }} rows={3} />
+                        </div>
+                        <div>
+                            <label style={mLabel}>Year / Date Range</label>
+                            <input type="text" value={lead.date} onChange={e => updateEntry(i, { date: e.target.value })} placeholder="2023–2024" style={mInput} />
+                        </div>
+                    </div>
+                ))}
+                <button onClick={addEntry} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 16px', borderRadius: 99, border: '1.5px solid rgba(19,91,236,0.25)', background: '#eff6ff', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: entries.length > 0 ? 4 : 0, fontFamily: 'inherit' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Add Another
+                </button>
+            </div>
+        )
     }
 
     return (
@@ -2834,7 +2873,7 @@ function LeadershipSection({ state, update }: { state: ResumeEditorState; update
 }
 
 // ── Section: Certifications ──────────────────────────────────
-function CertificationsSection({ state, update }: { state: ResumeEditorState; update: (s: ResumeEditorState) => void }) {
+function CertificationsSection({ state, update, isMobile }: { state: ResumeEditorState; update: (s: ResumeEditorState) => void; isMobile?: boolean }) {
     const certs = state.certifications
     const setCerts = (c: string[]) => update({ ...state, certifications: c })
 
@@ -2844,6 +2883,62 @@ function CertificationsSection({ state, update }: { state: ResumeEditorState; up
         const next = [...certs]
         next[i] = v
         setCerts(next)
+    }
+
+    if (isMobile) {
+        const parseCert = (s: string) => {
+            const parts = s.split('|').map(p => p.trim())
+            return { name: parts[0] || '', issuer: parts[1] || '', year: parts[2] || '' }
+        }
+        const fmtCert = (name: string, issuer: string, year: string): string => {
+            const n = name.trim(), iss = issuer.trim(), y = year.trim()
+            if (iss || y) return `${n} | ${iss} | ${y}`
+            return n
+        }
+        const updateField = (i: number, field: 'name' | 'issuer' | 'year', val: string) => {
+            const next = [...certs]
+            const parsed = parseCert(next[i] || '')
+            next[i] = fmtCert(
+                field === 'name' ? val : parsed.name,
+                field === 'issuer' ? val : parsed.issuer,
+                field === 'year' ? val : parsed.year,
+            )
+            setCerts(next)
+        }
+        const mInput: React.CSSProperties = { width: '100%', padding: '9px 11px', borderRadius: 9, border: '1px solid #e2e8f0', fontSize: '13.5px', color: '#0f172a', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+        const mLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 5 }
+        return (
+            <div>
+                {certs.map((cert, i) => {
+                    const { name, issuer, year } = parseCert(cert)
+                    return (
+                        <div key={i} style={{ marginBottom: 20, paddingBottom: i < certs.length - 1 ? 20 : 0, borderBottom: i < certs.length - 1 ? '1px solid #f1f5f9' : 'none', position: 'relative' }}>
+                            {certs.length > 1 && (
+                                <button onClick={() => remove(i)} style={{ position: 'absolute', top: 0, right: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 2 }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                </button>
+                            )}
+                            <div style={{ marginBottom: 12 }}>
+                                <label style={mLabel}>Certification</label>
+                                <input type="text" value={name} onChange={e => updateField(i, 'name', e.target.value)} placeholder="e.g. AWS Certified Developer" style={mInput} />
+                            </div>
+                            <div style={{ marginBottom: 12 }}>
+                                <label style={mLabel}>Issuer</label>
+                                <input type="text" value={issuer} onChange={e => updateField(i, 'issuer', e.target.value)} placeholder="e.g. Amazon Web Services" style={mInput} />
+                            </div>
+                            <div>
+                                <label style={mLabel}>Year</label>
+                                <input type="text" value={year} onChange={e => updateField(i, 'year', e.target.value)} placeholder="2024" style={mInput} />
+                            </div>
+                        </div>
+                    )
+                })}
+                <button onClick={add} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 16px', borderRadius: 99, border: '1.5px solid rgba(19,91,236,0.25)', background: '#eff6ff', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: certs.length > 0 ? 4 : 0, fontFamily: 'inherit' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Add Another
+                </button>
+            </div>
+        )
     }
 
     return (
@@ -2888,7 +2983,7 @@ function CertificationsSection({ state, update }: { state: ResumeEditorState; up
 }
 
 // ── Section: Achievements ────────────────────────────────────
-function AchievementsSection({ state, update }: { state: ResumeEditorState; update: (s: ResumeEditorState) => void }) {
+function AchievementsSection({ state, update, isMobile }: { state: ResumeEditorState; update: (s: ResumeEditorState) => void; isMobile?: boolean }) {
     const achievements = state.achievements
     const setAch = (a: string[]) => update({ ...state, achievements: a })
 
@@ -2898,6 +2993,75 @@ function AchievementsSection({ state, update }: { state: ResumeEditorState; upda
         const next = [...achievements]
         next[i] = v
         setAch(next)
+    }
+
+    if (isMobile) {
+        const parseAch = (s: string) => {
+            const yearMatch = s.match(/\((\d{4})\)\s*$/)
+            const year = yearMatch ? yearMatch[1] : ''
+            const withoutYear = year ? s.replace(/\s*\(\d{4}\)\s*$/, '') : s
+            const dashIdx = withoutYear.indexOf(' — ')
+            if (dashIdx > -1) return { title: withoutYear.slice(0, dashIdx).trim(), description: withoutYear.slice(dashIdx + 3).trim(), year }
+            return { title: withoutYear.trim(), description: '', year }
+        }
+        const fmtAch = (title: string, description: string, year: string): string => {
+            const t = title.trim(), d = description.trim(), y = year.trim()
+            if (!t) return ''
+            if (d && y) return `${t} — ${d} (${y})`
+            if (d) return `${t} — ${d}`
+            if (y) return `${t} (${y})`
+            return t
+        }
+        const updateAchField = (i: number, field: 'title' | 'description' | 'year', val: string) => {
+            const next = [...achievements]
+            const parsed = parseAch(next[i] || '')
+            next[i] = fmtAch(
+                field === 'title' ? val : parsed.title,
+                field === 'description' ? val : parsed.description,
+                field === 'year' ? val : parsed.year,
+            )
+            setAch(next)
+        }
+        const mInput: React.CSSProperties = { width: '100%', padding: '9px 11px', borderRadius: 9, border: '1px solid #e2e8f0', fontSize: '13.5px', color: '#0f172a', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
+        const mLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 5 }
+        return (
+            <div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '8px 11px', background: '#fefce8', border: '1px solid #fef08a', borderRadius: 9, marginBottom: 16 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                    </svg>
+                    <span style={{ fontSize: '11.5px', color: '#92400e', lineHeight: 1.5 }}>Quantify impact when possible — e.g. "Increased X by 40%"</span>
+                </div>
+                {achievements.map((ach, i) => {
+                    const { title, description, year } = parseAch(ach)
+                    return (
+                        <div key={i} style={{ marginBottom: 20, paddingBottom: i < achievements.length - 1 ? 20 : 0, borderBottom: i < achievements.length - 1 ? '1px solid #f1f5f9' : 'none', position: 'relative' }}>
+                            {achievements.length > 1 && (
+                                <button onClick={() => remove(i)} style={{ position: 'absolute', top: 0, right: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 2 }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                                </button>
+                            )}
+                            <div style={{ marginBottom: 12 }}>
+                                <label style={mLabel}>Achievement</label>
+                                <input type="text" value={title} onChange={e => updateAchField(i, 'title', e.target.value)} placeholder="Led team of 5 to deliver 2 weeks early" style={mInput} />
+                            </div>
+                            <div style={{ marginBottom: 12 }}>
+                                <label style={mLabel}>Description (optional)</label>
+                                <textarea value={description} onChange={e => updateAchField(i, 'description', e.target.value)} placeholder="Provide additional context or impact..." style={{ ...mInput, resize: 'vertical', minHeight: 60 }} rows={2} />
+                            </div>
+                            <div>
+                                <label style={mLabel}>Year</label>
+                                <input type="text" value={year} onChange={e => updateAchField(i, 'year', e.target.value)} placeholder="2023" style={mInput} />
+                            </div>
+                        </div>
+                    )
+                })}
+                <button onClick={add} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 16px', borderRadius: 99, border: '1.5px solid rgba(217,119,6,0.25)', background: '#fefce8', color: '#d97706', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: achievements.length > 0 ? 4 : 0, fontFamily: 'inherit' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Add Achievement
+                </button>
+            </div>
+        )
     }
 
     return (
@@ -4798,6 +4962,23 @@ export default function ResumesPage() {
             cobalt: '#1d4ed8', onyx: '#18181b', jade: '#6d28d9', lapis: '#c2410c',
         }
 
+        const renderPreviewForTemplate = (tid: string): React.ReactNode => {
+            switch (tid) {
+                case 'cobalt':       return <CobaltResumePreview state={editorState} />
+                case 'onyx':         return <OnyxResumePreview state={editorState} />
+                case 'jade':         return <JadeResumePreview state={editorState} />
+                case 'lapis':        return <LapisResumePreview state={editorState} />
+                case 'rezi':         return <ReziResumePreview state={editorState} />
+                case 'rezi-standard':return <ReziStandardResumePreview state={editorState} />
+                case 'london':       return <LondonResumePreview state={editorState} />
+                case 'stitch':       return <StitchResumePreview state={editorState} />
+                case 'harvard':      return <HarvardResumePreview state={editorState} />
+                case 'sb2nov':       return <Sb2novResumePreview state={editorState} />
+                case 'open-resume':  return <OpenResumePreview state={editorState} />
+                default:             return <ClassicResumePreview state={editorState} />
+            }
+        }
+
         return (
             <>
             <style>{`@keyframes m-spin{to{transform:rotate(360deg)}}`}</style>
@@ -4835,6 +5016,7 @@ export default function ResumesPage() {
                 {/* ── Source Resume dropdown ── */}
                 <div ref={mobileSrcDropRef} style={{ background: M.white, borderBottom: `1px solid ${M.border}`, padding: '9px 13px', flexShrink: 0, position: 'relative' }}>
                     <div style={{ fontFamily: M.fontMono, fontSize: '8.5px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: M.textFaint, marginBottom: 5 }}>Source Resume</div>
+                    <div style={{ position: 'relative' }}>
                     <button type="button" onClick={() => uploadedResumes.length > 1 && setMobileSrcDropOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '9px 11px', background: M.surfaceAlt, border: `1.5px solid ${mobileSrcDropOpen ? M.accent : M.border}`, borderRadius: mobileSrcDropOpen ? '10px 10px 0 0' : 10, cursor: uploadedResumes.length > 1 ? 'pointer' : 'default', fontFamily: M.fontBody, transition: 'border-color .13s' }}>
                         <div style={{ width: 30, height: 30, borderRadius: 8, background: M.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -4848,7 +5030,7 @@ export default function ResumesPage() {
                         )}
                     </button>
                     {mobileSrcDropOpen && (
-                        <div style={{ border: `1.5px solid ${M.accent}`, borderTop: 'none', borderRadius: '0 0 10px 10px', background: M.white, overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, border: `1.5px solid ${M.accent}`, borderTop: 'none', borderRadius: '0 0 10px 10px', background: M.white, overflow: 'hidden', boxShadow: '0 8px 20px rgba(15,30,64,0.1)' }}>
                             <div onClick={() => { handleSourceChange(null); setMobileSrcDropOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', cursor: 'pointer', borderBottom: `1px solid ${M.borderLight}`, background: !sourceResumeId ? M.surfaceAlt : M.white }}>
                                 <div style={{ width: 30, height: 30, borderRadius: 8, background: M.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -4877,6 +5059,7 @@ export default function ResumesPage() {
                             })}
                         </div>
                     )}
+                    </div>{/* /btn-dropdown wrapper */}
                 </div>
 
                 {/* ── Resume strip ── */}
@@ -4996,12 +5179,7 @@ export default function ResumesPage() {
                                     const accent = TMPL_ACCENT[id] ?? '#0f1e40'
                                     return (
                                         <div key={id} onClick={() => {
-                                            const imgUrl = TEMPLATE_IMAGES[id]
-                                            if (imgUrl) {
-                                                setPreviewingTemplate({ id, name, imageUrl: imgUrl })
-                                            } else {
-                                                handleTemplateSelect(id as any)
-                                            }
+                                            setPreviewingTemplate({ id, name, imageUrl: TEMPLATE_IMAGES[id] ?? '' })
                                         }} style={{ border: `2px solid ${isActive ? M.accent : M.border}`, borderRadius: 11, overflow: 'hidden', cursor: 'pointer', background: M.white, transition: 'border-color .13s', boxShadow: isActive ? `0 0 0 3px rgba(29,106,245,0.1)` : 'none' }}>
                                             {/* Template thumbnail */}
                                             <div style={{ height: 160, background: '#f8fafc', overflow: 'hidden', position: 'relative' }}>
@@ -5072,11 +5250,9 @@ export default function ResumesPage() {
                             </button>
                         </div>
                         <div className="mob-tmpl-preview-scroll">
-                            {previewingTemplate.imageUrl ? (
-                                <img src={previewingTemplate.imageUrl} alt={previewingTemplate.name} />
-                            ) : (
-                                <div style={{ textAlign: 'center' as const, padding: 40, color: '#94a3b8', fontSize: 13 }}>No preview available</div>
-                            )}
+                            <div style={{ width: 700, zoom: 0.5, pointerEvents: 'none', background: '#fff' }}>
+                                {renderPreviewForTemplate(previewingTemplate.id)}
+                            </div>
                         </div>
                         <div className="mob-tmpl-preview-footer">
                             <button onClick={() => setPreviewingTemplate(null)} style={{ flex: 1, padding: 11, border: '1.5px solid #e2e8f0', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 600, color: '#64748b', cursor: 'pointer', fontFamily: M.fontBody }}>
@@ -5095,7 +5271,7 @@ export default function ResumesPage() {
 
             {/* ── Section editor modal ── */}
             {openModalSection && (
-                <ActiveModal key={openModalSection} sectionKey={openModalSection} state={editorState} update={setEditorState} onClose={() => setOpenModalSection(null)} />
+                <ActiveModal key={openModalSection} sectionKey={openModalSection} state={editorState} update={setEditorState} onClose={() => setOpenModalSection(null)} isMobile={isMobile} />
             )}
 
             {/* ── Template picker modal ── */}
@@ -5123,44 +5299,10 @@ export default function ResumesPage() {
                                 <button onClick={() => setPreviewTab('ats')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'ats' ? '#0f172a' : 'transparent', color: previewTab === 'ats' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What ATS Sees</button>
                             </div>
                             {previewTab === 'recruiters' ? (
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '14px', background: '#f1f5f9' }}>
-                                    <div style={{ background: '#fff', borderRadius: 8, padding: '16px', boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
-                                        {/* Inline preview using editorState */}
-                                        <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 9, color: '#1a1a1a', lineHeight: 1.55 }}>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f1e40', letterSpacing: '-0.02em', marginBottom: 2 }}>{editorState.profile.name || 'Your Name'}</div>
-                                            <div style={{ fontSize: 8, color: '#555', marginBottom: 8, display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-                                                {editorState.profile.email && <span>{editorState.profile.email}</span>}
-                                                {editorState.profile.phone && <span>· {editorState.profile.phone}</span>}
-                                                {editorState.profile.location && <span>· {editorState.profile.location}</span>}
-                                            </div>
-                                            {editorState.summary && <>
-                                                <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5 }}>Summary</div>
-                                                <div style={{ fontSize: 8, color: '#374151', lineHeight: 1.6, marginBottom: 8 }}>{editorState.summary}</div>
-                                            </>}
-                                            {editorState.experience.length > 0 && <>
-                                                <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Experience</div>
-                                                {editorState.experience.map((exp, i) => (
-                                                    <div key={i} style={{ marginBottom: 6 }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><b style={{ fontSize: 9 }}>{exp.title}</b><span style={{ fontSize: 8, color: '#555' }}>{exp.startDate}{exp.endDate ? ` – ${exp.endDate}` : ''}</span></div>
-                                                        <div style={{ fontSize: 8, color: '#2563eb', fontWeight: 600, marginBottom: 2 }}>{exp.company}</div>
-                                                        <ul style={{ paddingLeft: 10, margin: 0 }}>{exp.bullets.slice(0, 3).map((b, j) => <li key={j} style={{ fontSize: 8, color: '#374151', lineHeight: 1.5 }}>{b}</li>)}</ul>
-                                                    </div>
-                                                ))}
-                                            </>}
-                                            {editorState.education.length > 0 && <>
-                                                <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Education</div>
-                                                {editorState.education.map((edu, i) => (
-                                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                        <div><b style={{ fontSize: 9 }}>{edu.degree} · {edu.school}</b></div>
-                                                        <span style={{ fontSize: 8, color: '#555', flexShrink: 0 }}>{edu.date}</span>
-                                                    </div>
-                                                ))}
-                                            </>}
-                                            {(editorState.skills.languages || editorState.skills.tools) && <>
-                                                <div style={{ fontSize: '8.5px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#0f1e40', borderBottom: '1px solid #0f1e40', paddingBottom: 2, marginBottom: 5, marginTop: 8 }}>Skills</div>
-                                                {editorState.skills.languages && <div style={{ fontSize: 8, color: '#374151', marginBottom: 2 }}><b>Languages:</b> {editorState.skills.languages}</div>}
-                                                {editorState.skills.tools && <div style={{ fontSize: 8, color: '#374151' }}><b>Tools:</b> {editorState.skills.tools}</div>}
-                                            </>}
+                                <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#f1f5f9', padding: '8px 6px 16px' }}>
+                                    <div style={{ background: '#fff', borderRadius: 6, boxShadow: '0 2px 12px rgba(15,23,42,0.08)', overflow: 'hidden' }}>
+                                        <div style={{ width: 700, zoom: 0.45, pointerEvents: 'none' }}>
+                                            {renderPreviewForTemplate(templateId)}
                                         </div>
                                     </div>
                                 </div>

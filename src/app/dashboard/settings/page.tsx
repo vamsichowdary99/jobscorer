@@ -127,6 +127,7 @@ export default function SettingsPage() {
     const [usage, setUsage] = useState<UsageStats | null>(null)
     const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null)
     const [loading, setLoading] = useState(true)
+    const [showSecSheet, setShowSecSheet] = useState(false)
     const [savedPills, setSavedPills] = useState<Record<string, boolean>>({})
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
     const [deleteConfirmText, setDeleteConfirmText] = useState('')
@@ -330,6 +331,7 @@ export default function SettingsPage() {
 
     const displayName = settings.full_name ?? user?.email?.split('@')[0] ?? 'You'
     const initial = firstInitial(settings.full_name ?? user?.email)
+    const activeSectionLabel = NAV_ITEMS.find(n => n.id === activeSection)?.label ?? 'Profile'
 
     return (
         <PageShell>
@@ -340,20 +342,22 @@ export default function SettingsPage() {
                 <p style={S.pageSub}>Manage your profile, preferences, and account</p>
             </div>
 
-            {/* Mobile tab bar */}
-            <nav style={S.tabbar} className="rs-tabbar">
-                {NAV_ITEMS.map(item => (
-                    <button key={item.id} onClick={() => scrollTo(item.id)}
-                        style={{
-                            ...S.tabbarLink,
-                            color: activeSection === item.id ? (item.danger ? '#dc2626' : '#135bec') : (item.danger ? '#dc2626' : '#64748b'),
-                            borderBottom: activeSection === item.id ? `2px solid ${item.danger ? '#dc2626' : '#135bec'}` : '2px solid transparent',
-                            fontWeight: activeSection === item.id ? 600 : 500,
-                        }}>
-                        {item.label}
-                    </button>
-                ))}
-            </nav>
+            {/* Mobile section nav — sticky button showing current section; tapping opens jump sheet */}
+            <div className="rs-sec-nav" style={{ display: 'none', position: 'sticky', top: 64, zIndex: 20, background: '#fff', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', margin: '8px -8px 0' }}>
+                <button onClick={() => setShowSecSheet(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2" strokeLinecap="round">
+                            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                        </svg>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{activeSectionLabel}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#94a3b8' }}>
+                        All sections
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                </button>
+            </div>
 
             <div style={S.bodyGrid} className="rs-body-grid">
 
@@ -516,7 +520,7 @@ export default function SettingsPage() {
                             </Field>
 
                             <Field label="Remote preference">
-                                <div style={S.radioGrid4}>
+                                <div style={S.radioGrid4} className="rs-radioGrid4">
                                     {REMOTE_OPTIONS.map(opt => {
                                         const active = settings.remote_preference === opt
                                         return (
@@ -578,24 +582,26 @@ export default function SettingsPage() {
                                                 {isPrimary ? 'master resume' : (tailoredFor ?? 'tailored resume')}
                                             </div>
                                         </div>
-                                        {isPrimary ? (
-                                            <span style={S.primaryPill}>★ Primary</span>
-                                        ) : (
-                                            <button style={S.setPrimary} onClick={() => handleSetPrimary(r.id)}>Set as primary</button>
-                                        )}
-                                        <button
-                                            type="button"
-                                            style={S.iconBtn}
-                                            title="Download"
-                                            onClick={() => handleDownloadResume(r.id)}
-                                        >
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                                        </button>
-                                        <button style={{ ...S.iconBtn }} title="Delete" onClick={() => handleDeleteResume(r.id)}
-                                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; (e.currentTarget as HTMLButtonElement).style.color = '#dc2626' }}
-                                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b' }}>
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
-                                        </button>
+                                        <div className="rs-resume-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                            {isPrimary ? (
+                                                <span style={S.primaryPill}>★ Primary</span>
+                                            ) : (
+                                                <button className="rs-resume-set-primary" style={S.setPrimary} onClick={() => handleSetPrimary(r.id)}>Set as primary</button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                style={S.iconBtn}
+                                                title="Download"
+                                                onClick={() => handleDownloadResume(r.id)}
+                                            >
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                                            </button>
+                                            <button style={{ ...S.iconBtn }} title="Delete" onClick={() => handleDeleteResume(r.id)}
+                                                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; (e.currentTarget as HTMLButtonElement).style.color = '#dc2626' }}
+                                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b' }}>
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
+                                            </button>
+                                        </div>
                                     </div>
                                 )
                             })}
@@ -764,7 +770,7 @@ export default function SettingsPage() {
                     <Card id="danger" refSetter={el => sectionRefs.current.danger = el}
                         title="Danger Zone" sub="Destructive actions. These cannot be undone." danger>
                         <div style={S.cardBody}>
-                            <div style={S.dangerRow}>
+                            <div style={S.dangerRow} className="rs-dangerRow">
                                 <div style={{ flex: 1 }}>
                                     <div style={S.dangerTitle}>Sign out everywhere</div>
                                     <div style={S.dangerDesc}>Sign you out on all devices including this one. You&apos;ll need to log in again with your email or Google.</div>
@@ -786,6 +792,37 @@ export default function SettingsPage() {
 
                 </main>
             </div>
+
+            {/* Mobile section jump sheet */}
+            {showSecSheet && (
+                <>
+                    <div onClick={() => setShowSecSheet(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)', zIndex: 50 }} />
+                    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 55, background: '#fff', borderRadius: '22px 22px 0 0', boxShadow: '0 -20px 60px rgba(0,0,0,0.22)', maxHeight: '80vh', overflowY: 'auto' }}>
+                        <div style={{ width: 36, height: 4, borderRadius: 99, background: '#e2e8f0', margin: '12px auto 0' }} />
+                        <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid #e2e8f0' }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>Jump to section</div>
+                            <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>Settings · {settings.email}</div>
+                        </div>
+                        <div style={{ padding: '8px 12px 32px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {NAV_ITEMS.map(item => {
+                                const active = activeSection === item.id
+                                return (
+                                    <button key={item.id} onClick={() => { setShowSecSheet(false); setTimeout(() => scrollTo(item.id), 120) }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, cursor: 'pointer', border: 'none', background: active ? '#eff6ff' : 'none', fontFamily: 'inherit', width: '100%', textAlign: 'left' as const }}>
+                                        <div style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0, background: active ? 'rgba(19,91,236,0.1)' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
+                                            {item.icon}
+                                        </div>
+                                        <div style={{ flex: 1, textAlign: 'left' as const }}>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: item.danger ? '#dc2626' : (active ? '#135bec' : '#0f172a') }}>{item.label}</div>
+                                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{SEC_DESCRIPTIONS[item.id]}</div>
+                                        </div>
+                                        {active && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Delete confirmation modal */}
             {deleteModalOpen && (
@@ -828,10 +865,16 @@ export default function SettingsPage() {
                 @media (max-width: 900px) {
                     .rs-body-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
                     .rs-side-nav { display: none !important; }
-                    .rs-tabbar { display: flex !important; }
+                    .rs-tabbar { display: none !important; }
+                    .rs-sec-nav { display: block !important; }
                     .rs-field-row { grid-template-columns: 1fr !important; }
                     .rs-usage-grid { grid-template-columns: repeat(2, 1fr) !important; }
                     .rs-level-grid { grid-template-columns: repeat(2, 1fr) !important; }
+                    .rs-radioGrid4 { grid-template-columns: repeat(2, 1fr) !important; }
+                    .rs-resume-row { flex-wrap: wrap !important; padding: 12px !important; background: #f8fafc !important; border: 1px solid #e2e8f0 !important; border-radius: 10px !important; margin-bottom: 8px !important; row-gap: 0 !important; }
+                    .rs-resume-actions { width: 100% !important; border-top: 1px solid #f1f5f9 !important; padding-top: 10px !important; margin-top: 6px !important; }
+                    .rs-resume-set-primary { flex: 1 !important; border: 1.5px solid rgba(19,91,236,0.25) !important; background: #eff6ff !important; color: #135bec !important; padding: 7px 0 !important; border-radius: 8px !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; font-family: inherit !important; }
+                    .rs-dangerRow { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
                 }
                 input::placeholder { color: #64748b; opacity: 1; }
             `}</style>
@@ -851,6 +894,17 @@ const NAV_ITEMS: { id: SectionId; label: string; icon: string; danger?: boolean 
     { id: 'security', label: 'Security', icon: '🔒' },
     { id: 'danger', label: 'Danger Zone', icon: '⚠️', danger: true },
 ]
+
+const SEC_DESCRIPTIONS: Record<SectionId, string> = {
+    profile: 'Name, avatar, email',
+    prefs: 'Roles, locations, experience level',
+    resumes: 'Uploaded files, primary resume',
+    notifications: 'Email frequency and alerts',
+    plan: 'Subscription, upgrades, payment',
+    usage: 'Monthly activity & quotas',
+    security: 'Password, connected accounts, sessions',
+    danger: 'Delete account, sign out everywhere',
+}
 
 function PageShell({ children }: { children: React.ReactNode }) {
     return (
