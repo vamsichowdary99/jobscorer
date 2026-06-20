@@ -613,7 +613,7 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                 background: 'white',
                 padding: isMobile ? '14px 16px 12px' : '28px 36px 24px',
                 borderBottom: '1px solid #f3f4f6',
-                position: 'sticky', top: 0, zIndex: 10,
+                ...(isMobile ? {} : { position: 'sticky' as const, top: 0, zIndex: 10 }),
             }}>
                 <div style={{ display: 'flex', gap: isMobile ? 10 : 18, alignItems: 'flex-start' }}>
                     <CompanyIcon company={job.company} size={isMobile ? 40 : 56} />
