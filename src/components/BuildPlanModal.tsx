@@ -117,6 +117,10 @@ export default function BuildPlanModal({
                         <XIcon />
                     </button>
 
+                    {/* Scroll body — on mobile this is the single scroll container so
+                        the header scrolls away with the content instead of staying sticky */}
+                    <div className="bp-scroll-body">
+
                     {/* Header */}
                     <div className="bp-header">
                         <div className="bp-header__badge">
@@ -138,7 +142,7 @@ export default function BuildPlanModal({
 
                     {!loading && !error && hasContent && buildPlan && (
                         <div className="bp-body">
-                            {/* (a) Certifications */}
+                            {/* (a) Certifications */ }
                             {buildPlan.certifications.length > 0 && (
                                 <Section title="Certifications" count={buildPlan.certifications.length} icon={<CertIcon />}>
                                     {buildPlan.certifications.map(c => (
@@ -220,22 +224,22 @@ export default function BuildPlanModal({
                         </div>
                     )}
 
-                    {/* Footer */}
+                    </div>{/* /bp-scroll-body */}
+
+                    {/* Footer — outside scroll body so it stays pinned at bottom */}
                     {!loading && (
                         <div className="bp-footer">
-                            {acceptedCount > 0 && (
-                                <div className="bp-counter-row">
-                                    <svg width="12" height="12" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true">
-                                        <polyline points="20 6 9 17 4 12" />
-                                    </svg>
-                                    <span className="bp-counter-text">
-                                        {acceptedCount} item{acceptedCount > 1 ? 's' : ''} added
-                                    </span>
-                                    <span className="bp-counter-dot">·</span>
-                                    <span className="bp-counter-label">est. lift:</span>
-                                    <span className="bp-counter-lift">+{totalLift}%</span>
-                                </div>
-                            )}
+                            <div className="bp-counter-row">
+                                <svg width="12" height="12" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true">
+                                    <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                                <span className="bp-counter-text">
+                                    {acceptedCount} item{acceptedCount !== 1 ? 's' : ''} added
+                                </span>
+                                <span className="bp-counter-dot">·</span>
+                                <span className="bp-counter-label">est. lift:</span>
+                                <span className="bp-counter-lift">+{totalLift}%</span>
+                            </div>
                             <div className="bp-footer-actions">
                                 <button type="button" className="bp-btn-ghost" onClick={onSkipAll}>
                                     Skip all &amp; build
@@ -485,7 +489,12 @@ const MODAL_CSS = `
 }
 .bp-header__sub { font-size: 13.5px; color: #64748B; line-height: 1.6; margin: 0; }
 
+.bp-scroll-body {
+    flex: 1 1 0; min-height: 0; overflow: hidden;
+    display: flex; flex-direction: column;
+}
 .bp-body {
+    flex: 1 1 0; min-height: 0;
     overflow-y: auto; padding: 4px 30px 8px;
     display: flex; flex-direction: column; gap: 22px;
 }
@@ -661,10 +670,21 @@ const MODAL_CSS = `
         top: 14px; right: 14px;
         width: 28px; height: 28px;
     }
+    /* Issue 1 — bp-scroll-body is the single scroll container on mobile.
+       Header scrolls away with content; footer stays pinned via flex column. */
+    .bp-scroll-body {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: none;
+        display: block;
+    }
+    .bp-scroll-body::-webkit-scrollbar { display: none; }
     .bp-header {
         padding: 14px 17px 13px;
         padding-right: 46px;
         border-bottom: 1px solid #f1f5f9;
+        position: static;
     }
     .bp-header__badge {
         width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
@@ -672,11 +692,12 @@ const MODAL_CSS = `
     .bp-header__title { font-size: 17px; }
     .bp-header__sub { font-size: 12px; }
     .bp-body {
+        overflow-y: visible;
+        overflow-x: visible;
+        flex: none;
         padding: 14px 17px 8px;
         gap: 18px;
-        scrollbar-width: none;
     }
-    .bp-body::-webkit-scrollbar { display: none; }
     .bp-section__title { font-size: 9px; letter-spacing: 0.12em; color: #0f172a; }
     .bp-item {
         flex-direction: column;
@@ -685,36 +706,66 @@ const MODAL_CSS = `
         margin-bottom: 0;
     }
     .bp-item__title { font-size: 14px; line-height: 1.3; }
-    .bp-item__body { font-size: 12.5px; line-height: 1.6; margin: 8px 0 12px; }
+    /* Issue 2 — remove bottom margin from body; action row provides separator */
+    .bp-item__body { font-size: 12.5px; line-height: 1.6; margin: 8px 0 0; }
     .bp-item__meta { font-size: 11px; }
     .bp-impact { font-size: 10.5px; padding: 3px 9px; }
+    /* Issue 2 — action row: horizontal, border-top separator */
     .bp-item__actions {
-        flex-direction: row; align-self: stretch; gap: 8px; flex-wrap: wrap;
+        flex-direction: row;
+        align-self: stretch;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+        border-top: 1px solid #f1f5f9;
+        padding-top: 12px;
+        margin-top: 10px;
     }
-    .bp-btn-accept, .bp-btn-skip {
-        padding: 7px 16px; font-size: 13px;
-        border-radius: 8px;
+    /* Issue 2 — Add button: neutral white on mobile (not light-blue) */
+    .bp-btn-accept {
+        padding: 7px 16px; font-size: 13px; border-radius: 8px;
+        background: #fff; color: #0f172a; border: 1.5px solid #e2e8f0;
+        flex-shrink: 0;
     }
-    .bp-btn-learn { font-size: 13px; padding: 7px 4px; }
+    .bp-btn-accept.is-active {
+        background: #135bec; color: #fff; border-color: #135bec;
+    }
+    /* Issue 2 — Skip: text-only on mobile */
+    .bp-btn-skip {
+        padding: 7px 10px; font-size: 13px; border-radius: 8px;
+        background: none; border: none; color: #64748b;
+        flex-shrink: 0;
+    }
+    /* Issue 2 — Learn it →: pushed right with margin-left: auto */
+    .bp-btn-learn {
+        font-size: 13px; padding: 7px 4px;
+        margin-left: auto;
+        color: #2563eb; background: none; border: none;
+    }
     .bp-repo { padding: 5px 9px; }
     .bp-repo__name { font-size: 12px; }
     .bp-repo__stars { font-size: 10.5px; }
     .bp-repos__label { font-size: 9px; }
+    /* Issue 3 — footer: always shows counter row */
     .bp-footer {
         padding: 12px 17px 14px;
         border-top: 1px solid #e2e8f0;
         gap: 9px;
     }
     .bp-footer-actions { gap: 8px; }
+    /* Issue 3 — ghost button gets border/bg on mobile to match spec */
     .bp-btn-ghost {
         flex: 1; padding: 11px;
         border: 1.5px solid #e2e8f0; border-radius: 10px;
-        background: #fff; font-size: 13px;
+        background: #fff; color: #64748b;
+        font-size: 13px; font-weight: 600;
         text-align: center;
     }
+    /* Issue 3 — primary button: flat blue (not gradient) + flex: 2 */
     .bp-btn-primary {
         flex: 2; padding: 11px;
         border-radius: 10px; font-size: 13px;
+        background: #135bec;
         box-shadow: 0 3px 10px rgba(19,91,236,0.3);
         display: flex; align-items: center; justify-content: center;
     }

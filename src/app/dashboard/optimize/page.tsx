@@ -2479,27 +2479,39 @@ function OptimizePageInner() {
                 </div>
 
                 {/* ── Resume Selector ── */}
-                <div ref={resumeDropdownRef} style={{ padding: '11px 14px', background: '#fff', borderBottom: '1px solid #e2e8f0', position: 'relative' }}>
+                <div ref={resumeDropdownRef} style={{ padding: '9px 13px', background: '#fff', borderBottom: '1px solid #e2e8f0', position: 'relative' }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: '#94a3b8', marginBottom: 6 }}>
-                        Resume
+                        Source Resume
                     </div>
                     <button
                         type="button"
                         onClick={() => resumes.length > 1 && setResumeDropOpen(o => !o)}
                         style={{
-                            width: '100%', display: 'flex', alignItems: 'center', gap: 7,
-                            padding: '8px 11px', background: '#f1f5f9',
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                            padding: '9px 11px', background: '#f8fafc',
                             border: `1.5px solid ${resumeDropOpen ? '#135bec' : '#e2e8f0'}`,
-                            borderRadius: 9, cursor: resumes.length > 1 ? 'pointer' : 'default',
+                            borderRadius: 10, cursor: resumes.length > 1 ? 'pointer' : 'default',
                             fontFamily: 'inherit', textAlign: 'left' as const,
+                            boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
                         }}
                     >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round">
-                            <path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6"/>
-                        </svg>
-                        <span style={{ flex: 1, fontSize: '12.5px', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                            {currentResumeName}
-                        </span>
+                        {selectedResumeId ? (
+                            <div style={{ width: 28, height: 28, borderRadius: 8, background: iconColor(currentResumeName), flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
+                                {currentResumeName.charAt(0).toUpperCase() || '?'}
+                            </div>
+                        ) : (
+                            <div style={{ width: 28, height: 28, borderRadius: 8, background: '#eff6ff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                            </div>
+                        )}
+                        <div style={{ flex: 1, minWidth: 0, textAlign: 'left' as const }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                                {currentResumeName}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#64748b' }}>
+                                {optimizedList.length} optimised variant{optimizedList.length !== 1 ? 's' : ''}
+                            </div>
+                        </div>
                         {resumes.length > 1 && (
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"
                                 style={{ transform: resumeDropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>
@@ -2509,31 +2521,37 @@ function OptimizePageInner() {
                     </button>
                     {resumeDropOpen && resumes.length > 1 && (
                         <div style={{
-                            position: 'absolute', top: 'calc(100% - 2px)', left: 14, right: 14,
+                            position: 'absolute', top: 'calc(100% - 2px)', left: 13, right: 13,
                             background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-                            boxShadow: '0 4px 16px rgba(0,0,0,0.1)', zIndex: 50, overflow: 'hidden',
+                            boxShadow: '0 4px 20px rgba(15,23,42,0.1)', zIndex: 40, overflow: 'hidden',
                         }}>
-                            {resumes.map(r => (
-                                <button
-                                    key={r.id}
-                                    type="button"
-                                    onClick={() => { handleResumeSwitch(r.id); setResumeDropOpen(false) }}
-                                    style={{
-                                        width: '100%', padding: '10px 13px', border: 'none',
-                                        background: r.id === selectedResumeId ? '#eff6ff' : '#fff',
-                                        color: r.id === selectedResumeId ? '#135bec' : '#0f172a',
-                                        fontFamily: 'inherit', fontSize: '13px', fontWeight: r.id === selectedResumeId ? 700 : 500,
-                                        cursor: 'pointer', textAlign: 'left' as const,
-                                        borderBottom: '1px solid #f1f5f9',
-                                        display: 'flex', alignItems: 'center', gap: 8,
-                                    }}
-                                >
-                                    {r.id === selectedResumeId && (
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-                                    )}
-                                    {r.file_name ?? `Resume ${r.id.slice(0, 6)}`}
-                                </button>
-                            ))}
+                            {resumes.map(r => {
+                                const isSel = r.id === selectedResumeId
+                                const name = r.file_name ?? `Resume ${r.id.slice(0, 6)}`
+                                return (
+                                    <div
+                                        key={r.id}
+                                        onClick={() => { handleResumeSwitch(r.id); setResumeDropOpen(false) }}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 9,
+                                            padding: '10px 13px', cursor: 'pointer',
+                                            background: isSel ? '#eff6ff' : '#fff',
+                                            borderBottom: '1px solid #f1f5f9',
+                                        }}
+                                    >
+                                        <div style={{ width: 28, height: 28, borderRadius: 8, background: iconColor(name), flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
+                                            {name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? '#135bec' : '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{name}</div>
+                                            <div style={{ fontSize: 11, color: '#64748b' }}>
+                                                {optimizedList.filter(o => o.resume_id === r.id).length} optimised variant{optimizedList.filter(o => o.resume_id === r.id).length !== 1 ? 's' : ''}
+                                            </div>
+                                        </div>
+                                        {isSel && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.8" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                                    </div>
+                                )
+                            })}
                         </div>
                     )}
                 </div>

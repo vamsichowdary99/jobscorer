@@ -474,3 +474,105 @@ h4 {
     border-bottom: none !important;
   }
 }
+
+/* ── AI Chat — mobile specifics (≤767px) ───────────────────── */
+@media (max-width: 767px) {
+  /* Secondary nav strip: hidden on mobile */
+  .mob-chat-subnav { display: none !important; }
+
+  /* Resume session bubble: hidden (shown in resume bar instead) */
+  .mob-resume-session-msg { display: none !important; }
+
+  /* Resume locked banner: hidden on mobile */
+  .mob-resume-locked-banner { display: none !important; }
+
+  /* Job cards: single column on mobile */
+  .mob-job-cards-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  /* Chat input wrap */
+  .mob-chat-input-wrap {
+    background: #f1f5f9;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .mob-chat-input-wrap:focus-within {
+    border-color: #2563eb;
+    background: #fff;
+  }
+}
+
+/* ── Sheet slide-up animation (shared across pages) ─────────── */
+@keyframes sheetSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* ── Resumes page — mobile modal → bottom sheet (≤767px) ────── */
+@media (max-width: 767px) {
+  /* Overlay: push sheet to the bottom */
+  .mob-edit-overlay {
+    align-items: flex-end !important;
+    justify-content: flex-start !important;
+    padding: 0 !important;
+  }
+
+  /* Sheet: full-width, slides up from bottom */
+  .mob-edit-modal {
+    border-radius: 22px 22px 0 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 88vh !important;
+    animation: sheetSlideUp 0.28s cubic-bezier(0.32,0.72,0.2,1) !important;
+  }
+
+  /* Template preview sheet */
+  .mob-tmpl-preview-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 49 !important;
+    background: rgba(15,23,42,0.6) !important;
+    backdrop-filter: blur(4px) !important;
+  }
+  .mob-tmpl-preview-sheet {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    background: #fff !important;
+    border-radius: 22px 22px 0 0 !important;
+    max-height: 90vh !important;
+    z-index: 50 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    animation: sheetSlideUp 0.28s cubic-bezier(0.32,0.72,0.2,1) !important;
+  }
+  .mob-tmpl-preview-scroll {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    background: #f1f5f9 !important;
+    padding: 14px 12px 20px !important;
+    scrollbar-width: none !important;
+  }
+  .mob-tmpl-preview-scroll::-webkit-scrollbar { display: none; }
+  .mob-tmpl-preview-scroll img {
+    width: 100% !important;
+    display: block !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 12px rgba(15,23,42,0.1) !important;
+  }
+  .mob-tmpl-preview-footer {
+    padding: 11px 16px 20px !important;
+    border-top: 1px solid #e2e8f0 !important;
+    display: flex !important;
+    gap: 8px !important;
+  }
+}

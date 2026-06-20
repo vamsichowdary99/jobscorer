@@ -4591,6 +4591,7 @@ export default function ResumesPage() {
     const [previewTab, setPreviewTab] = useState<'recruiters' | 'ats'>('recruiters')
     const [mobileSrcDropOpen, setMobileSrcDropOpen] = useState(false)
     const mobileSrcDropRef = useRef<HTMLDivElement>(null)
+    const [previewingTemplate, setPreviewingTemplate] = useState<{ id: string; name: string; imageUrl: string } | null>(null)
 
     const loadOptimizedResume = useCallback(async (entry: SavedResumeEntry) => {
         setSelectedId(entry.id)
@@ -4994,7 +4995,14 @@ export default function ResumesPage() {
                                     const isActive = templateId === id
                                     const accent = TMPL_ACCENT[id] ?? '#0f1e40'
                                     return (
-                                        <div key={id} onClick={() => { handleTemplateSelect(id as any) }} style={{ border: `2px solid ${isActive ? M.accent : M.border}`, borderRadius: 11, overflow: 'hidden', cursor: 'pointer', background: M.white, transition: 'border-color .13s', boxShadow: isActive ? `0 0 0 3px rgba(29,106,245,0.1)` : 'none' }}>
+                                        <div key={id} onClick={() => {
+                                            const imgUrl = TEMPLATE_IMAGES[id]
+                                            if (imgUrl) {
+                                                setPreviewingTemplate({ id, name, imageUrl: imgUrl })
+                                            } else {
+                                                handleTemplateSelect(id as any)
+                                            }
+                                        }} style={{ border: `2px solid ${isActive ? M.accent : M.border}`, borderRadius: 11, overflow: 'hidden', cursor: 'pointer', background: M.white, transition: 'border-color .13s', boxShadow: isActive ? `0 0 0 3px rgba(29,106,245,0.1)` : 'none' }}>
                                             {/* Template thumbnail */}
                                             <div style={{ height: 160, background: '#f8fafc', overflow: 'hidden', position: 'relative' }}>
                                                 {TEMPLATE_IMAGES[id] ? (
@@ -5047,6 +5055,43 @@ export default function ResumesPage() {
                     )}
                 </div>
             </div>
+
+            {/* ── Template preview bottom sheet (mobile) ── */}
+            {previewingTemplate && isMobile && (
+                <>
+                    <div className="mob-tmpl-preview-overlay" onClick={() => setPreviewingTemplate(null)} />
+                    <div className="mob-tmpl-preview-sheet">
+                        <div style={{ width: 36, height: 4, borderRadius: 99, background: '#e2e8f0', margin: '12px auto 0', flexShrink: 0 }} />
+                        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
+                            <div>
+                                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>{previewingTemplate.name}</div>
+                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Tap &apos;Use this template&apos; to apply</div>
+                            </div>
+                            <button onClick={() => setPreviewingTemplate(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flexShrink: 0 }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div className="mob-tmpl-preview-scroll">
+                            {previewingTemplate.imageUrl ? (
+                                <img src={previewingTemplate.imageUrl} alt={previewingTemplate.name} />
+                            ) : (
+                                <div style={{ textAlign: 'center' as const, padding: 40, color: '#94a3b8', fontSize: 13 }}>No preview available</div>
+                            )}
+                        </div>
+                        <div className="mob-tmpl-preview-footer">
+                            <button onClick={() => setPreviewingTemplate(null)} style={{ flex: 1, padding: 11, border: '1.5px solid #e2e8f0', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 600, color: '#64748b', cursor: 'pointer', fontFamily: M.fontBody }}>
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => { handleTemplateSelect(previewingTemplate.id as any); setPreviewingTemplate(null) }}
+                                style={{ flex: 2, padding: 11, background: '#135bec', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: M.fontBody, boxShadow: '0 3px 10px rgba(19,91,236,0.3)' }}
+                            >
+                                Use this template →
+                            </button>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* ── Section editor modal ── */}
             {openModalSection && (

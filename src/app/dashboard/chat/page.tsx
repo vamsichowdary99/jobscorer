@@ -83,6 +83,15 @@ const I = {
     Menu: (p: React.SVGProps<SVGSVGElement>) => (
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
     ),
+    ChatBubble: (p: React.SVGProps<SVGSVGElement>) => (
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+    ),
+    ChevronDown: (p: React.SVGProps<SVGSVGElement>) => (
+        <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M6 9l6 6 6-6" /></svg>
+    ),
+    DocSmall: (p: React.SVGProps<SVGSVGElement>) => (
+        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
+    ),
 }
 
 /* ── resume display helpers (handles n8n's double-stringified JSON) ─ */
@@ -269,6 +278,17 @@ function deriveTitle(messages: EnrichedMessage[]): string {
     return first.length > 38 ? first.slice(0, 38) + '…' : first
 }
 
+function formatRelTime(ts: number): string {
+    const diff = Date.now() - ts
+    const mins = Math.floor(diff / 60000)
+    const hrs = Math.floor(diff / 3600000)
+    const days = Math.floor(diff / 86400000)
+    if (mins < 1) return 'Just now'
+    if (mins < 60) return `${mins} min ago`
+    if (hrs < 24) return `${hrs}h ago`
+    return `${days}d ago`
+}
+
 const QUICK_ACTIONS = [
     { icon: <I.Brief />, label: 'Find me jobs that fit', prompt: 'Which jobs are my strongest fit right now? Show me the top matches with what each one is pulling.' },
     { icon: <I.Bolt />, label: 'Tailor my resume', prompt: 'How would you tailor my resume for my best match?' },
@@ -311,21 +331,36 @@ function BetaPill() {
     )
 }
 
-function ToolBadge({ name, durationMs }: { name: string; durationMs?: number }) {
+function ToolBadge({ name, durationMs, inProgress }: { name: string; durationMs?: number; inProgress?: boolean }) {
     const m = toolBadgeMeta(name)
+    const done = typeof durationMs === 'number'
+    // done → green; in-progress → amber; fallback → blue
+    const palette = done
+        ? { bg: '#dcfce7', border: '#a7f3d0', color: '#047857' }
+        : inProgress
+            ? { bg: '#fff7ed', border: '#fde68a', color: '#b45309' }
+            : { bg: 'var(--rs-blue-50)', border: '#DBEAFE', color: 'var(--rs-blue-700)' }
     return (
         <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '4px 9px 4px 8px',
-            background: 'var(--rs-blue-50)', border: '1px solid #DBEAFE',
-            borderRadius: 99, color: 'var(--rs-blue-700)',
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '4px 9px',
+            background: palette.bg, border: `1px solid ${palette.border}`,
+            borderRadius: 99, color: palette.color,
             fontSize: '.6875rem', fontWeight: 600, letterSpacing: '-.005em',
         }}>
-            <span style={{ display: 'inline-flex', color: 'var(--rs-blue)' }}>{m.icon}</span>
+            {done ? (
+                <I.Check style={{ color: '#10b981', width: 9, height: 9 }} />
+            ) : inProgress ? (
+                <span className="qsb-spin" style={{ display: 'inline-flex', color: palette.color }}>
+                    <I.Refresh style={{ width: 9, height: 9 }} />
+                </span>
+            ) : (
+                <span style={{ display: 'inline-flex', color: palette.color }}>{m.icon}</span>
+            )}
             <span>{m.label}</span>
-            {typeof durationMs === 'number' && (
-                <span style={{ color: 'var(--rs-blue)', opacity: .65, fontFamily: 'var(--font-mono)', fontSize: '.625rem' }}>
-                    · {(durationMs / 1000).toFixed(1)}s
+            {done && (
+                <span style={{ color: palette.color, opacity: .65, fontFamily: 'var(--font-mono)', fontSize: '.625rem' }}>
+                    · {(durationMs! / 1000).toFixed(1)}s
                 </span>
             )}
         </div>
@@ -583,7 +618,7 @@ function JobMatchesCard({ jobs }: { jobs: JobMatchData[] }) {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {expanded.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: expanded.length === 1 ? '1fr' : '1fr 1fr', gap: 10 }}>
+                <div className="mob-job-cards-grid" style={{ display: 'grid', gridTemplateColumns: expanded.length === 1 ? '1fr' : '1fr 1fr', gap: 10 }}>
                     {expanded.map(j => <JobMatchExpanded key={j.job_id} job={j} />)}
                 </div>
             )}
@@ -1437,6 +1472,262 @@ function Sidebar({
 }
 
 /* ─────────────────────────────────────────────────────────
+   Mobile History Drawer (left slide-in, full-height)
+   ───────────────────────────────────────────────────────── */
+function MobileHistoryDrawer({
+    open, onClose, history, activeId, onSelect, onNew, onDelete, userEmail,
+}: {
+    open: boolean
+    onClose: () => void
+    history: ChatRecord[]
+    activeId: string | null
+    onSelect: (id: string) => void
+    onNew: () => void
+    onDelete: (id: string) => void
+    userEmail?: string | null
+}) {
+    const now = Date.now()
+    const DAY = 86400000
+    const groups = [
+        { label: 'Today', items: history.filter(h => now - h.updatedAt < DAY) },
+        { label: 'Yesterday', items: history.filter(h => now - h.updatedAt >= DAY && now - h.updatedAt < 2 * DAY) },
+        { label: 'Earlier', items: history.filter(h => now - h.updatedAt >= 2 * DAY) },
+    ].filter(g => g.items.length > 0)
+
+    const initial = userEmail ? userEmail[0].toUpperCase() : 'U'
+    const displayName = userEmail?.split('@')[0] ?? 'User'
+
+    return (
+        <>
+            {/* Overlay */}
+            <div
+                onClick={onClose}
+                style={{
+                    display: open ? 'block' : 'none',
+                    position: 'fixed', inset: 0, zIndex: 200,
+                    background: 'rgba(15,23,42,0.5)',
+                    backdropFilter: 'blur(2px)',
+                    WebkitBackdropFilter: 'blur(2px)',
+                }}
+            />
+            {/* Drawer */}
+            <div style={{
+                position: 'fixed', top: 0, left: open ? 0 : '-100%', bottom: 0,
+                zIndex: 201, width: 280,
+                background: '#fff',
+                boxShadow: '8px 0 40px rgba(15,23,42,0.2)',
+                display: 'flex', flexDirection: 'column',
+                transition: 'left 0.28s cubic-bezier(0.32,0.72,0.2,1)',
+                fontFamily: 'inherit',
+            }}>
+                {/* Header */}
+                <div style={{
+                    padding: '14px 16px', borderBottom: '1px solid #e2e8f0',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    flexShrink: 0,
+                }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Chat History</span>
+                    <button type="button" onClick={onClose} style={{
+                        width: 30, height: 30, borderRadius: 9,
+                        background: '#f1f5f9', border: 'none',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', color: '#64748b', fontSize: 15, fontWeight: 700,
+                        lineHeight: 1,
+                    }}>✕</button>
+                </div>
+
+                {/* Body */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px' }}>
+                    {/* New Chat button */}
+                    <button type="button" onClick={() => { onNew(); onClose() }} style={{
+                        display: 'flex', alignItems: 'center', gap: 7,
+                        padding: '9px 12px', borderRadius: 9,
+                        fontSize: 12.5, fontWeight: 700, color: '#2563eb',
+                        background: '#eff6ff', border: 'none', cursor: 'pointer',
+                        width: '100%', marginBottom: 6, fontFamily: 'inherit',
+                    }}>
+                        <I.Plus width={14} height={14} />
+                        New Chat
+                    </button>
+
+                    {history.length === 0 ? (
+                        <div style={{ padding: '12px', fontSize: 12, color: '#94a3b8', lineHeight: 1.5 }}>
+                            No chats yet. Start asking — I&apos;ll remember.
+                        </div>
+                    ) : (
+                        groups.map(g => (
+                            <div key={g.label}>
+                                <div style={{
+                                    fontFamily: "'JetBrains Mono','DM Mono',monospace",
+                                    fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase',
+                                    letterSpacing: '0.1em', color: '#94a3b8',
+                                    padding: '8px 12px 4px',
+                                }}>{g.label}</div>
+                                {g.items.map(h => {
+                                    const on = h.id === activeId
+                                    return (
+                                        <div key={h.id} onClick={() => { onSelect(h.id); onClose() }} style={{
+                                            display: 'flex', alignItems: 'center', gap: 8,
+                                            padding: '9px 12px', borderRadius: 9, cursor: 'pointer',
+                                            marginBottom: 1,
+                                            background: on ? '#eff6ff' : 'transparent',
+                                        }}>
+                                            <I.ChatBubble style={{ color: on ? '#2563eb' : '#64748b', flexShrink: 0 }} />
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{
+                                                    fontSize: 12.5, fontWeight: 600,
+                                                    color: on ? '#2563eb' : '#0f172a',
+                                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                    maxWidth: 160,
+                                                }}>{h.title || 'New chat'}</div>
+                                                <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 1 }}>
+                                                    {formatRelTime(h.updatedAt)}
+                                                </div>
+                                            </div>
+                                            <button type="button"
+                                                onClick={e => { e.stopPropagation(); onDelete(h.id) }}
+                                                style={{
+                                                    width: 22, height: 22, flexShrink: 0,
+                                                    background: 'none', border: 'none', cursor: 'pointer',
+                                                    color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    borderRadius: 6, padding: 0,
+                                                }}>
+                                                <I.Trash />
+                                            </button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div style={{ padding: '12px 14px 28px', borderTop: '1px solid #e2e8f0', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                        <div style={{
+                            width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                            background: 'linear-gradient(135deg,#2563eb,#1e40af)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontWeight: 700, fontSize: 13,
+                        }}>{initial}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</div>
+                            <div style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </>
+    )
+}
+
+/* ─────────────────────────────────────────────────────────
+   Mobile Composer (bottom input bar)
+   ───────────────────────────────────────────────────────── */
+function MobileComposer({
+    value, onChange, onSend, disabled, isStreaming, onStop,
+    attachedFile, onFileAttach, onRemoveFile, fileInputRef,
+}: {
+    value: string
+    onChange: (v: string) => void
+    onSend: () => void
+    disabled?: boolean
+    isStreaming?: boolean
+    onStop?: () => void
+    attachedFile: File | null
+    onFileAttach: (e: React.ChangeEvent<HTMLInputElement>) => void
+    onRemoveFile: () => void
+    fileInputRef: React.RefObject<HTMLInputElement | null>
+}) {
+    const taRef = useRef<HTMLTextAreaElement>(null)
+    const canSend = value.trim().length > 0 && !disabled
+
+    useEffect(() => {
+        const ta = taRef.current
+        if (!ta) return
+        ta.style.height = 'auto'
+        ta.style.height = `${Math.min(ta.scrollHeight, 80)}px`
+    }, [value])
+
+    return (
+        <div style={{ background: '#fff', borderTop: '1px solid #e2e8f0', padding: '10px 13px 14px', flexShrink: 0 }}>
+            <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                onChange={onFileAttach}
+            />
+
+            {attachedFile && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '5px 10px', borderRadius: 8, marginBottom: 6,
+                    background: '#eff6ff', border: '1px solid #bfdbfe',
+                    fontSize: 12, color: '#2563eb',
+                }}>
+                    <I.File style={{ flexShrink: 0 }} />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachedFile.name}</span>
+                    <button type="button" onClick={onRemoveFile} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', display: 'flex', padding: 2, flexShrink: 0, fontSize: 14, fontWeight: 700, lineHeight: 1 }}>✕</button>
+                </div>
+            )}
+
+            <div className="mob-chat-input-wrap">
+                <button type="button" onClick={() => fileInputRef.current?.click()} aria-label="Attach file"
+                    style={{ width: 32, height: 32, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    <I.Plus />
+                </button>
+
+                <textarea
+                    ref={taRef}
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (canSend) onSend() } }}
+                    placeholder="Ask anything about your job search…"
+                    rows={1}
+                    disabled={disabled}
+                    style={{
+                        flex: 1, border: 'none', outline: 'none', resize: 'none',
+                        background: 'transparent', fontFamily: 'inherit',
+                        fontSize: 13.5, color: '#0f172a', lineHeight: 1.5,
+                        minHeight: 22, maxHeight: 80, padding: 0,
+                    }}
+                />
+
+                <button type="button" aria-label="Record"
+                    style={{ width: 32, height: 32, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                    <I.Mic />
+                </button>
+
+                {isStreaming ? (
+                    <button type="button" aria-label="Stop" onClick={onStop}
+                        style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0, background: '#0f172a', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fff', display: 'inline-block' }} />
+                    </button>
+                ) : (
+                    <button type="button" aria-label="Send" onClick={onSend} disabled={!canSend}
+                        style={{
+                            width: 32, height: 32, borderRadius: 9, flexShrink: 0, border: 'none',
+                            background: canSend ? '#2563eb' : '#f1f5f9',
+                            cursor: canSend ? 'pointer' : 'default',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                            boxShadow: canSend ? '0 3px 8px -2px rgba(37,99,235,0.4)' : 'none',
+                            transition: 'all .15s ease',
+                        }}>
+                        <I.Send style={{ color: canSend ? '#fff' : '#94a3b8' }} />
+                    </button>
+                )}
+            </div>
+
+            <div style={{ fontSize: 10.5, color: '#94a3b8', textAlign: 'center', marginTop: 6 }}>
+                JobScorer AI can make mistakes. Verify important info.
+            </div>
+        </div>
+    )
+}
+
+/* ─────────────────────────────────────────────────────────
    PAGE
    ───────────────────────────────────────────────────────── */
 export default function AIChatPage() {
@@ -1460,6 +1751,10 @@ export default function AIChatPage() {
 
     const [isMobile, setIsMobile] = useState(false)
     const [sidebarOpen, setSidebarOpen] = useState(false)
+    const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false)
+    const [attachedFile, setAttachedFile] = useState<File | null>(null)
+    const [sessionResumeName, setSessionResumeName] = useState<string | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     // Saved jobs (localStorage) + toasts.
     const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
@@ -1514,6 +1809,13 @@ export default function AIChatPage() {
         setToastMsg(msg)
         if (toastTimer.current) clearTimeout(toastTimer.current)
         toastTimer.current = setTimeout(() => setToastMsg(null), 2400)
+    }, [])
+
+    const handleFileAttach = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setAttachedFile(file)
+        e.target.value = ''
     }, [])
 
     const actions: ChatActions = useMemo(() => ({
@@ -1774,6 +2076,7 @@ export default function AIChatPage() {
                 if (list.length === 1) {
                     const only = list[0]
                     setSessionResumeId(only.id)
+                    setSessionResumeName(resumeDisplayName(only))
                     setPrimaryResumeId(only.id)
                     const confirm: EnrichedMessage = {
                         role: 'assistant',
@@ -1794,6 +2097,7 @@ export default function AIChatPage() {
                 const auto = savedPrimary ?? dbPrimary
                 if (auto) {
                     setSessionResumeId(auto.id)
+                    setSessionResumeName(resumeDisplayName(auto))
                     setPrimaryResumeId(auto.id)
                     const confirm: EnrichedMessage = {
                         role: 'assistant',
@@ -1834,6 +2138,7 @@ export default function AIChatPage() {
         if (!pendingPick) return
         const { message: deferred } = pendingPick
         setSessionResumeId(r.id)
+        setSessionResumeName(resumeDisplayName(r))
         setPrimaryResumeId(r.id)
         setPendingPick(null)
         setIsLoading(true)
@@ -1861,6 +2166,7 @@ export default function AIChatPage() {
         setInput('')
         setError(null)
         setSessionResumeId(null)
+        setSessionResumeName(null)
         setPendingPick(null)
         setActiveId(null)
     }
@@ -1870,6 +2176,10 @@ export default function AIChatPage() {
         setActiveId(rec.id)
         setMessages(rec.messages)
         setSessionResumeId(rec.sessionResumeId)
+        // Extract resume name from "Using **Name** for this session." message
+        const resumeMsg = rec.messages.find(m => m.role === 'assistant' && m.content.startsWith('Using **') && m.content.includes('for this session.'))
+        const nameMatch = resumeMsg?.content.match(/^Using \*\*(.+?)\*\* for this session\.$/)
+        setSessionResumeName(nameMatch?.[1] ?? null)
         setPendingPick(null)
         setInput('')
         setError(null)
@@ -1888,35 +2198,22 @@ export default function AIChatPage() {
         <div className="rs-chat-root">
             <style>{globalChatStyle}</style>
 
-            {/* Mobile sidebar backdrop */}
-            {isMobile && sidebarOpen && (
-                <div
-                    onClick={() => setSidebarOpen(false)}
-                    style={{
-                        position: 'fixed', inset: 0, top: 64, zIndex: 198,
-                        background: 'rgba(0,0,0,0.35)',
-                    }}
+            {/* Mobile: left slide-in history drawer (full-height, covers navbar) */}
+            {isMobile && (
+                <MobileHistoryDrawer
+                    open={historyDrawerOpen}
+                    onClose={() => setHistoryDrawerOpen(false)}
+                    history={history}
+                    activeId={activeId}
+                    onSelect={id => { selectChat(id); setHistoryDrawerOpen(false) }}
+                    onNew={() => { startNewChat(); setHistoryDrawerOpen(false) }}
+                    onDelete={deleteChat}
+                    userEmail={user?.email}
                 />
             )}
 
-            {/* Sidebar — slide-over on mobile, direct child on desktop */}
-            {isMobile ? (
-                <div style={{
-                    position: 'fixed', left: 0, top: 64, bottom: 0, zIndex: 199,
-                    width: 300, overflow: 'hidden',
-                    transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-                    transition: 'transform 0.25s cubic-bezier(.4,0,.2,1)',
-                    pointerEvents: sidebarOpen ? 'auto' : 'none',
-                }}>
-                    <Sidebar
-                        history={history}
-                        activeId={activeId}
-                        onSelect={(id) => { selectChat(id); setSidebarOpen(false) }}
-                        onNew={() => { startNewChat(); setSidebarOpen(false) }}
-                        onDelete={deleteChat}
-                    />
-                </div>
-            ) : (
+            {/* Desktop: persistent sidebar */}
+            {!isMobile && (
                 <Sidebar
                     history={history}
                     activeId={activeId}
@@ -1927,11 +2224,11 @@ export default function AIChatPage() {
             )}
 
             <main className="rs-chat-main" style={{ position: 'relative' }}>
-                {/* Mobile hamburger — always visible at top-left */}
-                {isMobile && (
+                {/* Mobile hamburger for empty state (no messages) */}
+                {isMobile && !hasMessages && (
                     <button
                         type="button"
-                        onClick={() => setSidebarOpen(s => !s)}
+                        onClick={() => setHistoryDrawerOpen(true)}
                         style={{
                             position: 'absolute', top: 10, left: 10, zIndex: 10,
                             width: 36, height: 36, borderRadius: 9,
@@ -1994,30 +2291,16 @@ export default function AIChatPage() {
                 ) : (
                     /* ── CONVERSATION ── */
                     <>
-                        <div style={{
+                        {/* Desktop nav strip (hidden on mobile via CSS) */}
+                        <div className="mob-chat-subnav" style={{
                             height: 56, borderBottom: '1px solid var(--rs-line-2)',
                             display: 'flex', alignItems: 'center',
-                            padding: isMobile ? '0 12px' : '0 24px', gap: 8,
+                            padding: '0 24px', gap: 8,
                             background: 'rgba(255,255,255,.85)',
                             backdropFilter: 'blur(10px)',
                             WebkitBackdropFilter: 'blur(10px)',
                             flexShrink: 0,
                         }}>
-                            {isMobile && (
-                                <button
-                                    type="button"
-                                    onClick={() => setSidebarOpen(s => !s)}
-                                    style={{
-                                        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                                        background: 'transparent', border: 'none',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: 'pointer', color: 'var(--rs-ink)',
-                                    }}
-                                    aria-label="Chat history"
-                                >
-                                    <I.Menu />
-                                </button>
-                            )}
                             <BetaPill />
                             <div style={{
                                 fontSize: '.8125rem', color: 'var(--rs-muted)',
@@ -2035,25 +2318,87 @@ export default function AIChatPage() {
                             </div>
                         </div>
 
+                        {/* Mobile-only chat navbar (hamburger + logo + name + BETA + edit) */}
+                        {isMobile && (
+                            <div style={{
+                                height: 52, borderBottom: '1px solid #e2e8f0',
+                                display: 'flex', alignItems: 'center',
+                                padding: '0 12px', gap: 8,
+                                background: '#fff', flexShrink: 0,
+                            }}>
+                                <button type="button" onClick={() => setHistoryDrawerOpen(true)} aria-label="Chat history"
+                                    style={{ width: 32, height: 32, borderRadius: 8, background: 'none', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#0f172a', flexShrink: 0 }}>
+                                    <I.Menu />
+                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg,#2563eb,#1e40af)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <I.Sparkles width={14} height={14} style={{ color: '#fff' }} />
+                                    </div>
+                                    <span style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                                        JobScorer <span style={{ color: '#2563eb' }}>AI</span>
+                                    </span>
+                                    <span style={{
+                                        fontFamily: "'JetBrains Mono','DM Mono',monospace",
+                                        fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase' as const,
+                                        letterSpacing: '0.06em', color: '#2563eb',
+                                        padding: '2px 6px', borderRadius: 4,
+                                        background: '#eff6ff', border: '1px solid #bfdbfe',
+                                    }}>BETA</span>
+                                </div>
+                                <button type="button" onClick={startNewChat} aria-label="New chat"
+                                    style={{ width: 32, height: 32, borderRadius: 8, background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#0f172a', flexShrink: 0 }}>
+                                    <I.Edit />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Mobile-only resume selector bar */}
+                        {isMobile && sessionResumeId && (
+                            <div style={{
+                                background: '#fff', borderBottom: '1px solid #e2e8f0',
+                                padding: '7px 13px',
+                                display: 'flex', alignItems: 'center', gap: 7,
+                                flexShrink: 0,
+                            }}>
+                                <I.DocSmall style={{ color: '#64748b', flexShrink: 0 }} />
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Chatting with:</span>
+                                <div style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                    padding: '5px 10px', borderRadius: 8,
+                                    border: '1.5px solid rgba(37,99,235,0.2)',
+                                    background: '#eff6ff',
+                                    fontSize: 11.5, fontWeight: 600, color: '#2563eb',
+                                }}>
+                                    <span style={{ color: '#f59e0b', fontSize: 10 }}>★</span>
+                                    {sessionResumeName ?? 'Resume'}
+                                    <I.ChevronDown style={{ color: '#94a3b8' }} />
+                                </div>
+                            </div>
+                        )}
+
                         <div className="rs-thread-scroll" style={{
                             flex: 1, overflowY: 'auto',
-                            padding: '32px 24px 8px',
+                            padding: isMobile ? '16px 14px 8px' : '32px 24px 8px',
                             background: 'linear-gradient(180deg,#FAFBFD 0%,#FFFFFF 80px)',
                         }}>
                             <div style={{
                                 maxWidth: 880, margin: '0 auto',
                                 display: 'flex', flexDirection: 'column', gap: 24,
                             }}>
-                                {messages.map((m, i) => m.role === 'user' ? (
-                                    <UserBubble key={i} text={m.content} />
-                                ) : (
-                                    <AsstMessage key={i} toolCalls={m.toolCalls} streaming={!!m.streaming}>
-                                        <ReactMarkdown
-                                            remarkPlugins={[remarkGfm]}
-                                            components={MARKDOWN_COMPONENTS}
-                                        >{m.content}</ReactMarkdown>
-                                    </AsstMessage>
-                                ))}
+                                {messages.map((m, i) => {
+                                    if (m.role === 'user') return <UserBubble key={i} text={m.content} />
+                                    const isSessionResume = m.content.startsWith('Using **') && m.content.includes('for this session.')
+                                    return (
+                                        <div key={i} className={isSessionResume ? 'mob-resume-session-msg' : undefined}>
+                                            <AsstMessage toolCalls={m.toolCalls} streaming={!!m.streaming}>
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={MARKDOWN_COMPONENTS}
+                                                >{m.content}</ReactMarkdown>
+                                            </AsstMessage>
+                                        </div>
+                                    )
+                                })}
 
                                 {pendingPick && (
                                     <ResumePicker
@@ -2084,6 +2429,8 @@ export default function AIChatPage() {
                             </div>
                         </div>
 
+                        {/* Desktop input area */}
+                        {!isMobile && (
                         <div style={{
                             padding: '14px 24px 22px',
                             borderTop: '1px solid var(--rs-line-2)',
@@ -2092,7 +2439,7 @@ export default function AIChatPage() {
                         }}>
                             <div style={{ maxWidth: 880, margin: '0 auto' }}>
                                 {sessionResumeId && (
-                                    <div style={{
+                                    <div className="mob-resume-locked-banner" style={{
                                         display: 'flex', alignItems: 'center', gap: 6,
                                         marginBottom: 8, flexWrap: 'wrap', justifyContent: 'center',
                                     }}>
@@ -2115,8 +2462,6 @@ export default function AIChatPage() {
                                     value={input}
                                     onChange={setInput}
                                     onSend={() => send(input)}
-                                    // While the stream runs, allow typing the next prompt
-                                    // (just block submission). Picker modal still blocks input.
                                     disabled={!!pendingPick}
                                     isStreaming={isLoading}
                                     onStop={stopStreaming}
@@ -2135,6 +2480,24 @@ export default function AIChatPage() {
                                 {error && <ErrorBar text={error} onClose={() => setError(null)} />}
                             </div>
                         </div>
+                        )}
+
+                        {/* Mobile input area */}
+                        {isMobile && (
+                            <MobileComposer
+                                value={input}
+                                onChange={setInput}
+                                onSend={() => send(input)}
+                                disabled={!!pendingPick}
+                                isStreaming={isLoading}
+                                onStop={stopStreaming}
+                                attachedFile={attachedFile}
+                                onFileAttach={handleFileAttach}
+                                onRemoveFile={() => setAttachedFile(null)}
+                                fileInputRef={fileInputRef}
+                            />
+                        )}
+                        {isMobile && error && <ErrorBar text={error} onClose={() => setError(null)} />}
                     </>
                 )}
             </main>
@@ -2176,10 +2539,6 @@ const globalChatStyle = `
   --rs-line-2: #EEF2F7;
   --rs-bg-alt: #FAFBFD;
 
-  /* Inset the chat shell from the viewport edges so the sidebar's "Recents"
-     list doesn't sit flush against the left edge of the window. The left
-     inset is larger than the right so the sidebar visually anchors a bit
-     further into the page — feels less like a wall-attached drawer. */
   position: fixed;
   top: 64px; left: 56px; right: 24px; bottom: 0;
   display: flex;
@@ -2325,6 +2684,10 @@ const globalChatStyle = `
 .rs-new-chat-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 24px -8px rgba(37,99,235,.55);
+}
+
+@media (max-width: 767px) {
+  .rs-chat-root { left: 0 !important; right: 0 !important; }
 }
 
 /* thin scrollbar */
