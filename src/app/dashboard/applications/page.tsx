@@ -512,19 +512,6 @@ export default function ApplicationsPage() {
                                 </div>
                             ))}
                         </div>
-                        {/* Progress bar */}
-                        <div style={{ height: 6, borderRadius: 99, background: '#f1f5f9', display: 'flex', overflow: 'hidden', marginBottom: 8 }}>
-                            {(['applied', 'interview', 'offer', 'rejected', 'withdrawn'] as ApplicationStatus[]).filter(s => counts[s] > 0).map((s, i, arr) => (
-                                <div key={s} style={{ background: STATUS_META[s].color, width: `${(counts[s] / Math.max(1, total)) * 100}%`, minWidth: 4, borderRadius: i === 0 ? '99px 0 0 99px' : i === arr.length - 1 ? '0 99px 99px 0' : 0 }} />
-                            ))}
-                        </div>
-                        {/* Bar labels */}
-                        <div style={{ display: 'flex', gap: 8, fontSize: 11, flexWrap: 'wrap' }}>
-                            {counts.applied > 0 && <span style={{ color: '#135bec', fontWeight: 700 }}>{counts.applied} Applied</span>}
-                            {counts.interview > 0 && <span style={{ color: '#16a34a', fontWeight: 700 }}>/ {counts.interview} Interview</span>}
-                            {counts.offer > 0 && <span style={{ color: '#d97706', fontWeight: 700 }}>/ {counts.offer} Offer</span>}
-                            {counts.rejected > 0 && <span style={{ color: '#dc2626', fontWeight: 700 }}>/ {counts.rejected} Rejected</span>}
-                        </div>
                     </div>
 
                     {/* Stats 2×3 grid */}

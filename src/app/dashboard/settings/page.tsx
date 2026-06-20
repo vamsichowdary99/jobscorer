@@ -352,10 +352,6 @@ export default function SettingsPage() {
                         </svg>
                         <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{activeSectionLabel}</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#94a3b8' }}>
-                        All sections
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    </div>
                 </button>
             </div>
 
@@ -703,7 +699,7 @@ export default function SettingsPage() {
                                     <div style={{ fontSize: 13, color: '#94a3b8', padding: 18 }}>Loading your usage…</div>
                                 )}
                             </div>
-                            <div style={S.upgradeCard}>
+                            <div style={S.upgradeCard} className="rs-upgrade-card">
                                 <span style={{ fontSize: 22 }}>💡</span>
                                 <span style={{ flex: 1, fontSize: 14, color: '#1e3a8a' }}>
                                     {(!planUsage || planUsage.plan === 'free')
@@ -780,7 +776,7 @@ export default function SettingsPage() {
                                 </button>
                             </div>
 
-                            <div style={{ ...S.dangerRow, borderBottom: 'none' }}>
+                            <div style={{ ...S.dangerRow, borderBottom: 'none' }} className="rs-dangerRow">
                                 <div style={{ flex: 1 }}>
                                     <div style={S.dangerTitle}>Delete account</div>
                                     <div style={S.dangerDesc}>Permanently delete your account, all resumes, matches, and data. This cannot be undone.</div>
@@ -875,6 +871,8 @@ export default function SettingsPage() {
                     .rs-resume-actions { width: 100% !important; border-top: 1px solid #f1f5f9 !important; padding-top: 10px !important; margin-top: 6px !important; }
                     .rs-resume-set-primary { flex: 1 !important; border: 1.5px solid rgba(19,91,236,0.25) !important; background: #eff6ff !important; color: #135bec !important; padding: 7px 0 !important; border-radius: 8px !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; font-family: inherit !important; }
                     .rs-dangerRow { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+                    .rs-upgrade-card { flex-wrap: wrap !important; align-items: flex-start !important; }
+                    .rs-upgrade-card button { width: 100% !important; justify-content: center !important; margin-top: 6px !important; }
                 }
                 input::placeholder { color: #64748b; opacity: 1; }
             `}</style>
