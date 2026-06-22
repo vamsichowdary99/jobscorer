@@ -152,6 +152,34 @@ export interface JobGap {
     has_adjacent_evidence: boolean
     adjacent_from: string | null
     mitigation_hint: string
+    score_impact?: number  // 0–15: score points this gap costs; absent on pre-v2 rows
+}
+
+// Matched skill with resume evidence (v2 scoring schema — absent on pre-v2 rows)
+export interface MatchedSkillEvidence {
+    skill: string
+    evidence: string  // e.g. "Multi-Tier AWS Deployment Project"
+}
+
+export interface MatchConfidence {
+    level: 'high' | 'medium' | 'low'
+    reason: string
+}
+
+export interface FastestPathStep {
+    action: string
+    time: string
+}
+
+export interface FastestPath {
+    steps: FastestPathStep[]
+    weeks_total: number
+    projected_score: number
+}
+
+export interface ApplicationOutlook {
+    interview_chance: 'high' | 'medium' | 'low'
+    competition_level: 'high' | 'medium' | 'low'
 }
 
 export interface UserProfileData {
@@ -302,10 +330,17 @@ export interface UserJobMatch {
     job_id: string | null
     relevance_score: number | null
     recommendation: string | null
-    matched_skills: string[] | null
+    // v2 scoring: each item may be {skill, evidence}; pre-v2 rows contain plain strings
+    matched_skills: Array<MatchedSkillEvidence | string> | null
     missing_skills: string[] | null
     ai_reasoning: string | null
     gaps?: JobGap[] | null
+    // v2 scoring fields — absent on pre-v2 rows
+    confidence?: MatchConfidence | null
+    fastest_path?: FastestPath | null
+    rejection_reason?: string | null
+    application_outlook?: ApplicationOutlook | null
+    optimized_score?: number | null
 }
 
 export interface JobIngestionLog {

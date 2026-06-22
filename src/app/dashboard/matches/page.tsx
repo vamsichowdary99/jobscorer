@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useRealtimeRun } from '@trigger.dev/react-hooks'
 import { fetchMatches, fetchResumes, fetchResumeById, getPrimaryResumeId, triggerCompanyResearch, RateLimitError, CompanyResearchPendingError, countActiveScoreJobs } from '@/lib/api'
 import { addPending } from '@/lib/pendingResearch'
 import { locationFacets, matchInLocation, ALL_LOCATION_KEY } from '@/lib/locations'
@@ -10,7 +11,7 @@ import { isJobClosed } from '@/lib/jobs/applicationStatus'
 import { reportJobStatus } from '@/lib/api'
 import { createClient as createBrowserClient } from '@/lib/supabase/client'
 import { getScoreColor } from '@/lib/types'
-import type { Job, Resume, UserJobMatch } from '@/lib/types'
+import type { Job, Resume, UserJobMatch, MatchedSkillEvidence, MatchConfidence, FastestPath } from '@/lib/types'
 import { useAuth } from '@/components/providers/AuthProvider'
 import LegitimacyBadge from '@/components/LegitimacyBadge'
 
@@ -480,6 +481,249 @@ function ScoreRing({ score, showQualityLabel = false }: { score: number; showQua
     )
 }
 
+/* ── matched_skills helpers (backward compat with pre-v2 string[] rows) ── */
+function getSkillName(s: MatchedSkillEvidence | string): string {
+    return typeof s === 'string' ? s : s.skill
+}
+function getSkillEvidence(s: MatchedSkillEvidence | string): string | null {
+    return typeof s === 'string' ? null : (s.evidence || null)
+}
+
+/* ── Confidence badge ── */
+function ConfidenceBadge({ conf }: { conf: MatchConfidence }) {
+    const map: Record<string, { dot: string; label: string; bg: string; text: string; border: string }> = {
+        high:   { dot: '#10b981', label: 'High confidence', bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
+        medium: { dot: '#f59e0b', label: 'Medium confidence', bg: '#fffbeb', text: '#92400e', border: '#fde68a' },
+        low:    { dot: '#9ca3af', label: 'Low confidence', bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb' },
+    }
+    const c = map[conf.level] ?? map.low
+    return (
+        <span title={conf.reason} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            fontSize: '0.68rem', fontWeight: 700, padding: '3px 9px',
+            borderRadius: 20, background: c.bg, color: c.text, border: `1px solid ${c.border}`,
+            cursor: 'help',
+        }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.dot, flexShrink: 0 }} />
+            {c.label}
+        </span>
+    )
+}
+
+/* ── Application outlook badges ── */
+function OutlookPill({ label, level }: { label: string; level: 'high' | 'medium' | 'low' }) {
+    const colors: Record<string, { bg: string; text: string; border: string }> = {
+        high:   { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+        medium: { bg: '#fffbeb', text: '#92400e', border: '#fde68a' },
+        low:    { bg: '#fef2f2', text: '#b91c1c', border: '#fecaca' },
+    }
+    const c = colors[level] ?? colors.medium
+    return (
+        <span style={{
+            fontSize: '0.7rem', fontWeight: 700, padding: '3px 9px',
+            borderRadius: 20, background: c.bg, color: c.text, border: `1px solid ${c.border}`,
+        }}>{label}</span>
+    )
+}
+
+/* ── Mini score ring (used in ScoreJourney) ── */
+function MiniScoreRing({ score, topLabel, subLabel, color, dashed }: {
+    score: number; topLabel: string; subLabel?: string; color: string; dashed?: boolean
+}) {
+    const r = 30, circ = 2 * Math.PI * r
+    const offset = circ - (score / 100) * circ
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 90 }}>
+            <svg width="76" height="76" viewBox="0 0 76 76">
+                <circle cx="38" cy="38" r={r} fill="none" stroke="#f3f4f6" strokeWidth="7" />
+                <circle
+                    cx="38" cy="38" r={r} fill="none"
+                    stroke={color} strokeWidth="7" strokeLinecap="round"
+                    strokeDasharray={dashed ? `${circ * 0.12} ${circ * 0.04}` : `${circ}`}
+                    strokeDashoffset={dashed ? 0 : offset}
+                    style={{
+                        transform: 'rotate(-90deg)', transformOrigin: 'center',
+                        transition: 'stroke-dashoffset 1s cubic-bezier(.34,1.56,.64,1)',
+                        filter: dashed ? 'none' : `drop-shadow(0 0 5px ${color}44)`,
+                        opacity: dashed ? 0.55 : 1,
+                    }}
+                />
+                <text x="38" y="33" textAnchor="middle" fontSize="17" fontWeight="800" fill={dashed ? '#9ca3af' : color}
+                    style={{ fontFamily: "'Manrope', sans-serif" }}>
+                    {score}%
+                </text>
+                <text x="38" y="48" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="#9ca3af"
+                    style={{ fontFamily: "'Manrope', sans-serif", letterSpacing: '0.06em' }}>
+                    {topLabel}
+                </text>
+            </svg>
+            {subLabel && (
+                <span style={{
+                    fontSize: '0.68rem', color: '#6b7280', textAlign: 'center',
+                    maxWidth: 90, lineHeight: 1.3, fontWeight: 500,
+                }}>
+                    {subLabel}
+                </span>
+            )}
+        </div>
+    )
+}
+
+/* ── Score Journey — 3-step progression card ── */
+function ScoreJourney({ currentScore, optimizedScore, projectedScore, isMobile }: {
+    currentScore: number; optimizedScore: number; projectedScore: number; isMobile: boolean
+}) {
+    const currentColor = getScoreColor(currentScore)
+    const gain1 = optimizedScore - currentScore
+    const gain2 = projectedScore - optimizedScore
+    return (
+        <div style={{
+            background: 'white', borderRadius: 14,
+            border: '1px solid #e8ecf4',
+            padding: isMobile ? '16px' : '20px 28px',
+            marginBottom: 20,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <p style={{
+                    fontSize: '0.6rem', fontWeight: 800, color: '#6b7280',
+                    letterSpacing: '0.09em', textTransform: 'uppercase',
+                }}>Score Journey</p>
+                <span style={{ fontSize: '0.72rem', color: '#9ca3af', fontWeight: 500 }}>
+                    Your path from here to interview-ready
+                </span>
+            </div>
+            <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: isMobile ? 4 : 12, flexWrap: isMobile ? 'wrap' : 'nowrap',
+            }}>
+                <MiniScoreRing
+                    score={currentScore}
+                    topLabel="NOW"
+                    subLabel="Your profile today"
+                    color={currentColor}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    <svg width="40" height="14" viewBox="0 0 40 14" fill="none">
+                        <path d="M2 7H34M28 2L36 7L28 12" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {gain1 > 0 && (
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#135bec' }}>+{gain1}%</span>
+                    )}
+                </div>
+                <MiniScoreRing
+                    score={optimizedScore}
+                    topLabel="OPTIMIZED"
+                    subLabel="After resume tailoring"
+                    color="#135bec"
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    <svg width="40" height="14" viewBox="0 0 40 14" fill="none">
+                        <path d="M2 7H34M28 2L36 7L28 12" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {gain2 > 0 && (
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#6366f1' }}>+{gain2}%</span>
+                    )}
+                </div>
+                <MiniScoreRing
+                    score={projectedScore}
+                    topLabel="AFTER SKILLS"
+                    subLabel="Full potential"
+                    color="#6366f1"
+                    dashed
+                />
+            </div>
+        </div>
+    )
+}
+
+/* ── Fastest Path card ── */
+function FastestPathSection({ path, isMobile }: { path: FastestPath; isMobile: boolean }) {
+    return (
+        <div style={{
+            background: 'white', borderRadius: 14,
+            border: '1px solid #f3f4f6',
+            padding: isMobile ? '16px' : '20px 24px',
+            marginBottom: 20,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.5">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#111827' }}>Fastest Path to Apply</span>
+                </div>
+                <span style={{
+                    fontSize: '0.7rem', fontWeight: 700, padding: '3px 10px',
+                    borderRadius: 20, background: '#f0fdf4', color: '#15803d',
+                    border: '1px solid #bbf7d0',
+                }}>
+                    ~{path.weeks_total} {path.weeks_total === 1 ? 'week' : 'weeks'}
+                </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {path.steps.map((step, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <div style={{
+                            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                            background: '#eff6ff', border: '1.5px solid #bfdbfe',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.65rem', fontWeight: 800, color: '#1d4ed8', marginTop: 1,
+                        }}>{i + 1}</div>
+                        <div style={{ flex: 1 }}>
+                            <p style={{ fontSize: '0.85rem', color: '#1f2937', fontWeight: 500, lineHeight: 1.45 }}>
+                                {step.action}
+                            </p>
+                            <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontWeight: 600 }}>{step.time}</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {path.projected_score > 0 && (
+                <div style={{
+                    marginTop: 14, paddingTop: 12, borderTop: '1px solid #f3f4f6',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                    <span style={{ fontSize: '0.78rem', color: '#6b7280', fontWeight: 500 }}>
+                        Reach
+                    </span>
+                    <span style={{
+                        fontSize: '0.875rem', fontWeight: 800, color: '#135bec',
+                        padding: '1px 8px', background: '#eff6ff', borderRadius: 6,
+                    }}>
+                        {path.projected_score}%
+                    </span>
+                    <span style={{ fontSize: '0.78rem', color: '#6b7280', fontWeight: 500 }}>
+                        match score after completing these steps
+                    </span>
+                </div>
+            )}
+        </div>
+    )
+}
+
+/* ── Rejection Reason callout ── */
+function RejectionCallout({ reason, isMobile }: { reason: string; isMobile: boolean }) {
+    return (
+        <div style={{
+            background: '#fffbeb', borderRadius: 12,
+            border: '1px solid #fde68a',
+            padding: isMobile ? '12px 14px' : '14px 18px',
+            marginBottom: 20,
+            display: 'flex', gap: 11, alignItems: 'flex-start',
+        }}>
+            <span style={{ fontSize: '1rem', flexShrink: 0, lineHeight: 1.3 }}>⚠</span>
+            <div>
+                <p style={{ fontSize: '0.7rem', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
+                    Why candidates get screened out here
+                </p>
+                <p style={{ fontSize: '0.85rem', color: '#78350f', lineHeight: 1.55 }}>{reason}</p>
+            </div>
+        </div>
+    )
+}
+
 /* ── Description parser: detect section headers ── */
 function parseDescription(text: string) {
     const HEADERS = /^(key responsibilities|responsibilities|requirements|qualifications|about the role|role overview|about the job|what you.ll do|what we.re looking for|benefits|what we offer|nice to have|preferred|about us|who you are)/i
@@ -523,14 +767,21 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
         return () => mq.removeEventListener('change', handler)
     }, [])
 
-    // Hard blockers always surface first; mitigatable nice-to-haves trail them.
+    // Hard blockers first; within each tier sort by score_impact desc (v2) or keep original order (v1).
     const sortedGaps = gaps ? [...gaps].sort((a, b) => {
         const aHard = a.severity === 'hard_blocker' ? 0 : 1
         const bHard = b.severity === 'hard_blocker' ? 0 : 1
-        return aHard - bHard
+        if (aHard !== bHard) return aHard - bHard
+        return (b.score_impact ?? 0) - (a.score_impact ?? 0)
     }) : null
     const hardCount = sortedGaps?.filter(g => g.severity === 'hard_blocker').length ?? 0
     const niceCount = sortedGaps ? sortedGaps.length - hardCount : 0
+    const gapImpactTotal = sortedGaps
+        ? sortedGaps.reduce((sum, g) => sum + (g.score_impact ?? 0), 0)
+        : 0
+    const hasEvidence = matched.length > 0 && typeof matched[0] === 'object'
+    const hasImpact = sortedGaps != null && sortedGaps.some(g => (g.score_impact ?? 0) > 0)
+    const projectedScore = match.fastest_path?.projected_score ?? Math.min(95, score + gapImpactTotal)
 
     async function handleOptimize() {
         setResearchLoading(true)
@@ -806,6 +1057,16 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
             {/* ── BODY ── */}
             <div style={{ padding: isMobile ? '14px 16px' : '28px 36px' }}>
 
+                {/* Score Journey — only for v2 rows that have optimized_score */}
+                {match.optimized_score != null && (
+                    <ScoreJourney
+                        currentScore={score}
+                        optimizedScore={match.optimized_score}
+                        projectedScore={projectedScore}
+                        isMobile={isMobile}
+                    />
+                )}
+
                 {/* Score + Skills row */}
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1.8fr', gap: 16, marginBottom: 20 }}>
 
@@ -815,13 +1076,25 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                         border: '1px solid #f3f4f6',
                         padding: '24px 20px',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: 12,
                         boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                     }}>
                         <ScoreRing score={score} showQualityLabel={isMobile} />
-                        {isMobile && match.recommendation && (
-                            <div style={{ marginTop: 10 }}>
-                                <RecommendationBadge rec={match.recommendation} size="lg" />
+                        {match.confidence && <ConfidenceBadge conf={match.confidence} />}
+                        {match.application_outlook && (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <OutlookPill
+                                    label={`${match.application_outlook.interview_chance === 'high' ? 'High' : match.application_outlook.interview_chance === 'medium' ? 'Medium' : 'Low'} interview chance`}
+                                    level={match.application_outlook.interview_chance}
+                                />
+                                <OutlookPill
+                                    label={`${match.application_outlook.competition_level === 'high' ? 'High' : match.application_outlook.competition_level === 'medium' ? 'Medium' : 'Low'} competition`}
+                                    level={match.application_outlook.competition_level}
+                                />
                             </div>
+                        )}
+                        {isMobile && match.recommendation && (
+                            <RecommendationBadge rec={match.recommendation} size="lg" />
                         )}
                     </div>
 
@@ -840,32 +1113,59 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                             <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Compared to your profile</span>
                         </div>
 
+                        {/* Matched skills — evidence pairs for v2 rows, chips for v1 */}
                         {matched.length > 0 && (
-                            <div style={{ marginBottom: 14 }}>
+                            <div style={{ marginBottom: 16 }}>
                                 <p style={{
-                                    fontSize: '0.6rem', fontWeight: 800, color: '#15803d',
-                                    letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8,
+                                    fontSize: '0.6rem', fontWeight: 800,
+                                    color: '#15803d', letterSpacing: '0.08em',
+                                    textTransform: 'uppercase', marginBottom: 9,
                                 }}>
-                                    Matched Skills ({matched.length})
+                                    {hasEvidence ? `Evidence Found (${matched.length})` : `Matched Skills (${matched.length})`}
                                 </p>
-                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                    {matched.slice(0, 6).map((s, i) => (
-                                        <span key={i} style={{
-                                            fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
-                                            background: '#f0fdf4', color: '#15803d',
-                                            border: '1px solid #bbf7d0', fontWeight: 500,
-                                        }}>{s}</span>
-                                    ))}
-                                    {matched.length > 6 && (
-                                        <span style={{
-                                            fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
-                                            background: '#f3f4f6', color: '#6b7280', fontWeight: 500,
-                                        }}>+{matched.length - 6} more</span>
-                                    )}
-                                </div>
+                                {hasEvidence ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                                        {matched.slice(0, 6).map((s, i) => (
+                                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                                <span style={{
+                                                    fontSize: '0.72rem', padding: '3px 9px', borderRadius: 20,
+                                                    background: '#f0fdf4', color: '#15803d',
+                                                    border: '1px solid #bbf7d0', fontWeight: 600, flexShrink: 0,
+                                                }}>{getSkillName(s)}</span>
+                                                <span style={{ color: '#d1d5db', fontSize: '0.75rem', flexShrink: 0 }}>─</span>
+                                                <span style={{
+                                                    fontSize: '0.75rem', color: '#6b7280', lineHeight: 1.3,
+                                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                                }}>{getSkillEvidence(s)}</span>
+                                            </div>
+                                        ))}
+                                        {matched.length > 6 && (
+                                            <span style={{ fontSize: '0.72rem', color: '#9ca3af', fontWeight: 500 }}>
+                                                +{matched.length - 6} more matched
+                                            </span>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                        {matched.slice(0, 6).map((s, i) => (
+                                            <span key={i} style={{
+                                                fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
+                                                background: '#f0fdf4', color: '#15803d',
+                                                border: '1px solid #bbf7d0', fontWeight: 500,
+                                            }}>{getSkillName(s)}</span>
+                                        ))}
+                                        {matched.length > 6 && (
+                                            <span style={{
+                                                fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
+                                                background: '#f3f4f6', color: '#6b7280', fontWeight: 500,
+                                            }}>+{matched.length - 6} more</span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
 
+                        {/* Gaps — with score impact for v2, chips for v1 */}
                         {sortedGaps && sortedGaps.length > 0 ? (
                             <div>
                                 <div style={{
@@ -900,27 +1200,66 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                         )}
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                                    {(sortedGaps ?? []).map((g, i) => {
-                                        const isHard = g.severity === 'hard_blocker'
-                                        const bg = isHard ? '#fef2f2' : '#fff7ed'
-                                        const color = isHard ? '#b91c1c' : '#c2410c'
-                                        const border = isHard ? '#fecaca' : '#fed7aa'
-                                        return (
-                                            <span
-                                                key={`${g.skill}-${i}`}
-                                                title={isHard ? 'Hard blocker' : 'Nice to have'}
-                                                style={{
-                                                    fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
-                                                    background: bg, color, border: `1px solid ${border}`,
-                                                    fontWeight: 500,
-                                                }}
-                                            >
-                                                {g.skill}
-                                            </span>
-                                        )
-                                    })}
-                                </div>
+                                {hasImpact ? (
+                                    // v2: rows with per-gap score_impact
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 12 }}>
+                                        {sortedGaps.map((g, i) => {
+                                            const isHard = g.severity === 'hard_blocker'
+                                            const bg = isHard ? '#fef2f2' : '#fff7ed'
+                                            const color = isHard ? '#b91c1c' : '#c2410c'
+                                            const border = isHard ? '#fecaca' : '#fed7aa'
+                                            return (
+                                                <div key={`${g.skill}-${i}`} style={{
+                                                    display: 'flex', alignItems: 'center',
+                                                    justifyContent: 'space-between', gap: 8,
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                                        <span style={{
+                                                            fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
+                                                            background: bg, color, border: `1px solid ${border}`,
+                                                            fontWeight: 500, flexShrink: 0,
+                                                        }}>{g.skill}</span>
+                                                        {g.has_adjacent_evidence && g.adjacent_from && (
+                                                            <span style={{ fontSize: '0.65rem', color: '#9ca3af', fontStyle: 'italic', flexShrink: 0 }}>
+                                                                ≈ {g.adjacent_from}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {(g.score_impact ?? 0) > 0 && (
+                                                        <span style={{
+                                                            fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px',
+                                                            borderRadius: 20, background: '#fef9c3', color: '#a16207',
+                                                            border: '1px solid #fde68a', flexShrink: 0,
+                                                        }}>+{g.score_impact}%</span>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                ) : (
+                                    // v1: flat chips
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                                        {sortedGaps.map((g, i) => {
+                                            const isHard = g.severity === 'hard_blocker'
+                                            const bg = isHard ? '#fef2f2' : '#fff7ed'
+                                            const color = isHard ? '#b91c1c' : '#c2410c'
+                                            const border = isHard ? '#fecaca' : '#fed7aa'
+                                            return (
+                                                <span
+                                                    key={`${g.skill}-${i}`}
+                                                    title={isHard ? 'Hard blocker' : 'Nice to have'}
+                                                    style={{
+                                                        fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
+                                                        background: bg, color, border: `1px solid ${border}`,
+                                                        fontWeight: 500,
+                                                    }}
+                                                >
+                                                    {g.skill}
+                                                </span>
+                                            )
+                                        })}
+                                    </div>
+                                )}
                                 <Link href={`/dashboard/learning?jobId=${match.job_id}`}>
                                     <button style={{
                                         display: 'inline-flex', alignItems: 'center', gap: isMobile ? 5 : 6,
@@ -978,6 +1317,16 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                         )}
                     </div>
                 </div>
+
+                {/* Fastest Path — v2 rows only */}
+                {match.fastest_path && match.fastest_path.steps.length > 0 && (
+                    <FastestPathSection path={match.fastest_path} isMobile={isMobile} />
+                )}
+
+                {/* Rejection Reason — v2 rows only */}
+                {match.rejection_reason && (
+                    <RejectionCallout reason={match.rejection_reason} isMobile={isMobile} />
+                )}
 
                 {/* Optimize banner — show for any recommendation that benefits from prep:
                  * optimize_resume (skills present, resume buries them) and
@@ -1599,10 +1948,54 @@ function ResumeSelector({
 ══════════════════════════════════════════════════════ */
 type FilterType = 'all' | 'high' | 'medium' | 'low'
 
+type TriggerProgress = { scored: number; total: number; batchDone: number; totalBatches: number }
+
+function TriggerProgressBanner({ runId, accessToken, onComplete }: {
+    runId: string
+    accessToken: string
+    onComplete: () => void
+}) {
+    const { run } = useRealtimeRun(runId, { accessToken, onComplete })
+    const progress = run?.metadata?.progress as TriggerProgress | undefined
+    const isScoring = !run || run.status === 'QUEUED' || run.status === 'EXECUTING'
+    if (!isScoring) return null
+    return (
+        <div style={{ padding: '10px 12px', marginBottom: 12, borderRadius: 9, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: progress ? 8 : 0 }}>
+                <div style={{ width: 15, height: 15, flexShrink: 0, border: '2px solid #bfdbfe', borderTopColor: '#135bec', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
+                    {progress ? `Scored ${progress.scored} of ${progress.total} jobs` : 'Scoring your matches'}
+                </span>
+            </div>
+            {progress && (
+                <div style={{ background: '#dbeafe', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 4, background: '#135bec', width: `${Math.round((progress.scored / progress.total) * 100)}%`, transition: 'width 0.4s ease' }} />
+                </div>
+            )}
+        </div>
+    )
+}
+
 export default function MatchesPage() {
     const { user } = useAuth()
     const searchParams = useSearchParams()
     const requestedJobId = searchParams?.get('jobId') ?? null
+    // Trigger.dev run ID — passed as ?runId= from search/page.tsx when scoring
+    // was dispatched via Trigger.dev (TRIGGER_DEV_SCORING=true). Used to subscribe
+    // to live progress via useRealtimeRun below.
+    const triggerRunId = searchParams?.get('runId') ?? null
+    const [triggerPublicToken, setTriggerPublicToken] = useState<string | null>(null)
+
+    // Fetch a short-lived public token for the Trigger.dev realtime hook.
+    // Only fires when a runId is present in the URL.
+    useEffect(() => {
+        if (!triggerRunId) return
+        fetch('/api/trigger-token', { method: 'POST' })
+            .then(r => r.json())
+            .then(d => { if (d.token) setTriggerPublicToken(d.token) })
+            .catch(() => { /* silently ignore — fallback to Supabase polling */ })
+    }, [triggerRunId])
+
     const [matches, setMatches] = useState<FullMatch[]>([])
     const [loading, setLoading] = useState(true)
     const [selected, setSelected] = useState<FullMatch | null>(null)
@@ -1913,11 +2306,15 @@ export default function MatchesPage() {
                             loading={resumesLoading}
                         />
 
-                        {/* Scoring-in-progress banner — shown while the queue still
-                            has an active score job. Reassures the user redirected
-                            here mid-run that results are on the way (the list below
-                            fills in progressively as matches land). */}
-                        {scoringInFlight && (
+                        {triggerRunId && triggerPublicToken && (
+                            <TriggerProgressBanner
+                                runId={triggerRunId}
+                                accessToken={triggerPublicToken}
+                                onComplete={() => { if (user) reload(user.id).catch(() => {}) }}
+                            />
+                        )}
+
+                        {scoringInFlight && !triggerRunId && (
                             <div style={{
                                 display: 'flex', alignItems: 'center', gap: 9,
                                 padding: '9px 12px', marginBottom: 12, borderRadius: 9,
@@ -1929,7 +2326,7 @@ export default function MatchesPage() {
                                     borderRadius: '50%', animation: 'spin 0.8s linear infinite',
                                 }} />
                                 <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
-                                    Scoring your matches… results appear here automatically as they’re ready.
+                                    Scoring your matches… results appear here automatically as they're ready.
                                 </span>
                             </div>
                         )}
