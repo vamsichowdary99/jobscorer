@@ -67,7 +67,7 @@ interface FastestPathStep {
 interface FastestPath {
   steps: FastestPathStep[];
   weeks_total: number;
-  projected_score: number;
+  projected_score_range: string;
 }
 
 interface MatchConfidence {
@@ -94,6 +94,7 @@ interface ScoreResult {
   rejection_reason?: string;
   application_outlook?: ApplicationOutlook;
   optimized_score?: number;
+  profile_strengths?: string[];
 }
 
 // ── Helpers (ported from n8n Filter Jobs Code node) ───────────────────────────
@@ -150,21 +151,22 @@ You will be given MULTIPLE job postings to score against ONE candidate resume. Y
     * severity: "hard_blocker" if the JD lists this as required AND the candidate has zero adjacent experience; "nice_to_have" otherwise
     * has_adjacent_evidence: true if the candidate's CV shows a related/equivalent skill (e.g., JavaScript -> TypeScript, Splunk -> SIEM, Java -> Kotlin, AWS -> cloud platform, MySQL -> SQL Server)
     * adjacent_from: short string naming the adjacent skill if has_adjacent_evidence is true, otherwise the string "none"
-    * mitigation_hint: ONE short sentence with a SPECIFIC named resource — always name the exact course, platform, or action (e.g. "NPTEL 'Programming in Java' 12-week free course", "AWS Cloud Practitioner free-tier labs on aws.amazon.com/training", "Coursera 'Modern React with Redux' by Stephen Grider", "Killercoda Kubernetes free interactive labs, 1 week", "Build one GitHub repo using Spring Boot microservices, 3-5 days"). Never use vague phrases like 'online tutorials', 'online resources', 'personal projects', or 'study the documentation'. India-fresher preference order: NPTEL -> AWS/Azure/GCP free tier labs -> Coursera India -> YouTube (Apna College, CodeWithHarry, TechWorld with Nana) -> GitHub portfolio project.
+    * mitigation_hint: ONE short sentence describing a SPECIFIC hands-on action. Preference order: (1) Build a concrete GitHub project using the missing skill (e.g. "Build a Jenkins + Docker pipeline deploying to AWS EC2 on GitHub, 1 week"), (2) AWS/Azure/GCP free-tier labs (e.g. "AWS CloudWatch free-tier monitoring lab on aws.amazon.com/training, 3 days"), (3) NPTEL free course (e.g. "NPTEL 'Linux Shell Scripting' 4-week free course"), (4) Coursera India, (5) YouTube (Apna College, CodeWithHarry, TechWorld with Nana). ALWAYS prefer a build/project over a passive course when the skill can be demonstrated in a GitHub repo. Never use vague phrases like 'online tutorials', 'online resources', 'personal projects', or 'study the documentation'.
     * score_impact: integer 0-15. Score points this gap is costing the candidate. Rules: hard_blocker with NO adjacent evidence = 10-15; hard_blocker WITH adjacent evidence = 5-9; nice_to_have = 2-5. The SUM of all score_impact values MUST NOT exceed (100 - relevance_score). Distribute proportionally if needed.
   IMPORTANT: gaps[] must only cover SKILL gaps (tools, technologies, frameworks, methodologies). NEVER add an entry for years-of-experience requirements. The gaps[] array length must equal missing_skills.length. Order: hard_blocker entries first, then nice_to_have.
 - confidence: object with:
     * level: "high" if the JD has an explicit required_skills list AND description is >= 300 chars; "medium" if description is 100-299 chars or has no explicit skill list; "low" if description is vague/missing or <= 100 chars.
     * reason: ONE short phrase (e.g. "Detailed JD with explicit skill list", "Partial JD — extracted from description", "Sparse JD — score is best-effort")
 - fastest_path: object with:
-    * steps: array of {action: string (mitigation_hint condensed to <=12 words), time: string (e.g. "1 week")}. Top 2-3 hard_blocker actions only. Empty array [] if recommendation is "strong_apply" or "apply".
+    * steps: array of {action: string, time: string}. Top 2-3 hard_blocker actions only. Each action MUST be a concrete build or hands-on task that creates portfolio evidence — NOT a course name. Examples: "Build a Jenkins + Docker pipeline deploying to AWS EC2 on GitHub", "Add Prometheus + Grafana monitoring dashboard to your existing AWS project", "Build a Kubernetes deployment for your app using Killercoda free labs". Empty array [] if recommendation is "strong_apply" or "apply".
     * weeks_total: integer. Sum of estimated weeks across steps (round up). 0 if steps is empty.
-    * projected_score: integer. relevance_score + sum(score_impact of gaps covered by steps). Cap at 95. Equal to relevance_score when steps is empty.
-- rejection_reason: string. ONE sentence on the non-obvious screening failure pattern for this role TYPE — NOT about this candidate. What typically trips up otherwise-qualified candidates at this level/domain. Be specific to domain and seniority. NEVER write a generic answer like "communication skills".
+    * projected_score_range: string. Estimated score range after completing the steps. Format "low–high" where low = relevance_score + sum(score_impact of covered gaps) - 3 and high = relevance_score + sum(score_impact of covered gaps) + 3, both capped at 95. Example: "85–91". Use just the relevance_score as a string (e.g. "78") when steps is empty.
+- rejection_reason: string. ONE sentence that FIRST names a specific strength from THIS candidate's resume, THEN identifies the exact missing evidence. Format: "Your [specific strength from resume, referencing a real project or role] is there — the missing signal is [specific gap, e.g. hands-on Jenkins pipeline or Prometheus dashboard]." Make it personal to THIS resume — never write a generic industry observation. Example: "Your AWS and Terraform are demonstrated in two projects — the missing evidence is a hands-on Jenkins CI/CD pipeline and Prometheus monitoring dashboard."
 - application_outlook: object with:
     * interview_chance: "high" if relevance_score >= 75; "medium" if 55-74; "low" if < 55
     * competition_level: "high" if MNC/Big-4/FAANG-adjacent/prominent Indian tech co OR hot-demand skills (ML/AI, cloud security, full-stack); "medium" for mid-market standard roles; "low" for niche/tier-2 city/unusual stack
 - optimized_score: integer. Estimated relevance_score with better resume PRESENTATION only (keyword placement, quantified bullets, surfaced certs, JD-mirrored summary — NO new skills assumed). Rule: optimized_score = relevance_score + min(15, count_of_matched_skills_not_prominent x 4). Cap at 95. MUST be >= relevance_score. For "strong_apply": optimized_score = relevance_score.
+- profile_strengths: array of 3-5 SHORT strings (<=8 words each). The candidate's strongest matching signals for THIS specific job — skills that are BOTH present in the resume with concrete evidence AND directly relevant to this JD. Format each as "Skill (evidence source)" e.g. "AWS Infrastructure (Deployment project)", "Terraform IaC (2 projects)", "Python scripting (Security Intern role)". Rules: (a) ONLY include skills with project/role evidence — never skills listed in a skills section alone. (b) NEVER include soft skills. (c) Return empty array [] if fewer than 3 evidenced signals match this JD.
 
 Critical rules:
 - Never invent or assume skills not explicitly stated in the resume data
@@ -265,6 +267,25 @@ function buildPrompt(resumeText: string, job: Record<string, unknown>): string {
   ].join("\n");
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function normalizeFastestPath(raw: Record<string, unknown>): FastestPath {
+  const steps = Array.isArray(raw.steps) ? raw.steps as { action: string; time: string }[] : [];
+  const weeks_total = typeof raw.weeks_total === "number" ? raw.weeks_total : 0;
+  // Handle both old projected_score (number) and new projected_score_range (string)
+  let projected_score_range: string;
+  if (typeof raw.projected_score_range === "string") {
+    projected_score_range = raw.projected_score_range;
+  } else if (typeof raw.projected_score === "number") {
+    // Backward compat: convert old integer → range string
+    const mid = Math.min(95, raw.projected_score as number);
+    projected_score_range = steps.length > 0 ? `${Math.max(0, mid - 3)}–${mid}` : String(mid);
+  } else {
+    projected_score_range = "";
+  }
+  return { steps, weeks_total, projected_score_range };
+}
+
 // ── Normalize score result — handle LLM format variations ────────────────────
 
 function normalizeScore(raw: Record<string, unknown>): ScoreResult {
@@ -307,10 +328,11 @@ function normalizeScore(raw: Record<string, unknown>): ScoreResult {
     ai_reasoning: ai_reasoning as string,
     gaps,
     confidence: raw.confidence as MatchConfidence | undefined,
-    fastest_path: raw.fastest_path as FastestPath | undefined,
+    fastest_path: raw.fastest_path ? normalizeFastestPath(raw.fastest_path as Record<string, unknown>) : undefined,
     rejection_reason: raw.rejection_reason as string | undefined,
     application_outlook: raw.application_outlook as ApplicationOutlook | undefined,
     optimized_score: typeof raw.optimized_score === "number" ? raw.optimized_score : undefined,
+    profile_strengths: Array.isArray(raw.profile_strengths) ? (raw.profile_strengths as string[]) : undefined,
   };
 }
 
@@ -445,6 +467,7 @@ export const scoreJobs = task({
             rejection_reason: score.rejection_reason ?? null,
             application_outlook: score.application_outlook ?? null,
             optimized_score: score.optimized_score ?? null,
+            profile_strengths: score.profile_strengths ?? null,
           },
           { onConflict: "user_id,job_id,resume_id" }
         );

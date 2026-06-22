@@ -680,25 +680,62 @@ function FastestPathSection({ path, isMobile }: { path: FastestPath; isMobile: b
                     </div>
                 ))}
             </div>
-            {path.projected_score > 0 && (
+            {path.projected_score_range && path.projected_score_range !== '' && path.steps.length > 0 && (
                 <div style={{
                     marginTop: 14, paddingTop: 12, borderTop: '1px solid #f3f4f6',
                     display: 'flex', alignItems: 'center', gap: 8,
                 }}>
                     <span style={{ fontSize: '0.78rem', color: '#6b7280', fontWeight: 500 }}>
-                        Reach
+                        Could reach
                     </span>
                     <span style={{
                         fontSize: '0.875rem', fontWeight: 800, color: '#135bec',
                         padding: '1px 8px', background: '#eff6ff', borderRadius: 6,
                     }}>
-                        {path.projected_score}%
+                        ~{path.projected_score_range}%
                     </span>
                     <span style={{ fontSize: '0.78rem', color: '#6b7280', fontWeight: 500 }}>
-                        match score after completing these steps
+                        match after completing these steps
                     </span>
                 </div>
             )}
+        </div>
+    )
+}
+
+/* ── Profile Strengths ── */
+function ProfileStrengths({ strengths, isMobile }: { strengths: string[]; isMobile: boolean }) {
+    if (!strengths || strengths.length === 0) return null
+    return (
+        <div style={{
+            background: '#f0fdf4', borderRadius: 14,
+            border: '1px solid #bbf7d0',
+            padding: isMobile ? '14px 16px' : '18px 22px',
+            marginBottom: 16,
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2l2.4 6.4L21 9.3l-5 4.9 1.2 6.8L12 17.8l-5.2 3.2L8 14.2 3 9.3l6.6-1z"/>
+                </svg>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                    You Already Have
+                </span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {strengths.map((s, i) => (
+                    <div key={i} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '5px 11px', borderRadius: 20,
+                        background: 'white', border: '1px solid #a7f3d0',
+                        fontSize: '0.8rem', color: '#166534', fontWeight: 500,
+                    }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                        {s}
+                    </div>
+                ))}
+            </div>
         </div>
     )
 }
@@ -781,7 +818,7 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
         : 0
     const hasEvidence = matched.length > 0 && typeof matched[0] === 'object'
     const hasImpact = sortedGaps != null && sortedGaps.some(g => (g.score_impact ?? 0) > 0)
-    const projectedScore = match.fastest_path?.projected_score ?? Math.min(95, score + gapImpactTotal)
+    const projectedScore = match.fastest_path?.projected_score_range ?? String(Math.min(95, score + gapImpactTotal))
 
     async function handleOptimize() {
         setResearchLoading(true)
@@ -1317,6 +1354,11 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                         )}
                     </div>
                 </div>
+
+                {/* Profile Strengths — v3 rows only */}
+                {match.profile_strengths && match.profile_strengths.length > 0 && (
+                    <ProfileStrengths strengths={match.profile_strengths} isMobile={isMobile} />
+                )}
 
                 {/* Fastest Path — v2 rows only */}
                 {match.fastest_path && match.fastest_path.steps.length > 0 && (

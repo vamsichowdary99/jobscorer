@@ -174,7 +174,7 @@ export interface FastestPathStep {
 export interface FastestPath {
     steps: FastestPathStep[]
     weeks_total: number
-    projected_score: number
+    projected_score_range: string
 }
 
 export interface ApplicationOutlook {
@@ -341,6 +341,7 @@ export interface UserJobMatch {
     rejection_reason?: string | null
     application_outlook?: ApplicationOutlook | null
     optimized_score?: number | null
+    profile_strengths?: string[] | null
 }
 
 export interface JobIngestionLog {
