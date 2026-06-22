@@ -1379,31 +1379,46 @@ export default function SearchPage() {
     const levelAtStartRef = useRef<string>('')
 
     const onIngestComplete = async (state: QueueJobState) => {
-        const log = state.raw as { new_jobs_added?: number } | null
+        const log = state.raw as { new_jobs_added?: number; cached?: boolean } | null
         const since = ingestStartTimeRef.current
         const queryStart = queryAtStartRef.current
         const locStart = locationAtStartRef.current
         const lvlStart = levelAtStartRef.current
+        const isCacheHit = log?.cached === true
         try {
             let jobs = await fetchJobsSince(since)
             if (jobs.length === 0) {
-                jobs = await searchJobs(queryStart, {
-                    location: locStart || undefined,
-                    experience_level: lvlStart || undefined,
-                })
-                // n8n's experience_level extraction is unreliable — drop the level
-                // filter on miss so role+location still surface results.
-                if (jobs.length === 0 && lvlStart) {
-                    jobs = await searchJobs(queryStart, { location: locStart || undefined })
+                // On a cache/pool hit no n8n run happened, so fetchJobsSince
+                // returns nothing. Recall the previously-ingested job IDs for this
+                // exact filter set so we show the same results as the last real
+                // ingestion, not a broad DB dump of 200+ unrelated historical jobs.
+                if (isCacheHit) {
+                    const rememberedIds = recallIngestion(queryStart, locStart, lvlStart)
+                    if (rememberedIds.length > 0) {
+                        jobs = await fetchJobsByIds(rememberedIds)
+                    }
+                }
+                if (jobs.length === 0) {
+                    jobs = await searchJobs(queryStart, {
+                        location: locStart || undefined,
+                        experience_level: lvlStart || undefined,
+                    })
+                    // n8n's experience_level extraction is unreliable — drop the level
+                    // filter on miss so role+location still surface results.
+                    if (jobs.length === 0 && lvlStart) {
+                        jobs = await searchJobs(queryStart, { location: locStart || undefined })
+                    }
                 }
             }
             setResults(jobs)
             setHasSearched(true)
             if (jobs.length > 0) setSelected(jobs[0])
-            // Stash the ingested job IDs so a follow-up Search DB click with the
-            // same filters keeps showing the full set, not just strict matches.
             rememberIngestion(queryStart, locStart, lvlStart, jobs.map(j => j.id))
-            setIngestStatus(`${log?.new_jobs_added ?? 0} new jobs added · Showing all ${jobs.length} fetched results`)
+            const addedCount = log?.new_jobs_added ?? 0
+            const statusMsg = isCacheHit
+                ? `Showing ${jobs.length} results from last search (results are fresh, no new jobs added)`
+                : `${addedCount} new jobs added · Showing all ${jobs.length} fetched results`
+            setIngestStatus(statusMsg)
         } catch {
             setIngestStatus(`${log?.new_jobs_added ?? 0} new jobs added. Click "Search" to view.`)
         } finally {
@@ -1586,7 +1601,12 @@ export default function SearchPage() {
                     ? `Scored ${scored} of ${totalSearched} jobs. ${skipped} skipped (asked for more experience than your resume shows). Redirecting…`
                     : `Scored ${scored} jobs! Redirecting to matches…`
                 setScoreStatus(msg)
-                setTimeout(() => router.push('/dashboard/matches'), skipped > 0 ? 2800 : 1500)
+                // Pass runId when Trigger.dev dispatched the run — matches page
+                // uses it to subscribe to live progress via useRealtimeRun.
+                const matchesUrl = res.runId
+                    ? `/dashboard/matches?runId=${res.runId}`
+                    : '/dashboard/matches'
+                setTimeout(() => router.push(matchesUrl), skipped > 0 ? 2800 : 1500)
             } else {
                 setScoreError('Scoring returned an error. Check n8n logs.')
             }

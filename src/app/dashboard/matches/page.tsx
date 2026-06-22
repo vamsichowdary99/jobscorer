@@ -439,17 +439,23 @@ function JobCard({ match, selected, onClick, idx }: {
 }
 
 /* ── Large score ring (right panel) ── */
-function ScoreRing({ score, showQualityLabel = false }: { score: number; showQualityLabel?: boolean }) {
+function ScoreRing({ score, showQualityLabel = false, size = 130, tierLabel }: {
+    score: number; showQualityLabel?: boolean; size?: number; tierLabel?: { text: string; color: string }
+}) {
     const color = getScoreColor(score)
-    const r = 52, circ = 2 * Math.PI * r
+    const scale = size / 130
+    const r = Math.round(52 * scale)
+    const circ = 2 * Math.PI * r
     const offset = circ - (score / 100) * circ
+    const sw = Math.max(6, Math.round(10 * scale))
+    const cx = size / 2, cy = size / 2
     return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: showQualityLabel ? 3 : 8 }}>
-            <svg width="130" height="130" viewBox="0 0 130 130">
-                <circle cx="65" cy="65" r={r} fill="none" stroke="#f3f4f6" strokeWidth="10" />
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f3f4f6" strokeWidth={sw} />
                 <circle
-                    cx="65" cy="65" r={r} fill="none"
-                    stroke={color} strokeWidth="10" strokeLinecap="round"
+                    cx={cx} cy={cy} r={r} fill="none"
+                    stroke={color} strokeWidth={sw} strokeLinecap="round"
                     strokeDasharray={circ} strokeDashoffset={offset}
                     style={{
                         transform: 'rotate(-90deg)', transformOrigin: 'center',
@@ -457,11 +463,11 @@ function ScoreRing({ score, showQualityLabel = false }: { score: number; showQua
                         filter: `drop-shadow(0 0 8px ${color}55)`,
                     }}
                 />
-                <text x="65" y="58" textAnchor="middle" fontSize="30" fontWeight="800" fill={color}
+                <text x={cx} y={cy - 7 * scale} textAnchor="middle" fontSize={Math.round(30 * scale)} fontWeight="800" fill={color}
                     style={{ fontFamily: "'Manrope', sans-serif" }}>
                     {score}%
                 </text>
-                <text x="65" y="76" textAnchor="middle" fontSize="10" fontWeight="600" fill="#9ca3af"
+                <text x={cx} y={cy + 11 * scale} textAnchor="middle" fontSize={Math.max(6, Math.round(10 * scale))} fontWeight="600" fill="#9ca3af"
                     style={{ fontFamily: "'Manrope', sans-serif", letterSpacing: '0.06em' }}>
                     AI SCORE
                 </text>
@@ -474,8 +480,8 @@ function ScoreRing({ score, showQualityLabel = false }: { score: number; showQua
                     Match quality
                 </span>
             )}
-            <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#374151' }}>
-                {matchLabel(score)}
+            <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: tierLabel?.color ?? '#374151' }}>
+                {tierLabel?.text ?? matchLabel(score)}
             </span>
         </div>
     )
@@ -565,6 +571,129 @@ function MiniScoreRing({ score, topLabel, subLabel, color, dashed }: {
                     {subLabel}
                 </span>
             )}
+        </div>
+    )
+}
+
+/* ── Mobile tier info ── */
+function mobileTierInfo(s: number): { text: string; color: string } {
+    if (s >= 90) return { text: 'Exceptional Match', color: '#059669' }
+    if (s >= 80) return { text: 'Strong Match', color: '#135bec' }
+    if (s >= 70) return { text: 'Good Match', color: '#d97706' }
+    return { text: 'Reach Role', color: '#b91c1c' }
+}
+
+/* ── Mobile Score Journey — 3-gauge SVG layout (mobile only, ≤767px) ── */
+function MobileScoreJourney({ currentScore, optimizedScore, projectedRangeStr }: {
+    currentScore: number
+    optimizedScore: number
+    projectedRangeStr: string
+}) {
+    const CIRC = 163.4 // 2π × 26
+
+    let fullLow: number, fullHigh: number, fullMid: number
+    const rangeMatch = projectedRangeStr.match(/(\d+)[–\-](\d+)/)
+    if (rangeMatch) {
+        fullLow = parseInt(rangeMatch[1])
+        fullHigh = parseInt(rangeMatch[2])
+        fullMid = Math.round((fullLow + fullHigh) / 2)
+    } else {
+        const single = parseInt(projectedRangeStr)
+        if (!isNaN(single) && single > 0) {
+            fullMid = single
+            fullLow = Math.max(0, single - 3)
+            fullHigh = Math.min(99, single + 3)
+        } else {
+            fullLow = Math.min(optimizedScore + 3, 96)
+            fullHigh = Math.min(optimizedScore + 10, 99)
+            fullMid = Math.round((fullLow + fullHigh) / 2)
+        }
+    }
+
+    const delta1 = optimizedScore - currentScore
+    const delta2 = fullMid - optimizedScore
+    const nowOffset = CIRC * (1 - currentScore / 100)
+    const optOffset = CIRC * (1 - optimizedScore / 100)
+    const fullOffset = CIRC * (1 - fullMid / 100)
+
+    return (
+        <div className="mob-score-journey">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <span style={{ fontFamily: "'JetBrains Mono', 'DM Mono', monospace", fontSize: 9, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: '#94a3b8' }}>
+                    Score Journey
+                </span>
+                <span style={{ fontSize: 10.5, color: '#94a3b8' }}>
+                    Your path from here to interview-ready
+                </span>
+            </div>
+
+            <div className="mob-sj-gauges">
+                {/* Gauge 1: NOW */}
+                <div className="mob-sj-gauge">
+                    <div className="mob-sj-gauge-ring">
+                        <svg width="64" height="64" viewBox="0 0 64 64">
+                            <circle cx="32" cy="32" r="26" fill="none" stroke="#f3f4f6" strokeWidth="5.5" />
+                            <circle cx="32" cy="32" r="26" fill="none"
+                                stroke="#f59e0b" strokeWidth="5.5" strokeLinecap="round"
+                                strokeDasharray={CIRC} strokeDashoffset={nowOffset}
+                                transform="rotate(-90 32 32)" />
+                        </svg>
+                        <div className="mob-sj-ring-text">
+                            <span style={{ fontFamily: "'JetBrains Mono', 'DM Mono', monospace", fontSize: 15, fontWeight: 800, color: '#d97706', lineHeight: 1 }}>{currentScore}%</span>
+                            <span style={{ fontFamily: "'JetBrains Mono', 'DM Mono', monospace", fontSize: 6, fontWeight: 700, color: '#94a3b8', lineHeight: 1 }}>NOW</span>
+                        </div>
+                    </div>
+                    <span className="mob-sj-gauge-label">Your profile today</span>
+                </div>
+
+                {/* Delta 1 */}
+                <div className="mob-sj-delta">
+                    {delta1 > 0 && <span className="mob-sj-delta-badge">+{delta1}%</span>}
+                    <div className="mob-sj-delta-line" style={{ background: 'linear-gradient(90deg, #e2e8f0, #135bec)' }} />
+                </div>
+
+                {/* Gauge 2: OPTIMIZED */}
+                <div className="mob-sj-gauge">
+                    <div className="mob-sj-gauge-ring">
+                        <svg width="64" height="64" viewBox="0 0 64 64" style={{ filter: 'drop-shadow(0 0 5px rgba(19,91,236,0.4))' }}>
+                            <circle cx="32" cy="32" r="26" fill="none" stroke="#dbeafe" strokeWidth="5.5" />
+                            <circle cx="32" cy="32" r="26" fill="none"
+                                stroke="#135bec" strokeWidth="5.5" strokeLinecap="round"
+                                strokeDasharray={CIRC} strokeDashoffset={optOffset}
+                                transform="rotate(-90 32 32)" />
+                        </svg>
+                        <div className="mob-sj-ring-text">
+                            <span style={{ fontFamily: "'JetBrains Mono', 'DM Mono', monospace", fontSize: 15, fontWeight: 800, color: '#135bec', lineHeight: 1 }}>{optimizedScore}%</span>
+                            <span style={{ fontFamily: "'JetBrains Mono', 'DM Mono', monospace", fontSize: 5.5, fontWeight: 700, color: '#135bec', opacity: 0.7, lineHeight: 1 }}>OPTIMIZED</span>
+                        </div>
+                    </div>
+                    <span className="mob-sj-gauge-label">After resume tailoring</span>
+                </div>
+
+                {/* Delta 2 */}
+                <div className="mob-sj-delta">
+                    {delta2 > 0 && <span className="mob-sj-delta-badge">+{delta2}%</span>}
+                    <div className="mob-sj-delta-line" style={{ background: 'linear-gradient(90deg, #135bec, #6366f1)' }} />
+                </div>
+
+                {/* Gauge 3: AFTER SKILLS */}
+                <div className="mob-sj-gauge">
+                    <div className="mob-sj-gauge-ring">
+                        <svg width="64" height="64" viewBox="0 0 64 64">
+                            <circle cx="32" cy="32" r="26" fill="none" stroke="#dcfce7" strokeWidth="5.5" />
+                            <circle cx="32" cy="32" r="26" fill="none"
+                                stroke="#10b981" strokeWidth="5.5" strokeLinecap="round"
+                                strokeDasharray={CIRC} strokeDashoffset={fullOffset}
+                                transform="rotate(-90 32 32)" />
+                        </svg>
+                        <div className="mob-sj-ring-text">
+                            <span style={{ fontFamily: "'JetBrains Mono', 'DM Mono', monospace", fontSize: 11, fontWeight: 800, color: '#059669', lineHeight: 1 }}>{fullLow}–{fullHigh}%</span>
+                            <span style={{ fontFamily: "'JetBrains Mono', 'DM Mono', monospace", fontSize: 5, fontWeight: 700, color: '#059669', opacity: 0.7, lineHeight: 1 }}>AFTER SKILLS</span>
+                        </div>
+                    </div>
+                    <span className="mob-sj-gauge-label">Full potential range</span>
+                </div>
+            </div>
         </div>
     )
 }
@@ -819,6 +948,32 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
     const hasEvidence = matched.length > 0 && typeof matched[0] === 'object'
     const hasImpact = sortedGaps != null && sortedGaps.some(g => (g.score_impact ?? 0) > 0)
     const projectedScore = match.fastest_path?.projected_score_range ?? String(Math.min(95, score + gapImpactTotal))
+    // Parse numeric midpoint for desktop ScoreJourney (which renders a single gauge)
+    const projectedScoreNum = (() => {
+        const rangeMatch = projectedScore.match(/(\d+)[–\-](\d+)/)
+        if (rangeMatch) return Math.round((parseInt(rangeMatch[1]) + parseInt(rangeMatch[2])) / 2)
+        const n = parseInt(projectedScore)
+        return isNaN(n) ? Math.min(95, score + gapImpactTotal) : n
+    })()
+
+    // Mobile score journey values
+    const mobileOptimizedScore = match.optimized_score ?? Math.min(score + 7, 95)
+
+    // Mobile personalized rejection reason — built from actual matched/missing data
+    const topMatchedSkills = matched.slice(0, 2).map(s => getSkillName(s))
+    const evidencedCount = matched.filter(s => getSkillEvidence(s) !== null).length
+    const topMissingSkills = (sortedGaps ?? []).slice(0, 2).map(g => g.skill)
+    const fallbackMissingSkills = missing.slice(0, 2)
+    const screenedOutText = (() => {
+        const topMatchedStr = topMatchedSkills.join(' and ')
+        const topMissingArr = topMissingSkills.length > 0 ? topMissingSkills : fallbackMissingSkills
+        const topMissingStr = topMissingArr.join(' and ')
+        const count = evidencedCount > 0 ? evidencedCount : matched.length
+        if (topMatchedStr && topMissingStr) {
+            return `Your ${topMatchedStr} are demonstrated in ${count} project${count !== 1 ? 's' : ''} — the missing evidence is ${topMissingStr}.`
+        }
+        return match.rejection_reason ?? ''
+    })()
 
     async function handleOptimize() {
         setResearchLoading(true)
@@ -1094,13 +1249,13 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
             {/* ── BODY ── */}
             <div style={{ padding: isMobile ? '14px 16px' : '28px 36px' }}>
 
-                {/* Score Journey — only for v2 rows that have optimized_score */}
-                {match.optimized_score != null && (
+                {/* Score Journey — desktop only; mobile version renders after the skills card */}
+                {!isMobile && match.optimized_score != null && (
                     <ScoreJourney
                         currentScore={score}
                         optimizedScore={match.optimized_score}
-                        projectedScore={projectedScore}
-                        isMobile={isMobile}
+                        projectedScore={projectedScoreNum}
+                        isMobile={false}
                     />
                 )}
 
@@ -1116,7 +1271,12 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                         gap: 12,
                         boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                     }}>
-                        <ScoreRing score={score} showQualityLabel={isMobile} />
+                        <ScoreRing
+                            score={score}
+                            showQualityLabel={isMobile}
+                            size={isMobile ? 80 : 130}
+                            tierLabel={isMobile ? mobileTierInfo(score) : undefined}
+                        />
                         {match.confidence && <ConfidenceBadge conf={match.confidence} />}
                         {match.application_outlook && (
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -1355,19 +1515,31 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                     </div>
                 </div>
 
-                {/* Profile Strengths — v3 rows only */}
-                {match.profile_strengths && match.profile_strengths.length > 0 && (
-                    <ProfileStrengths strengths={match.profile_strengths} isMobile={isMobile} />
+                {/* Mobile Score Journey — appears after skills card on mobile */}
+                {isMobile && (
+                    <MobileScoreJourney
+                        currentScore={score}
+                        optimizedScore={mobileOptimizedScore}
+                        projectedRangeStr={projectedScore}
+                    />
                 )}
 
-                {/* Fastest Path — v2 rows only */}
-                {match.fastest_path && match.fastest_path.steps.length > 0 && (
-                    <FastestPathSection path={match.fastest_path} isMobile={isMobile} />
+                {/* Profile Strengths — v3 rows only, desktop only (mobile replaced by score journey) */}
+                {!isMobile && match.profile_strengths && match.profile_strengths.length > 0 && (
+                    <ProfileStrengths strengths={match.profile_strengths} isMobile={false} />
                 )}
 
-                {/* Rejection Reason — v2 rows only */}
-                {match.rejection_reason && (
-                    <RejectionCallout reason={match.rejection_reason} isMobile={isMobile} />
+                {/* Fastest Path — v2 rows only, desktop only */}
+                {!isMobile && match.fastest_path && match.fastest_path.steps.length > 0 && (
+                    <FastestPathSection path={match.fastest_path} isMobile={false} />
+                )}
+
+                {/* Rejection Reason — personalized on mobile, verbatim on desktop */}
+                {(match.rejection_reason || (isMobile && screenedOutText)) && (
+                    <RejectionCallout
+                        reason={isMobile ? (screenedOutText || match.rejection_reason || '') : (match.rejection_reason || '')}
+                        isMobile={isMobile}
+                    />
                 )}
 
                 {/* Optimize banner — show for any recommendation that benefits from prep:
@@ -1494,6 +1666,21 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                 </p>
                             )
                         })}
+                    </div>
+                )}
+
+                {/* Mobile full-width Apply button — pinned at bottom of scroll */}
+                {isMobile && job.source_url && (
+                    <div style={{ paddingTop: 20 }}>
+                        <Link href={job.source_url} target="_blank" style={{
+                            display: 'block', textAlign: 'center',
+                            padding: '14px 24px', borderRadius: 12,
+                            background: '#135bec', color: 'white',
+                            fontSize: '1rem', fontWeight: 700, textDecoration: 'none',
+                            boxShadow: '0 4px 12px rgba(19,91,236,0.35)',
+                        }}>
+                            Apply Now →
+                        </Link>
                     </div>
                 )}
             </div>

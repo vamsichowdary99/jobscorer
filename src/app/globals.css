@@ -575,4 +575,68 @@ h4 {
     display: flex !important;
     gap: 8px !important;
   }
+
+  /* ── Score Journey (mobile) ── */
+  .mob-score-journey {
+    background: #fff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 12px !important;
+    padding: 14px 13px !important;
+    margin-top: 10px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+  }
+  .mob-sj-gauges {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 4px !important;
+  }
+  .mob-sj-gauge {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+  .mob-sj-gauge-ring {
+    position: relative !important;
+    width: 64px !important;
+    height: 64px !important;
+    flex-shrink: 0 !important;
+  }
+  .mob-sj-gauge-label {
+    font-size: 10px !important;
+    color: #64748b !important;
+    text-align: center !important;
+    line-height: 1.3 !important;
+  }
+  .mob-sj-delta {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 4px !important;
+    flex: 1 !important;
+  }
+  .mob-sj-delta-badge {
+    padding: 2px 7px !important;
+    border-radius: 99px !important;
+    background: #dcfce7 !important;
+    border: 1px solid #86efac !important;
+    font-family: 'JetBrains Mono', 'DM Mono', monospace !important;
+    font-size: 9.5px !important;
+    font-weight: 800 !important;
+    color: #15803d !important;
+  }
+  .mob-sj-delta-line {
+    width: 100% !important;
+    height: 1.5px !important;
+  }
+  .mob-sj-ring-text {
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 1px !important;
+  }
 }

@@ -8,6 +8,8 @@ import { getResumeYearsOfExperience } from '@/lib/rag/resume-years'
 import { enqueue } from '@/lib/queue'
 import { logEstimatedUsage } from '@/lib/usage'
 import { checkQuota } from '@/lib/plan'
+import { tasks } from '@trigger.dev/sdk'
+import type { scoreJobs } from '../../../trigger/scoreJobs'
 
 // Allow scoring to take up to 2 minutes
 export const maxDuration = 120
@@ -243,6 +245,38 @@ export async function POST(req: NextRequest) {
     // (a run scores a whole batch, so it's 1 unit regardless of job count).
     const scoreQuota = await checkQuota(user.id, 'score')
     if (scoreQuota) return scoreQuota
+
+    // Trigger.dev path: per-user lane, parallel batching, real-time progress.
+    // Enabled via TRIGGER_DEV_SCORING=true env var (false by default).
+    // Falls through to n8n queue path when disabled.
+    if (process.env.TRIGGER_DEV_SCORING === 'true') {
+        try {
+            const handle = await tasks.trigger<typeof scoreJobs>(
+                'score-jobs',
+                {
+                    userId: user.id,
+                    resumeId,
+                    jobIds: missingJobIds,
+                    experienceLevel,
+                },
+                {
+                    concurrencyKey: `user-${user.id}`,
+                }
+            )
+            void logEstimatedUsage({ userId: user.id, feature: 'score', units: missingJobIds.length })
+            return NextResponse.json({
+                success: true,
+                mode: 'trigger_dev',
+                runId: handle.id,
+                jobCount: missingJobIds.length,
+                cache_hits: cacheHits,
+                rag_shortlist_size: ragShortlistSize,
+            })
+        } catch (err) {
+            console.error('[/api/score] Trigger.dev trigger failed, falling back to n8n queue:', err)
+            // fall through to n8n queue below
+        }
+    }
 
     // Queue mode (default): enqueue + return immediately. The Queue Processor
     // n8n workflow picks up pending rows, dispatches to /webhook/anti-gravity/score
