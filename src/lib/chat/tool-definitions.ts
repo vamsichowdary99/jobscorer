@@ -17,13 +17,13 @@ export const chatTools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_job_scores',
-      description: 'Fetch the user\'s scored/matched jobs, ordered by relevance score descending. Returns top matches with scores, matched skills, missing skills, and AI reasoning.',
+      description: 'Fetch the user\'s AI-scored job matches from the Matches page, ordered by relevance score. ALWAYS call this first when the user asks "which jobs are my strongest fit", "show me my top matches", "what are my best matches", "what should I apply to", or any question about their current/existing match results. Returns the same scores shown on the Matches page (AI-evaluated, not just similarity). Set limit to 15–20 to show all matches. PREFER this over find_matching_jobs when the user is asking about their scored matches.',
       parameters: {
         type: 'object',
         properties: {
           limit: {
             type: 'number',
-            description: 'Number of top matches to return. Defaults to 5.',
+            description: 'Number of top matches to return. Defaults to 5. Set to 15 or 20 to see all scored matches.',
           },
         },
         required: [],
@@ -106,7 +106,7 @@ export const chatTools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'find_matching_jobs',
-      description: 'Find the most semantically similar jobs for the user via RAG vector search over job_embeddings. Use this when the user asks what jobs match their profile right now, or what new jobs fit them — even if no scoring has run yet. Returns ranked jobs with cosine similarity. Prefer this over get_job_scores when the user wants live matches. Pass `location` whenever the user names a city/region (e.g. "frontend roles in Hyderabad" → location:"Hyderabad").',
+      description: 'Discover jobs via RAG vector search — use for EXPLORATION when the user wants to browse new job options, find unscored jobs in a specific city, or discover matches beyond what is already on their Matches page. Do NOT use this when the user is asking about their existing/current match results or "strongest fit" — call get_job_scores for that. Pass `location` whenever the user names a city/region (e.g. "frontend roles in Hyderabad" → location:"Hyderabad").',
       parameters: {
         type: 'object',
         properties: {

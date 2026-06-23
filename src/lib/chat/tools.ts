@@ -4,7 +4,7 @@ import { safeRedis } from '@/lib/redis';
 import { KEY } from '@/lib/redis-keys';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const supabase = createServerSupabase() as any;
+function getSupabase() { return createServerSupabase() as any; }
 
 export async function executeTool(
   toolName: string,
@@ -43,7 +43,7 @@ export async function executeTool(
  */
 async function resolveResumeId(userId: string, sessionResumeId: string | null): Promise<string | null> {
   if (sessionResumeId) {
-    const { data } = await supabase
+    const { data } = await getSupabase()
       .from('resumes')
       .select('id')
       .eq('id', sessionResumeId)
@@ -52,7 +52,7 @@ async function resolveResumeId(userId: string, sessionResumeId: string | null): 
     if (data?.id) return data.id;
     // Fall through if the provided id doesn't belong to the user
   }
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from('resumes')
     .select('id')
     .eq('user_id', userId)
@@ -66,7 +66,7 @@ async function getUserResume(userId: string, sessionResumeId: string | null): Pr
   const resumeId = await resolveResumeId(userId, sessionResumeId);
   if (!resumeId) return JSON.stringify({ error: 'No resume found for this user.' });
 
-  const { data: resume, error } = await supabase
+  const { data: resume, error } = await getSupabase()
     .from('resumes')
     .select('*')
     .eq('id', resumeId)
@@ -76,7 +76,7 @@ async function getUserResume(userId: string, sessionResumeId: string | null): Pr
   if (error) return JSON.stringify({ error: error.message });
   if (!resume) return JSON.stringify({ error: 'Resume not found or does not belong to this user.' });
 
-  const { data: skills } = await supabase
+  const { data: skills } = await getSupabase()
     .from('resume_skills')
     .select('skill, category')
     .eq('resume_id', resume.id);
@@ -112,7 +112,7 @@ async function getJobScores(userId: string, sessionResumeId: string | null, limi
   // previous resume (e.g. frontend dev).
   const resumeId = await resolveResumeId(userId, sessionResumeId);
 
-  let query = supabase
+  let query = getSupabase()
     .from('user_job_matches')
     .select(`
       id,
@@ -166,7 +166,7 @@ async function getJobScores(userId: string, sessionResumeId: string | null, limi
 }
 
 async function getJobDetails(jobId: string): Promise<string> {
-  const { data: job, error } = await supabase
+  const { data: job, error } = await getSupabase()
     .from('jobs')
     .select('*')
     .eq('id', jobId)
@@ -189,7 +189,7 @@ async function getJobDetails(jobId: string): Promise<string> {
 }
 
 async function getCompanyResearch(companyName: string): Promise<string> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('company_research')
     .select('*')
     .ilike('company_name', `%${companyName}%`)
@@ -215,7 +215,7 @@ async function getCompanyResearch(companyName: string): Promise<string> {
 }
 
 async function getSkillGaps(userId: string, jobId: string): Promise<string> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('learning_paths')
     .select('skill_name, importance, why_it_matters, time_estimate, resources')
     .eq('user_id', userId)
@@ -224,7 +224,7 @@ async function getSkillGaps(userId: string, jobId: string): Promise<string> {
 
   if (error) return JSON.stringify({ error: error.message });
   if (!data || data.length === 0) {
-    const { data: match } = await supabase
+    const { data: match } = await getSupabase()
       .from('user_job_matches')
       .select('missing_skills, matched_skills')
       .eq('user_id', userId)
@@ -307,9 +307,9 @@ async function findMatchingJobs(userId: string, sessionResumeId: string | null, 
   }
 
   // Pull resume skills so we can compute matched/missing per job.
-  const { data: resume } = await supabase
+  const { data: resume } = await getSupabase()
     .from('resumes').select('structured_data').eq('id', resumeId).maybeSingle();
-  const { data: extraSkills } = await supabase
+  const { data: extraSkills } = await getSupabase()
     .from('resume_skills').select('skill').eq('resume_id', resumeId);
   let sd: Record<string, unknown> | null = null;
   let raw: unknown = resume?.structured_data;
@@ -328,12 +328,25 @@ async function findMatchingJobs(userId: string, sessionResumeId: string | null, 
   const userSkillSet = new Set(userSkillsRaw.map(norm).filter(Boolean));
 
   const jobIds = matches.map(m => m.job_id);
-  const { data: jobs, error } = await supabase
-    .from('jobs')
-    .select('id, title, company, location, salary, experience_level, required_skills, source_url')
-    .in('id', jobIds);
+  const [{ data: jobs, error }, { data: existingScores }] = await Promise.all([
+    getSupabase()
+      .from('jobs')
+      .select('id, title, company, location, salary, experience_level, required_skills, source_url')
+      .in('id', jobIds),
+    // Overlay actual AI scores from user_job_matches so displayed scores
+    // are consistent with the Matches page (not re-derived from similarity).
+    getSupabase()
+      .from('user_job_matches')
+      .select('job_id, relevance_score, matched_skills, missing_skills')
+      .eq('user_id', userId)
+      .eq('resume_id', resumeId)
+      .in('job_id', jobIds),
+  ]);
   if (error) return JSON.stringify({ error: error.message });
 
+  const aiScoreMap = new Map(
+    (existingScores ?? []).map((m: any) => [m.job_id, m])
+  );
   const jobsById = new Map((jobs ?? []).map((j: any) => [j.id, j]));
   const locNeedle = location ? location.toLowerCase().trim() : null;
   // City aliases — Apify scrapes return canonical names ("Bengaluru", "Bangalore City, Bengaluru, Karnataka").
@@ -377,29 +390,40 @@ async function findMatchingJobs(userId: string, sessionResumeId: string | null, 
         const jobLoc = (job.location ?? '').toString().toLowerCase();
         if (!locNeedles.some(n => jobLoc.includes(n))) return null;
       }
+      const aiMatch = aiScoreMap.get(m.job_id) as any;
       const required = (Array.isArray(job.required_skills) ? job.required_skills : []) as string[];
-      const matched: string[] = [];
-      const missing: string[] = [];
-      const seenMatched = new Set<string>();
-      const seenMissing = new Set<string>();
-      for (const skill of required) {
-        if (typeof skill !== 'string') continue;
-        const n = norm(skill);
-        if (!n) continue;
-        if (userSkillSet.has(n)) {
-          if (!seenMatched.has(n)) { seenMatched.add(n); matched.push(skill); }
-        } else {
-          if (!seenMissing.has(n)) { seenMissing.add(n); missing.push(skill); }
+
+      // Prefer AI-scored matched/missing skills from user_job_matches when available
+      // (they are more accurate than the local string-match below).
+      let matched: string[];
+      let missing: string[];
+      if (aiMatch) {
+        matched = Array.isArray(aiMatch.matched_skills) ? aiMatch.matched_skills : [];
+        missing = Array.isArray(aiMatch.missing_skills) ? aiMatch.missing_skills : [];
+      } else {
+        matched = [];
+        missing = [];
+        const seenMatched = new Set<string>();
+        const seenMissing = new Set<string>();
+        for (const skill of required) {
+          if (typeof skill !== 'string') continue;
+          const n = norm(skill);
+          if (!n) continue;
+          if (userSkillSet.has(n)) {
+            if (!seenMatched.has(n)) { seenMatched.add(n); matched.push(skill); }
+          } else {
+            if (!seenMissing.has(n)) { seenMissing.add(n); missing.push(skill); }
+          }
         }
       }
-      // Map cosine similarity to a 50–99 display score. Observed similarities
-      // for text-embedding-3-small with our content cluster 0.4–0.7, so the
-      // old (50 + sim * 110) formula clamped every match at 99. Spread:
-      //   0.30 → 50  (threshold floor)
-      //   0.50 → 70  (decent match)
-      //   0.65 → 85  (strong)
-      //   0.79 → 99  (rare, near-clone)
-      const score = Math.max(50, Math.min(99, Math.round(50 + (m.similarity - 0.3) * 100)));
+
+      // Use the actual AI relevance score from user_job_matches when available
+      // so scores shown here match the Matches page. Fall back to similarity-derived
+      // score only for jobs that haven't been scored yet.
+      const score = aiMatch
+        ? aiMatch.relevance_score
+        : Math.max(50, Math.min(99, Math.round(50 + (m.similarity - 0.3) * 100)));
+
       return {
         job_id: m.job_id,
         title: job.title,
@@ -413,6 +437,7 @@ async function findMatchingJobs(userId: string, sessionResumeId: string | null, 
         missing_skills: missing,
         similarity: Number(m.similarity.toFixed(3)),
         score,
+        score_source: aiMatch ? 'ai_scored' : 'similarity',
       };
     })
     .filter((j): j is NonNullable<typeof j> => j !== null)
@@ -442,7 +467,7 @@ async function recommendSkillToLearn(userId: string, sessionResumeId: string | n
   // The previous implementation re-derived gaps via RAG top-20 + string match against resume
   // skills, which silently disagreed with get_job_scores whenever the AI scoring had judged a
   // skill missing (verbatim term not in resume) but a generic resume skill string-matched it.
-  const { data: matches, error } = await supabase
+  const { data: matches, error } = await getSupabase()
     .from('user_job_matches')
     .select('relevance_score, missing_skills')
     .eq('user_id', userId)
@@ -503,7 +528,7 @@ async function getCachedScore(userId: string, sessionResumeId: string | null, jo
   // NOTE: the Redis score:* key is only a PRESENCE marker (value is the integer 1),
   // not a stored score — so we must NOT return it as the score. Always read the real
   // score from user_job_matches below. (M1)
-  const { data: match, error } = await supabase
+  const { data: match, error } = await getSupabase()
     .from('user_job_matches')
     .select('relevance_score, matched_skills, missing_skills, ai_reasoning, jobs:job_id (title, company)')
     .eq('user_id', userId)
