@@ -3955,17 +3955,17 @@ function SidebarToggleButton({ collapsed, onClick }: { collapsed: boolean; onCli
             title={collapsed ? 'Show resumes panel' : 'Hide resumes panel'}
             aria-label={collapsed ? 'Show resumes panel' : 'Hide resumes panel'}
             style={{
-                position: 'absolute', top: 84, right: -14, zIndex: 20,
-                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                position: 'absolute', top: 80, right: -18, zIndex: 20,
+                width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
                 background: hov ? M.accentLight : M.white,
-                border: `1.5px solid ${hov ? M.accentBorder : M.border}`,
-                boxShadow: '0 1px 5px rgba(15,30,64,0.16)',
+                border: `2px solid ${hov ? M.accentBorder : M.border}`,
+                boxShadow: '0 2px 8px rgba(15,30,64,0.2)',
                 color: hov ? M.accent : M.textMuted,
                 cursor: 'pointer', transition: 'all 0.13s',
             }}
         >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 {collapsed ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}
             </svg>
         </button>
