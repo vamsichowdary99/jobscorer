@@ -4735,6 +4735,11 @@ export default function ResumesPage() {
     const [sourceResumeId, setSourceResumeId] = useState<string | null>(null)
     // ── Modal-based editor state ──
     const [openModalSection, setOpenModalSection] = useState<string | null>(null)
+    // ── Studio tab (desktop) ──
+    const [studioTab, setStudioTab] = useState<'sections' | 'assistant'>('sections')
+    // useAssistant is a hook — must be called unconditionally, before the `!loaded`
+    // early return below, so it stays alongside the other top-level state hooks.
+    const assistant = useAssistant(editorState, setEditorState, selectedEntry?.job?.title ?? null)
     // ── Mobile state ──
     const [isMobile, setIsMobile] = useState(false)
     const [mobileTab, setMobileTab] = useState<'sections' | 'templates'>('sections')
@@ -5458,72 +5463,97 @@ export default function ResumesPage() {
                     background: M.surface, borderRight: `1px solid ${M.border}`,
                     height: '100%', overflow: 'hidden',
                 }}>
-                    {/* Editor header — progress indicator */}
-                    <div style={{
-                        flexShrink: 0, padding: '16px 22px 14px',
-                        background: M.white, borderBottom: `1px solid ${M.borderLight}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    }}>
-                        <span style={{
-                            fontSize: '1.0625rem', fontWeight: 700, color: M.text, fontFamily: M.fontHeading,
-                            letterSpacing: '-0.01em',
-                        }}>
-                            Resume Sections
-                        </span>
-                        <span style={{
-                            fontSize: '0.8125rem', fontWeight: 700, color: M.accent,
-                            background: M.accentLight, padding: '5px 13px', borderRadius: 20,
-                            border: `1px solid ${M.accentBorder}`, fontFamily: M.fontMono,
-                        }}>
-                            {completionSections.filter(s => isFilled(s)).length}/{completionSections.length} complete
-                        </span>
+                    {/* Tab switcher */}
+                    <div style={{ display: 'flex', borderBottom: `1px solid ${M.border}`, background: M.white, flexShrink: 0 }}>
+                        {([{ id: 'sections' as const, label: 'Resume Sections' }, { id: 'assistant' as const, label: '✦ Assistant' }]).map(t => (
+                            <button key={t.id} onClick={() => setStudioTab(t.id)} style={{
+                                flex: 1, padding: '13px 8px', border: 'none', background: 'transparent', cursor: 'pointer',
+                                fontSize: '0.875rem', fontWeight: studioTab === t.id ? 700 : 500,
+                                color: studioTab === t.id ? M.accent : M.textMuted, fontFamily: M.fontBody,
+                                borderBottom: studioTab === t.id ? `2.5px solid ${M.accent}` : '2.5px solid transparent',
+                                marginBottom: -1, transition: 'all 0.15s',
+                            }}>
+                                {t.label}
+                            </button>
+                        ))}
                     </div>
 
-                    {/* Scrollable editor body — Steps layout */}
-                    <div id="m-editor-scroll" style={{ flex: 1, overflowY: 'auto' }}>
-                        <StepsLayout
-                            state={editorState}
-                            isFilled={isFilled}
-                            onOpen={setOpenModalSection}
-                        />
-                    </div>
-
-                    {/* Sticky footer */}
-                    <div style={{
-                        flexShrink: 0, background: M.white,
-                        borderTop: `1px solid ${M.borderLight}`,
-                        padding: '8px 16px',
-                        display: 'flex', alignItems: 'center', gap: 12,
-                    }}>
-                        <div style={{
-                            flex: 1, height: 3, borderRadius: 2,
-                            background: M.borderLight, overflow: 'hidden',
-                        }}>
+                    {studioTab === 'sections' && (
+                        <>
+                            {/* Editor header — progress indicator */}
                             <div style={{
-                                height: '100%', width: `${completionPct}%`,
-                                background: M.accent, borderRadius: 2, transition: 'width 0.4s',
-                            }} />
-                        </div>
-                        <span style={{
-                            fontSize: '0.6875rem', color: M.textFaint,
-                            flexShrink: 0, fontFamily: M.fontMono,
-                        }}>
-                            {completionPct === 100 ? 'All sections complete' : `${completionPct}% complete`}
-                        </span>
-                    </div>
+                                flexShrink: 0, padding: '16px 22px 14px',
+                                background: M.white, borderBottom: `1px solid ${M.borderLight}`,
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            }}>
+                                <span style={{
+                                    fontSize: '1.0625rem', fontWeight: 700, color: M.text, fontFamily: M.fontHeading,
+                                    letterSpacing: '-0.01em',
+                                }}>
+                                    Resume Sections
+                                </span>
+                                <span style={{
+                                    fontSize: '0.8125rem', fontWeight: 700, color: M.accent,
+                                    background: M.accentLight, padding: '5px 13px', borderRadius: 20,
+                                    border: `1px solid ${M.accentBorder}`, fontFamily: M.fontMono,
+                                }}>
+                                    {completionSections.filter(s => isFilled(s)).length}/{completionSections.length} complete
+                                </span>
+                            </div>
+
+                            {/* Scrollable editor body — Steps layout */}
+                            <div id="m-editor-scroll" style={{ flex: 1, overflowY: 'auto' }}>
+                                <StepsLayout
+                                    state={editorState}
+                                    isFilled={isFilled}
+                                    onOpen={setOpenModalSection}
+                                />
+                            </div>
+
+                            {/* Sticky footer */}
+                            <div style={{
+                                flexShrink: 0, background: M.white,
+                                borderTop: `1px solid ${M.borderLight}`,
+                                padding: '8px 16px',
+                                display: 'flex', alignItems: 'center', gap: 12,
+                            }}>
+                                <div style={{
+                                    flex: 1, height: 3, borderRadius: 2,
+                                    background: M.borderLight, overflow: 'hidden',
+                                }}>
+                                    <div style={{
+                                        height: '100%', width: `${completionPct}%`,
+                                        background: M.accent, borderRadius: 2, transition: 'width 0.4s',
+                                    }} />
+                                </div>
+                                <span style={{
+                                    fontSize: '0.6875rem', color: M.textFaint,
+                                    flexShrink: 0, fontFamily: M.fontMono,
+                                }}>
+                                    {completionPct === 100 ? 'All sections complete' : `${completionPct}% complete`}
+                                </span>
+                            </div>
+                        </>
+                    )}
+
+                    {studioTab === 'assistant' && (
+                        <AssistantPanel controller={assistant} />
+                    )}
                 </div>
 
                 {/* Preview column */}
-                <MeridianPreviewPanel
-                    state={editorState}
-                    templateId={templateId}
-                    onTemplateChange={(t) => {
-                        setTemplateId(t)
-                        localStorage.setItem('jobscorer-template', t)
-                    }}
-                    onMoreTemplates={() => setShowTemplatePicker(true)}
-                    downloadButton={null}
-                />
+                <PreviewDecorationsProvider decorations={assistant.decorations}>
+                    <MeridianPreviewPanel
+                        state={editorState}
+                        templateId={templateId}
+                        onTemplateChange={(t) => {
+                            setTemplateId(t)
+                            localStorage.setItem('jobscorer-template', t)
+                        }}
+                        onMoreTemplates={() => setShowTemplatePicker(true)}
+                        downloadButton={null}
+                    />
+                </PreviewDecorationsProvider>
             </div>
         </div>
 
