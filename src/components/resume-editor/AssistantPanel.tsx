@@ -14,7 +14,7 @@ export function AssistantPanel({ controller: a }: { controller: AssistantControl
     return (
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <ScoreHeader
-                coverage={a.coverage} coverageMax={a.coverageMax} floatDelta={a.floatDelta}
+                coverage={a.coverage} coverageStart={a.coverageStart} coverageMax={a.coverageMax} floatDelta={a.floatDelta}
                 rescoring={a.rescoring} rescoredCaption={a.rescoredCaption} onRescore={a.onRescore}
             />
 

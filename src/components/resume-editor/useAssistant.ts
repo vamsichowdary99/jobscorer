@@ -32,6 +32,7 @@ export interface AssistantController {
     messages: ChatMessage[]
     isTyping: boolean
     coverage: number
+    coverageStart: number
     coverageMax: number
     floatDelta: { value: string; key: number } | null
     rescoring: boolean
@@ -243,6 +244,10 @@ export function useAssistant(
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [isTyping, setIsTyping] = useState(false)
     const [coverage, setCoverage] = useState(74)
+    // Fixed session-start baseline for the "Keyword coverage 68 →" header line —
+    // captured once and never updated, so the arrow always shows "where this
+    // session began", not a value that shifts on every apply.
+    const coverageStartRef = useRef(68)
     const coverageRef = useRef(74)
     coverageRef.current = coverage
     const [floatDelta, setFloatDelta] = useState<{ value: string; key: number } | null>(null)
@@ -433,7 +438,7 @@ export function useAssistant(
     const allDone = auditItems.every(a => a.done)
 
     return {
-        messages, isTyping, coverage, coverageMax: 82, floatDelta, rescoring, rescoredCaption,
+        messages, isTyping, coverage, coverageStart: coverageStartRef.current, coverageMax: 82, floatDelta, rescoring, rescoredCaption,
         auditItems, allDone, activeCard, decorations, toasts, inputValue, setInputValue,
         sendMessage: (t: string) => sendMessage(t), sendChip, onAuditItemClick, onApplyAll, onRescore,
         applyActiveCard, rejectActiveCard, editActiveCard, dismissToast,
