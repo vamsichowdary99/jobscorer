@@ -3941,32 +3941,35 @@ function MeridianResumeCard({
     )
 }
 
-// Small "collapse/expand sidebar" toggle — mirrors the panel-toggle affordance
-// common to Claude/Notion/Linear-style sidebars (chevron flips direction).
-function SidebarCollapseToggle({ collapsed, onClick }: { collapsed: boolean; onClick: () => void }) {
+// Sidebar toggle button — lives in the top bar (always visible, same spot
+// regardless of collapse state), styled as an explicit bordered button with
+// an icon + label so its purpose is unmistakable at a glance, not a tiny
+// hover-only chevron buried inside the sidebar's own content.
+function SidebarToggleButton({ collapsed, onClick }: { collapsed: boolean; onClick: () => void }) {
     const [hov, setHov] = useState(false)
     return (
         <button
             onClick={onClick}
             onMouseEnter={() => setHov(true)}
             onMouseLeave={() => setHov(false)}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Show resumes panel' : 'Hide resumes panel'}
+            aria-label={collapsed ? 'Show resumes panel' : 'Hide resumes panel'}
             style={{
-                width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: hov ? M.accentLight : 'transparent',
-                border: `1px solid ${hov ? M.accentBorder : 'transparent'}`,
-                cursor: 'pointer', transition: 'all 0.13s', padding: 0,
+                display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0,
+                padding: '7px 12px', borderRadius: 8,
+                background: hov ? M.accentLight : M.surface,
+                border: `1.5px solid ${hov ? M.accentBorder : M.border}`,
+                color: hov ? M.accent : M.textMid,
+                cursor: 'pointer', transition: 'all 0.13s',
+                fontSize: '0.8125rem', fontWeight: 600, fontFamily: M.fontBody,
             }}
         >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={hov ? M.accent : M.textMuted} strokeWidth="2.2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="4" width="18" height="16" rx="2.5" />
                 <path d="M9.5 4v16" />
-                {collapsed
-                    ? <path d="M13.5 9.5l3 2.5-3 2.5" />
-                    : <path d="M15.5 9.5l-3 2.5 3 2.5" />}
+                {!collapsed && <path d="M4.5 5.5h4v13h-4z" fill="currentColor" stroke="none" opacity="0.35" />}
             </svg>
+            Resumes
         </button>
     )
 }
@@ -3974,7 +3977,7 @@ function SidebarCollapseToggle({ collapsed, onClick }: { collapsed: boolean; onC
 function MeridianSidebar({
     resumes, selectedId, onSelect, onOptimizeNew, sourceResume,
     uploadedResumes, sourceResumeId, onSourceChange, optimizedCounts,
-    collapsed, onToggleCollapse,
+    collapsed,
 }: {
     resumes: SavedResumeEntry[]
     selectedId: string | null
@@ -3986,7 +3989,6 @@ function MeridianSidebar({
     onSourceChange: (id: string | null) => void
     optimizedCounts: Record<string, number>
     collapsed: boolean
-    onToggleCollapse: () => void
 }) {
     const [filter, setFilter] = useState('')
     const filtered = filter
@@ -4004,8 +4006,6 @@ function MeridianSidebar({
                 display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%',
                 padding: '14px 0', gap: 10, transition: 'width 0.18s ease',
             }}>
-                <SidebarCollapseToggle collapsed={collapsed} onClick={onToggleCollapse} />
-                <div style={{ width: 28, height: 1, background: M.borderLight, margin: '2px 0 4px' }} />
                 <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', width: '100%' }}>
                     {resumes.map(r => {
                         const sel = r.id === selectedId
@@ -4092,7 +4092,6 @@ function MeridianSidebar({
                     border: `1px solid ${M.accentBorder}`,
                     fontFamily: M.fontMono,
                 }}>{resumes.length}</div>
-                <SidebarCollapseToggle collapsed={collapsed} onClick={onToggleCollapse} />
             </div>
 
             {/* Search */}
@@ -5460,6 +5459,11 @@ export default function ResumesPage() {
                 height: 50, background: M.white, borderBottom: `1px solid ${M.border}`,
                 display: 'flex', alignItems: 'center', padding: '0 22px', gap: 14, flexShrink: 0,
             }}>
+                {/* Sidebar toggle — first thing in the bar, always visible regardless of collapse state */}
+                {(savedResumes.length > 0 || uploadedResumes.length > 0) && (
+                    <SidebarToggleButton collapsed={sidebarCollapsed} onClick={toggleSidebarCollapsed} />
+                )}
+
                 {/* Studio title (brand sits in the global nav above) */}
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2">
                     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -5533,7 +5537,6 @@ export default function ResumesPage() {
                         onSourceChange={handleSourceChange}
                         optimizedCounts={optimizedCountsBySource}
                         collapsed={sidebarCollapsed}
-                        onToggleCollapse={toggleSidebarCollapsed}
                     />
                 )}
 
