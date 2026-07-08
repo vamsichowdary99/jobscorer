@@ -18,14 +18,14 @@ export function AssistantPanel({ controller: a }: { controller: AssistantControl
                 rescoring={a.rescoring} rescoredCaption={a.rescoredCaption} onRescore={a.onRescore}
             />
 
-            <div style={{ padding: '10px 14px 0', flexShrink: 0 }}>
+            <div style={{ padding: '10px 14px 0', flexShrink: 0, maxHeight: '30vh', overflowY: 'auto' }}>
                 <AuditCard items={a.auditItems} allDone={a.allDone} onItemClick={a.onAuditItemClick} onApplyAll={a.onApplyAll} />
             </div>
 
             <MessageList messages={a.messages} isTyping={a.isTyping} />
 
             {a.activeCard && (
-                <div style={{ padding: '8px 12px', background: M.surface, borderTop: `1px solid ${M.borderLight}`, flexShrink: 0 }}>
+                <div style={{ padding: '8px 12px', background: M.surface, borderTop: `1px solid ${M.borderLight}`, flexShrink: 0, maxHeight: '46vh', overflowY: 'auto' }}>
                     {a.activeCard.state === 'pending' ? (
                         <SkeletonCard />
                     ) : (
