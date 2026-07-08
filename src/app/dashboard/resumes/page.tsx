@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume } from '@/lib/types'
+import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume, ResumeEditorState, ExperienceEntry, EducationEntry, ProjectEntry, LeadershipEntry } from '@/lib/types'
 import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes } from '@/lib/api'
 import TemplatePickerModal, { type TemplateId } from '@/components/TemplatePickerModal'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -18,7 +18,7 @@ interface SavedResumeEntry {
 }
 
 // ── Meridian Design Tokens ──────────────────────────────────
-const M = {
+export const M = {
     accent: '#1d6af5',
     accentMid: '#4b8df8',
     accentLight: 'rgba(29,106,245,0.10)',
@@ -68,64 +68,6 @@ const T = {
     editorTextMuted: M.textMuted,
     radius: '10px',
     radiusSm: '7px',
-}
-
-// ── Types ────────────────────────────────────────────────────
-
-interface ExperienceEntry {
-    company: string
-    title: string
-    startDate: string
-    endDate: string
-    location: string
-    bullets: string[]
-}
-
-interface EducationEntry {
-    school: string
-    degree: string
-    date: string
-    gpa: string
-    coursework: string
-}
-
-interface ProjectEntry {
-    name: string
-    tech: string
-    date: string
-    bullets: string[]
-}
-
-interface LeadershipEntry {
-    org: string
-    role: string
-    date: string
-    bullets: string[]
-}
-
-interface ResumeEditorState {
-    profile: {
-        name: string
-        email: string
-        phone: string
-        location: string
-        linkedin: string
-        github: string
-        portfolio: string
-    }
-    summary: string
-    education: EducationEntry[]
-    experience: ExperienceEntry[]
-    projects: ProjectEntry[]
-    skills: {
-        languages: string
-        tools: string
-        frameworks: string
-        soft: string
-    }
-    leadership: LeadershipEntry[]
-    certifications: string[]
-    achievements: string[]
 }
 
 const EMPTY_STATE: ResumeEditorState = {

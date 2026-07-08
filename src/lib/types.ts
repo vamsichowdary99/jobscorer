@@ -638,3 +638,60 @@ export interface ResumeBuildRecommendation {
     created_at: string
     updated_at: string
 }
+
+// ── Resume Studio editor state (moved from dashboard/resumes/page.tsx) ──
+export interface ExperienceEntry {
+    company: string
+    title: string
+    startDate: string
+    endDate: string
+    location: string
+    bullets: string[]
+}
+
+export interface EducationEntry {
+    school: string
+    degree: string
+    date: string
+    gpa: string
+    coursework: string
+}
+
+export interface ProjectEntry {
+    name: string
+    tech: string
+    date: string
+    bullets: string[]
+}
+
+export interface LeadershipEntry {
+    org: string
+    role: string
+    date: string
+    bullets: string[]
+}
+
+export interface ResumeEditorState {
+    profile: {
+        name: string
+        email: string
+        phone: string
+        location: string
+        linkedin: string
+        github: string
+        portfolio: string
+    }
+    summary: string
+    education: EducationEntry[]
+    experience: ExperienceEntry[]
+    projects: ProjectEntry[]
+    skills: {
+        languages: string
+        tools: string
+        frameworks: string
+        soft: string
+    }
+    leadership: LeadershipEntry[]
+    certifications: string[]
+    achievements: string[]
+}
