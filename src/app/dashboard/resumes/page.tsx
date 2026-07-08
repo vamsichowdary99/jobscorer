@@ -3941,9 +3941,40 @@ function MeridianResumeCard({
     )
 }
 
+// Small "collapse/expand sidebar" toggle — mirrors the panel-toggle affordance
+// common to Claude/Notion/Linear-style sidebars (chevron flips direction).
+function SidebarCollapseToggle({ collapsed, onClick }: { collapsed: boolean; onClick: () => void }) {
+    const [hov, setHov] = useState(false)
+    return (
+        <button
+            onClick={onClick}
+            onMouseEnter={() => setHov(true)}
+            onMouseLeave={() => setHov(false)}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            style={{
+                width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: hov ? M.accentLight : 'transparent',
+                border: `1px solid ${hov ? M.accentBorder : 'transparent'}`,
+                cursor: 'pointer', transition: 'all 0.13s', padding: 0,
+            }}
+        >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={hov ? M.accent : M.textMuted} strokeWidth="2.2">
+                <rect x="3" y="4" width="18" height="16" rx="2.5" />
+                <path d="M9.5 4v16" />
+                {collapsed
+                    ? <path d="M13.5 9.5l3 2.5-3 2.5" />
+                    : <path d="M15.5 9.5l-3 2.5 3 2.5" />}
+            </svg>
+        </button>
+    )
+}
+
 function MeridianSidebar({
     resumes, selectedId, onSelect, onOptimizeNew, sourceResume,
     uploadedResumes, sourceResumeId, onSourceChange, optimizedCounts,
+    collapsed, onToggleCollapse,
 }: {
     resumes: SavedResumeEntry[]
     selectedId: string | null
@@ -3954,6 +3985,8 @@ function MeridianSidebar({
     sourceResumeId: string | null
     onSourceChange: (id: string | null) => void
     optimizedCounts: Record<string, number>
+    collapsed: boolean
+    onToggleCollapse: () => void
 }) {
     const [filter, setFilter] = useState('')
     const filtered = filter
@@ -3963,11 +3996,65 @@ function MeridianSidebar({
           })
         : resumes
 
+    if (collapsed) {
+        return (
+            <div style={{
+                width: 60, flexShrink: 0, background: M.white,
+                borderRight: `1px solid ${M.border}`,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%',
+                padding: '14px 0', gap: 10, transition: 'width 0.18s ease',
+            }}>
+                <SidebarCollapseToggle collapsed={collapsed} onClick={onToggleCollapse} />
+                <div style={{ width: 28, height: 1, background: M.borderLight, margin: '2px 0 4px' }} />
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', width: '100%' }}>
+                    {resumes.map(r => {
+                        const sel = r.id === selectedId
+                        const company = r.job?.company ?? 'Untitled'
+                        const title = r.job?.title ?? 'Resume'
+                        const initial = (company || '?')[0].toUpperCase()
+                        return (
+                            <button
+                                key={r.id}
+                                onClick={() => onSelect(r.id)}
+                                title={`${title} · ${company}`}
+                                style={{
+                                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                                    background: sel ? M.accent : M.accentMid,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '0.9375rem', fontWeight: 800, color: '#fff',
+                                    fontFamily: M.fontHeading, border: 'none', cursor: 'pointer',
+                                    boxShadow: sel ? `0 0 0 2px ${M.white}, 0 0 0 4px ${M.accent}` : 'none',
+                                    transition: 'all 0.15s',
+                                }}
+                            >{initial}</button>
+                        )
+                    })}
+                </div>
+                <button
+                    onClick={onOptimizeNew}
+                    title="Optimize New Job"
+                    aria-label="Optimize New Job"
+                    style={{
+                        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: M.accentLight, border: `1.5px dashed ${M.accentBorder}`,
+                        color: M.accent, cursor: 'pointer',
+                    }}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </button>
+            </div>
+        )
+    }
+
     return (
         <div style={{
             width: 340, flexShrink: 0, background: M.white,
             borderRight: `1px solid ${M.border}`,
             display: 'flex', flexDirection: 'column', height: '100%',
+            transition: 'width 0.18s ease',
         }}>
             {/* ── Source resume picker (prominent, top-left) ── */}
             <div style={{
@@ -4005,6 +4092,7 @@ function MeridianSidebar({
                     border: `1px solid ${M.accentBorder}`,
                     fontFamily: M.fontMono,
                 }}>{resumes.length}</div>
+                <SidebarCollapseToggle collapsed={collapsed} onClick={onToggleCollapse} />
             </div>
 
             {/* Search */}
@@ -4713,6 +4801,8 @@ export default function ResumesPage() {
     const [openModalSection, setOpenModalSection] = useState<string | null>(null)
     // ── Studio tab (desktop) ──
     const [studioTab, setStudioTab] = useState<'sections' | 'assistant'>('sections')
+    // ── Sidebar collapse (desktop) — frees width for the editor/assistant + preview ──
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     // useAssistant is a hook — must be called unconditionally, before the `!loaded`
     // early return below, so it stays alongside the other top-level state hooks.
     const assistant = useAssistant(editorState, setEditorState, selectedEntry?.job?.title ?? null)
@@ -4786,6 +4876,18 @@ export default function ResumesPage() {
         const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
         mq.addEventListener('change', handler)
         return () => mq.removeEventListener('change', handler)
+    }, [])
+
+    useEffect(() => {
+        setSidebarCollapsed(localStorage.getItem('jobscorer-resumes-sidebar-collapsed') === '1')
+    }, [])
+
+    const toggleSidebarCollapsed = useCallback(() => {
+        setSidebarCollapsed(prev => {
+            const next = !prev
+            localStorage.setItem('jobscorer-resumes-sidebar-collapsed', next ? '1' : '0')
+            return next
+        })
     }, [])
 
     useEffect(() => {
@@ -5430,6 +5532,8 @@ export default function ResumesPage() {
                         sourceResumeId={sourceResumeId}
                         onSourceChange={handleSourceChange}
                         optimizedCounts={optimizedCountsBySource}
+                        collapsed={sidebarCollapsed}
+                        onToggleCollapse={toggleSidebarCollapsed}
                     />
                 )}
 
