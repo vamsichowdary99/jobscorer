@@ -10,6 +10,7 @@ import { usePreviewDecorations, decorationKey, PreviewDecorationsProvider } from
 import { A } from '@/components/resume-editor/tokens'
 import { AssistantPanel } from '@/components/resume-editor/AssistantPanel'
 import { useAssistant } from '@/components/resume-editor/useAssistant'
+import { M } from '@/lib/meridianTokens'
 
 interface SavedResumeEntry {
     id: string
@@ -21,33 +22,8 @@ interface SavedResumeEntry {
     job: { id: string; title: string; company: string; location: string } | null
 }
 
-// ── Meridian Design Tokens ──────────────────────────────────
-export const M = {
-    accent: '#1d6af5',
-    accentMid: '#4b8df8',
-    accentLight: 'rgba(29,106,245,0.10)',
-    accentBorder: 'rgba(29,106,245,0.28)',
-    accentTint: 'rgba(29,106,245,0.05)',
-    white: '#ffffff',
-    surface: '#f5f9ff',
-    surfaceAlt: '#edf4ff',
-    border: '#cfe2ff',
-    borderLight: '#e8f1ff',
-    text: '#0f1e40',
-    textMid: '#1e3a6e',
-    textMuted: '#4a6fa5',
-    textFaint: '#8dafd8',
-    green: '#16a34a',
-    greenLight: '#dcfce7',
-    greenBorder: '#a7f3d0',
-    amber: '#d97706',
-    amberLight: '#fef3c7',
-    amberBorder: '#fde68a',
-    red: '#dc2626',
-    fontHeading: "'Lora', Georgia, serif",
-    fontBody: "'DM Sans', 'Inter', sans-serif",
-    fontMono: "'JetBrains Mono', monospace",
-}
+// ── Meridian Design Tokens ── moved to '@/lib/meridianTokens' (imported above)
+// to avoid a circular import with components/resume-editor/tokens.ts. ──────
 
 // Legacy alias kept so unchanged sub-components still compile
 const T = {
