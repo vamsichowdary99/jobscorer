@@ -290,10 +290,21 @@ export function useAssistant(
 
     const sendMessageRef = useRef<(text: string, displayText?: string) => void>(() => {})
 
+    // Guards against overlapping send() calls: if the user fires a new message/chip/audit-click
+    // while a previous adapter call is still streaming or awaiting its skeleton delay, the older
+    // call's late-arriving events would otherwise overwrite activeCard with stale data (e.g.
+    // resetting a card the user is about to click Apply on back to 'pending'). Each runAdapter
+    // call claims a generation id and stops applying state updates the moment a newer call starts.
+    const requestGenerationRef = useRef(0)
+
     const runAdapter = useCallback(async (text: string) => {
+        const myGeneration = ++requestGenerationRef.current
+        const isCurrent = () => requestGenerationRef.current === myGeneration
+
         setIsTyping(true)
         let sawText = false
         for await (const event of adapterRef.current.send(text, editorStateRef.current)) {
+            if (!isCurrent()) return
             if (event.type === 'text_delta') {
                 if (!sawText) {
                     sawText = true
