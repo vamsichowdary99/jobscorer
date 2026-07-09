@@ -553,6 +553,20 @@ export interface OptimizedResumeData {
     career_action_plan?: CareerActionPlan
 }
 
+// One entry per persisted edit (manual save, AI apply, or undo) — Resume Editor
+// Agent Phase 1 persistence. See migrations/11-resume-editor-agent.sql.
+export interface ResumeEditHistoryEntry {
+    section: string
+    operation: string
+    index?: number
+    before: unknown
+    after: unknown
+    rationale?: string
+    source: 'ai' | 'manual' | 'undo'
+    coverage?: number
+    at: string
+}
+
 export interface OptimizedResume {
     id: string
     created_at: string
@@ -563,6 +577,10 @@ export interface OptimizedResume {
     optimized_data: OptimizedResumeData
     keyword_alignment_score: number | null
     optimization_notes: string[] | null
+    edit_history: ResumeEditHistoryEntry[]
+    ats_keywords: unknown | null   // Phase 3: {keywords:[{term,weight,variants[]}], extracted_at}
+    live_score: unknown | null     // Phase 3: {score, matched_skills, missing_skills, reasoning, scored_at}
+    suggestions: unknown | null    // Phase 3: cached AI audit {items[], generated_at, edits_since}
 }
 
 // ── Build Plan (recommendation popup before resume creation) ──────────────
