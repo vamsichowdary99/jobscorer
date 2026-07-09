@@ -14,8 +14,10 @@ import type { ChatCompletionTool } from 'openai/resources/chat/completions'
  * DiffCard/applyProposal.ts code the mock adapter already exercises, with zero
  * changes to those files. Whole-entry operations are a fast-follow.
  *
- * metric_sources.source omits 'project_evidence' (architecture doc §1/§4) —
- * that source only becomes real once Phase 3's get_user_evidence tool exists.
+ * Phase 3 adds get_user_evidence + metric_sources.source's third option,
+ * 'project_evidence' (architecture doc §1/§4) — the entity-hallucination
+ * guard: before adding a skill/technology the model can't already see in the
+ * resume, it must check for real proof (a completed project or milestone).
  */
 export const editorTools: ChatCompletionTool[] = [
     {
@@ -59,8 +61,8 @@ export const editorTools: ChatCompletionTool[] = [
                             type: 'object',
                             properties: {
                                 value: { type: 'string', description: 'The exact numeric token as it appears in new_value, e.g. "40%".' },
-                                source: { type: 'string', enum: ['original_resume', 'user_message'], description: 'Where this number came from — the resume as it already existed, or something the user typed in this conversation.' },
-                                quote: { type: 'string', description: 'The verbatim text (from the resume or the user\'s message) that contains this value. Must be an exact substring — do not paraphrase.' },
+                                source: { type: 'string', enum: ['original_resume', 'user_message', 'project_evidence'], description: 'Where this number came from — the resume as it already existed, something the user typed in this conversation, or a completed project returned by get_user_evidence.' },
+                                quote: { type: 'string', description: 'The verbatim text (from the resume, the user\'s message, or the get_user_evidence result) that contains this value. Must be an exact substring — do not paraphrase.' },
                             },
                             required: ['value', 'source', 'quote'],
                         },
@@ -92,6 +94,23 @@ export const editorTools: ChatCompletionTool[] = [
             name: 'get_ats_keywords',
             description: 'Fetch the weighted ATS keyword list and current keyword coverage for the resume being edited, if one has been generated yet. May return no keywords — that just means none have been extracted for this artifact yet.',
             parameters: { type: 'object', properties: {}, required: [] },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'get_user_evidence',
+            description: 'ALWAYS call this before proposing to add a skill or technology that is not already visible in the resume state you were given. Returns the user\'s REAL completed projects and milestones from JobScorer, with the skills/tech each one actually demonstrates. If nothing comes back for the skill, do NOT add it as if it were proven — tell the user you could not verify it and offer either to add it as a plain unverified claim (their call) or to start a roadmap that would let them build real evidence for it.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    skill: {
+                        type: 'string',
+                        description: 'Optional — filter to evidence related to this skill/technology (case-insensitive substring match). Omit to return everything the user has completed.',
+                    },
+                },
+                required: [],
+            },
         },
     },
 ]

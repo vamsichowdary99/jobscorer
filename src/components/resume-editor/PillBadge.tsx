@@ -8,6 +8,7 @@ const VARIANTS: Record<ProposalBadge, { bg: string; border: string; color: strin
     message: { bg: M.accentLight, border: M.accentBorder, color: M.accent, label: 'From your message' },
     project: { bg: M.greenLight, border: M.greenBorder, color: M.green, label: 'From your resume' },
     ai: { bg: M.surfaceAlt, border: M.border, color: M.textMid, label: 'AI wording — no facts added' },
+    evidence: { bg: M.greenLight, border: M.greenBorder, color: M.green, label: 'From your completed project' },
 }
 
 export function PillBadge({ type }: { type: ProposalBadge }) {

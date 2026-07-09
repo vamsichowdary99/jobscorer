@@ -1,7 +1,7 @@
 // resuscore/src/components/resume-editor/types.ts
 import type { ResumeEditorState } from '@/lib/types'
 
-export type ProposalBadge = 'message' | 'project' | 'ai'
+export type ProposalBadge = 'message' | 'project' | 'ai' | 'evidence'
 
 export interface ProposalTarget {
     section: 'summary' | 'experience' | 'projects' | 'skills'

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserLimit } from '@/lib/rate-limit'
 import { logUsage } from '@/lib/usage'
 import { checkQuota } from '@/lib/plan'
+import type { AtsKeyword } from '@/lib/resume-edit/coverage'
 import type { ResumeEditorState } from '@/lib/types'
 
 const CHAT_MODEL = 'gpt-4.1-mini'
@@ -32,6 +33,8 @@ You: propose_edit with stronger action verbs and no new numeric claim, metric_so
 propose_edit targets exactly one of: the whole summary, one technical-skills field (skills_field required), or one bullet in one experience/project entry (index + bullet_index required — call get_job_context/get_match_details first if you need to know which entry to target and aren't sure). It cannot add or remove whole entries yet — if asked to add a new project or experience entry, say that's not supported yet and offer to strengthen the wording of what's already there instead.
 
 For every number in new_value, include a metric_sources entry: source:"original_resume" with a verbatim quote from the resume state below, or source:"user_message" with a verbatim quote from something the user typed. If propose_edit rejects your proposal with an "unverified_metrics" error, do NOT retry with the same number — ask the user conversationally per the rule above.
+
+ANOTHER HARD RULE — NEVER CLAIM AN UNVERIFIED SKILL. If the user asks you to add a skill or technology that is not already visible in the resume state below, you MUST call get_user_evidence (optionally with that skill) BEFORE proposing anything. If it returns no matching evidence, do not add the skill as if it were proven — tell the user you couldn't verify it in their completed JobScorer work, name what you DID find instead if anything, and offer either to add it as a plain unverified claim (their choice) or to start a roadmap that builds real evidence for it. If get_user_evidence DOES return a matching completed project, you may cite it: metric_sources source:"project_evidence" with a verbatim quote from that tool's result.
 
 Tool routing: call get_job_context and get_match_details before tailoring content to the target job or making ATS-friendliness claims. Call get_ats_keywords before claiming a keyword is missing. Keep responses short — 1-3 sentences — since the UI shows the actual proposed change in a diff card, not in your text.`
 
@@ -76,6 +79,21 @@ export async function POST(req: NextRequest) {
         ...(conversationHistory ?? []).filter(m => m.role === 'user').map(m => m.content),
         message,
     ]
+
+    // For propose_edit's real coverage-delta "est." — cheap read, no-op if
+    // /api/resume-edit/keywords hasn't run for this artifact yet.
+    let atsKeywords: AtsKeyword[] = []
+    if (optimizedResumeId) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sb = supabase as any
+        const { data: row } = await sb
+            .from('optimized_resumes')
+            .select('ats_keywords')
+            .eq('id', optimizedResumeId)
+            .eq('user_id', userId)
+            .maybeSingle()
+        atsKeywords = row?.ats_keywords?.keywords ?? []
+    }
 
     const systemContent = `${SYSTEM_PROMPT}\n\n## Current resume state (JSON) — always reflects the latest edits, including ones the user just made manually\n${JSON.stringify(editorState)}`
 
@@ -148,6 +166,7 @@ export async function POST(req: NextRequest) {
                             optimizedResumeId,
                             editorState,
                             userMessages,
+                            atsKeywords,
                         })
                         const durationMs = Date.now() - t0
                         emit({ type: 'tool_end', name: toolCall.function.name, durationMs, result })

@@ -3,15 +3,10 @@
 // Deterministic "never hallucinate numbers" gate (architecture doc §4). Runs
 // inside propose_edit before any proposal reaches the user. The model's
 // cheapest path when it can't verify a number must be to ask the user.
-//
-// Phase 2 scope cut: allowlist source (d) — project_evidence — is omitted
-// here. That source only exists once Phase 3's get_user_evidence tool ships;
-// until then metric_sources only accepts 'original_resume' | 'user_message'
-// (see tool-definitions.ts).
 
 export interface MetricSource {
     value: string
-    source: 'original_resume' | 'user_message'
+    source: 'original_resume' | 'user_message' | 'project_evidence'
     quote: string
 }
 
@@ -20,6 +15,8 @@ export interface ValidatorContext {
     editorState: unknown
     /** Every user message in the conversation (history + current turn). Assistant messages and the job description are deliberately excluded. */
     userMessages: string[]
+    /** Text from the user's completed project_evidence rows (Phase 3) — allowlist source (d), grounded in real JobScorer work. */
+    evidenceTexts: string[]
 }
 
 export type ValidationResult =
@@ -111,11 +108,19 @@ export function validateProposedText(
 
     const stateText = JSON.stringify(ctx.editorState)
     const messagesText = ctx.userMessages.join(' \n ')
+    const evidenceText = ctx.evidenceTexts.join(' \n ')
     const allowlist = new Set<string>([
         ...extractNumbers(stateText),
         ...ctx.userMessages.flatMap(extractNumbers),
         ...ctx.userMessages.flatMap(extractWordNumbers).map(normalize),
+        ...extractNumbers(evidenceText),
     ])
+
+    const sourceTextFor = (source: MetricSource['source']): string => {
+        if (source === 'original_resume') return stateText
+        if (source === 'project_evidence') return evidenceText
+        return messagesText
+    }
 
     const unverified: string[] = []
     for (const num of candidates) {
@@ -124,7 +129,7 @@ export function validateProposedText(
         const source = metricSources.find(s => normalize(s.value) === num)
         if (!source) { unverified.push(num); continue }
 
-        const sourceText = source.source === 'original_resume' ? stateText : messagesText
+        const sourceText = sourceTextFor(source.source)
         const quoteContainsValue = source.quote.length > 0 && source.quote.includes(source.value)
         const quoteIsVerbatim = source.quote.length > 0 && sourceText.includes(source.quote)
         if (!quoteContainsValue || !quoteIsVerbatim) unverified.push(num)
@@ -139,7 +144,7 @@ export function buildRejectionPayload(unverified: string[]) {
         error: 'unverified_metrics',
         unverified,
         instruction:
-            "These figures do not appear in the resume or the user's messages. NEVER invent metrics. " +
+            "These figures do not appear in the resume, the user's messages, or their completed project evidence. NEVER invent metrics. " +
             'Ask the user conversationally, offering options: keep it as their estimate, remove the number, or rewrite the line qualitatively without a number.',
     }
 }

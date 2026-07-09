@@ -1,7 +1,9 @@
 import { createServerSupabase } from '@/lib/chat/supabase-server'
 import type { ResumeEditorState } from '@/lib/types'
 import type { Proposal, ProposalTarget, ProposalBadge } from '@/components/resume-editor/types'
-import { readProposalTarget } from '@/lib/resume-edit/apply'
+import { applyProposal, readProposalTarget } from '@/lib/resume-edit/apply'
+import { computeKeywordCoverage, type AtsKeyword } from './coverage'
+import { generateATSText } from './atsText'
 import { validateProposedText, buildRejectionPayload, type MetricSource } from './validator'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -11,6 +13,10 @@ export interface EditorToolContext {
     optimizedResumeId: string | null
     editorState: ResumeEditorState
     userMessages: string[]
+    // For propose_edit's real coverage-delta estimate (architecture doc §5 L1
+    // applied to the diff-card "est. +N"). Empty until /api/resume-edit/keywords
+    // has run for this artifact — est degrades honestly to 0, never a fake number.
+    atsKeywords: AtsKeyword[]
 }
 
 // Cloned contract from src/lib/chat/tools.ts: service-role client, every query
@@ -23,13 +29,15 @@ export async function executeEditorTool(
 ): Promise<string> {
     switch (toolName) {
         case 'propose_edit':
-            return proposeEdit(args, ctx)
+            return proposeEdit(args, userId, ctx)
         case 'get_job_context':
             return getJobContext(userId, ctx.optimizedResumeId)
         case 'get_match_details':
             return getMatchDetails(userId, ctx.optimizedResumeId)
         case 'get_ats_keywords':
             return getAtsKeywords(userId, ctx.optimizedResumeId)
+        case 'get_user_evidence':
+            return getUserEvidence(userId, typeof args.skill === 'string' ? args.skill : undefined)
         default:
             return JSON.stringify({ error: `Unknown tool: ${toolName}` })
     }
@@ -84,6 +92,58 @@ async function getAtsKeywords(userId: string, optimizedResumeId: string | null):
     return JSON.stringify(row.ats_keywords)
 }
 
+/**
+ * The entity-hallucination guard (architecture doc §1/§4): "Add Kubernetes" ->
+ * agent must call this before adding an unverified skill/technology. Queries
+ * project_evidence (polished proof-of-work) and completed project_roadmaps —
+ * the user's REAL, verified JobScorer work — never resume text (that's what's
+ * being edited, not evidence for it).
+ */
+async function getUserEvidence(userId: string, skill?: string): Promise<string> {
+    const { data: evidence } = await getSupabase()
+        .from('project_evidence')
+        .select('project_name, tech_used, skills_demonstrated, resume_bullet, description, github_url, completed_at')
+        .eq('user_id', userId)
+
+    const { data: roadmaps } = await getSupabase()
+        .from('project_roadmaps')
+        .select('project_name, skills_covered, tech_stack, completed_at')
+        .eq('user_id', userId)
+        .eq('status', 'completed')
+
+    let evidenceRows: Record<string, unknown>[] = evidence ?? []
+    let roadmapRows: Record<string, unknown>[] = roadmaps ?? []
+
+    if (skill) {
+        const s = skill.toLowerCase()
+        const hits = (arr: unknown) => Array.isArray(arr) && arr.some(v => typeof v === 'string' && v.toLowerCase().includes(s))
+        evidenceRows = evidenceRows.filter(e => hits(e.tech_used) || hits(e.skills_demonstrated) || String(e.project_name ?? '').toLowerCase().includes(s))
+        roadmapRows = roadmapRows.filter(r => hits(r.skills_covered) || hits(r.tech_stack) || String(r.project_name ?? '').toLowerCase().includes(s))
+    }
+
+    if (evidenceRows.length === 0 && roadmapRows.length === 0) {
+        return JSON.stringify({
+            evidence: [],
+            completed_projects: [],
+            note: skill
+                ? `No verified evidence found for "${skill}". Do NOT add it to the resume as if it were demonstrated — offer to add it as a plain skill claim only if the user insists, or suggest starting a project/roadmap to build real evidence.`
+                : 'No completed project evidence yet.',
+        })
+    }
+    return JSON.stringify({ evidence: evidenceRows, completed_projects: roadmapRows })
+}
+
+/** Flattened evidence text for the validator's project_evidence source check — see proposeEdit. */
+async function fetchEvidenceTexts(userId: string): Promise<string[]> {
+    const { data } = await getSupabase()
+        .from('project_evidence')
+        .select('resume_bullet, description, architecture_summary')
+        .eq('user_id', userId)
+    if (!Array.isArray(data)) return []
+    return data.flatMap((row: Record<string, unknown>) =>
+        [row.resume_bullet, row.description, row.architecture_summary].filter((v): v is string => typeof v === 'string' && v.length > 0))
+}
+
 const VALID_SECTIONS = ['summary', 'skills', 'experience', 'projects'] as const
 const VALID_SKILLS_FIELDS = ['languages', 'tools', 'frameworks', 'soft'] as const
 
@@ -101,12 +161,16 @@ function buildSectionLabel(state: ResumeEditorState, target: ProposalTarget): st
     return ''
 }
 
-/** No project_evidence source yet (Phase 3) — this is the 3-badge subset PillBadge already renders. */
+// Priority: a user-typed number is the most concrete signal; evidence beats a
+// bare "it's already on the resume" citation since it names actual proof.
 function deriveSourceBadge(metricSources: MetricSource[]): ProposalBadge {
     if (metricSources.length === 0) return 'ai'
     if (metricSources.some(s => s.source === 'user_message')) return 'message'
+    if (metricSources.some(s => s.source === 'project_evidence')) return 'evidence'
     return 'project'
 }
+
+const VALID_METRIC_SOURCES = new Set(['original_resume', 'user_message', 'project_evidence'])
 
 /**
  * The one write tool — proposes, never applies (architecture doc §1). Shape
@@ -114,7 +178,7 @@ function deriveSourceBadge(metricSources: MetricSource[]): ProposalBadge {
  * direct dependency; see Phase 2 report) but returns the same
  * `{error:'invalid_shape'}` contract the doc specifies.
  */
-function proposeEdit(args: Record<string, unknown>, ctx: EditorToolContext): string {
+async function proposeEdit(args: Record<string, unknown>, userId: string, ctx: EditorToolContext): Promise<string> {
     const section = args.section as string
     if (!VALID_SECTIONS.includes(section as typeof VALID_SECTIONS[number])) {
         return JSON.stringify({ error: 'invalid_shape', message: `section must be one of ${VALID_SECTIONS.join('|')}` })
@@ -150,25 +214,37 @@ function proposeEdit(args: Record<string, unknown>, ctx: EditorToolContext): str
 
     const metricSources: MetricSource[] = Array.isArray(args.metric_sources)
         ? (args.metric_sources as MetricSource[]).filter(s =>
-            s && typeof s.value === 'string' && typeof s.quote === 'string' && (s.source === 'original_resume' || s.source === 'user_message'))
+            s && typeof s.value === 'string' && typeof s.quote === 'string' && VALID_METRIC_SOURCES.has(s.source))
         : []
 
-    const validation = validateProposedText(newValue, { editorState: ctx.editorState, userMessages: ctx.userMessages }, metricSources)
+    // Only fetch evidence when a proposal actually claims it — most edits never
+    // cite project_evidence, so this stays a no-op DB call for the common case.
+    const evidenceTexts = metricSources.some(s => s.source === 'project_evidence')
+        ? await fetchEvidenceTexts(userId)
+        : []
+
+    const validation = validateProposedText(newValue, { editorState: ctx.editorState, userMessages: ctx.userMessages, evidenceTexts }, metricSources)
     if (!validation.ok) {
         return JSON.stringify(buildRejectionPayload(validation.unverified))
     }
+
+    const before = readProposalTarget(ctx.editorState, target)
+    // Real coverage-delta estimate (architecture doc §5 L1 applied to the diff
+    // card): simulate the edit against the SAME keywords/text scoring used for
+    // the live ScoreTicker, so "est. +N" is an honest number, not a guess.
+    const simulated = applyProposal(ctx.editorState, { target } as Proposal, newValue)
+    const beforeCoverage = computeKeywordCoverage(ctx.atsKeywords, generateATSText(ctx.editorState))
+    const afterCoverage = computeKeywordCoverage(ctx.atsKeywords, generateATSText(simulated))
 
     const proposal: Proposal = {
         id: crypto.randomUUID(),
         target,
         sectionLabel: buildSectionLabel(ctx.editorState, target),
         badge: deriveSourceBadge(metricSources),
-        before: readProposalTarget(ctx.editorState, target),
+        before,
         after: newValue,
         why: typeof args.rationale === 'string' ? args.rationale : '',
-        // Real coverage delta arrives in Phase 3 (computeKeywordCoverage) — flat
-        // placeholder for now, same "fake numbers" state the mock UI shipped with.
-        est: 2,
+        est: afterCoverage - beforeCoverage,
         auditId: null,
     }
 
