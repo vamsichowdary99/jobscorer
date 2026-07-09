@@ -1,11 +1,12 @@
 // resuscore/src/components/resume-editor/useAssistant.ts
 'use client'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ResumeEditorState } from '@/lib/types'
 import type { Proposal, ProposalTarget, AuditItem, AssistantEvent, AssistantAdapter, AssistantButton } from './types'
 import type { DecorationsMap } from './types'
 import { applyProposal, readProposalTarget } from './applyProposal'
 import { decorationKey } from './PreviewDecorations'
+import { persistEditorState } from '@/lib/resume-edit/persist'
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 let seq = 0
@@ -236,10 +237,27 @@ export function useAssistant(
     editorState: ResumeEditorState,
     setEditorState: (updater: ResumeEditorState | ((s: ResumeEditorState) => ResumeEditorState)) => void,
     jobTitle: string | null,
+    // Persistence (Plan 21 Phase 1) — null when the loaded resume isn't a saved
+    // optimized_resumes row (raw-resume / localStorage-draft mode), in which case
+    // PATCH is skipped entirely (no write target exists).
+    optimizedResumeId: string | null,
+    updatedAt: string | null,
 ): AssistantController {
     const adapterRef = useRef<AssistantAdapter>(createMockAssistantAdapter(jobTitle))
     const editorStateRef = useRef(editorState)
     editorStateRef.current = editorState
+
+    const optimizedResumeIdRef = useRef(optimizedResumeId)
+    optimizedResumeIdRef.current = optimizedResumeId
+    // Tracks the server's updated_at for the optimistic-lock `expected_updated_at`
+    // check. Reset to the fresh prop only when switching to a different resume —
+    // not on every render, since a successful PATCH advances this ahead of the
+    // (now-stale) prop until the parent re-fetches.
+    const updatedAtRef = useRef(updatedAt)
+    useEffect(() => {
+        updatedAtRef.current = updatedAt
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [optimizedResumeId])
 
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [isTyping, setIsTyping] = useState(false)
@@ -354,13 +372,25 @@ export function useAssistant(
         if (trigger) sendMessage(trigger)
     }, [sendMessage])
 
+    // Fire-and-forget PATCH — one per explicit user action (apply/undo), no debounce.
+    // No-ops when the loaded resume isn't a saved optimized_resumes row.
+    const persist = useCallback((state: ResumeEditorState, entry: Parameters<typeof persistEditorState>[2]) => {
+        const id = optimizedResumeIdRef.current
+        if (!id) return
+        void persistEditorState(id, state, entry, updatedAtRef.current).then(result => {
+            if (result.ok) updatedAtRef.current = result.updated_at
+            else if (result.stale) updatedAtRef.current = result.updated_at
+        })
+    }, [])
+
     const applyActiveCard = useCallback((text?: string) => {
         if (!activeCard || activeCard.state === 'pending') return
         const { proposal } = activeCard
         const finalText = text ?? proposal.after
         const previousValue = readProposalTarget(editorStateRef.current, proposal.target)
 
-        setEditorState(s => applyProposal(s, proposal, finalText))
+        const nextState = applyProposal(editorStateRef.current, proposal, finalText)
+        setEditorState(nextState)
         clearGhost(proposal.target)
         flash(proposal.target)
 
@@ -371,12 +401,24 @@ export function useAssistant(
 
         if (proposal.auditId) setAuditItems(prev => prev.map(a => (a.id === proposal.auditId ? { ...a, done: true } : a)))
 
+        persist(nextState, {
+            section: proposal.target.section, operation: 'replace', index: proposal.target.index,
+            before: previousValue, after: finalText, rationale: proposal.why, source: 'ai', coverage: next,
+        })
+
         const toastId = uid()
         const undo = () => {
-            setEditorState(s => applyProposal(s, proposal, previousValue))
-            setCoverage(c => Math.max(0, c - proposal.est))
+            const reverted = applyProposal(editorStateRef.current, proposal, previousValue)
+            setEditorState(reverted)
+            const coverageAfterUndo = Math.max(0, coverageRef.current - proposal.est)
+            setCoverage(coverageAfterUndo)
             if (proposal.auditId) setAuditItems(prev => prev.map(a => (a.id === proposal.auditId ? { ...a, done: false } : a)))
             setToasts(prev => prev.filter(t => t.id !== toastId))
+
+            persist(reverted, {
+                section: proposal.target.section, operation: 'replace', index: proposal.target.index,
+                before: finalText, after: previousValue, rationale: proposal.why, source: 'undo', coverage: coverageAfterUndo,
+            })
         }
 
         addMessage({ kind: 'applied', text: proposal.sectionLabel, pts: proposal.est, onUndo: undo })
@@ -384,7 +426,7 @@ export function useAssistant(
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== toastId)), 6000)
 
         setActiveCard(null)
-    }, [activeCard, setEditorState, clearGhost, flash, showFloat, addMessage])
+    }, [activeCard, setEditorState, clearGhost, flash, showFloat, addMessage, persist])
 
     const rejectActiveCard = useCallback(() => {
         if (!activeCard || activeCard.state === 'pending') return
