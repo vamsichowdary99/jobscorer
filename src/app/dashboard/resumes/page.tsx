@@ -10,6 +10,7 @@ import { usePreviewDecorations, decorationKey, PreviewDecorationsProvider } from
 import { A } from '@/components/resume-editor/tokens'
 import { AssistantPanel } from '@/components/resume-editor/AssistantPanel'
 import { useAssistant } from '@/components/resume-editor/useAssistant'
+import { persistEditorState } from '@/lib/resume-edit/persist'
 import { M } from '@/lib/meridianTokens'
 
 interface SavedResumeEntry {
@@ -364,16 +365,21 @@ function SectionModal({
 // ── Active Modal Dispatcher ────────────────────────────────
 // Clones state on open; commits on Save.
 function ActiveModal({
-    sectionKey, state, update, onClose, isMobile,
+    sectionKey, state, update, onClose, isMobile, onSaved,
 }: {
     sectionKey: string
     state: ResumeEditorState
     update: (s: ResumeEditorState) => void
     onClose: () => void
     isMobile?: boolean
+    // Plan 21 Phase 1 persistence — fires after `update()` with the section's
+    // before/after snapshot plus the full next state, so the caller can PATCH
+    // without racing React's async setState.
+    onSaved?: (section: string, before: unknown, after: unknown, nextState: ResumeEditorState) => void
 }) {
     // Deep snapshot so Cancel discards changes
     const [local, setLocal] = useState<ResumeEditorState>(() => JSON.parse(JSON.stringify(state)))
+    const beforeRef = useRef((state as unknown as Record<string, unknown>)[sectionKey])
 
     const configs: Record<string, { title: string; subtitle: string; wide?: boolean }> = {
         profile:        { title: 'Edit Profile',         subtitle: 'Personal & contact details' },
@@ -389,7 +395,11 @@ function ActiveModal({
     const cfg = configs[sectionKey]
     if (!cfg) return null
 
-    const handleSave = () => { update(local); onClose() }
+    const handleSave = () => {
+        update(local)
+        onSaved?.(sectionKey, beforeRef.current, (local as unknown as Record<string, unknown>)[sectionKey], local)
+        onClose()
+    }
 
     // Reuse existing inline section editors against local state
     const body: React.ReactNode = (() => {
@@ -4807,7 +4817,23 @@ export default function ResumesPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     // useAssistant is a hook — must be called unconditionally, before the `!loaded`
     // early return below, so it stays alongside the other top-level state hooks.
-    const assistant = useAssistant(editorState, setEditorState, selectedEntry?.job?.title ?? null)
+    const assistant = useAssistant(
+        editorState, setEditorState, selectedEntry?.job?.title ?? null,
+        selectedEntry?.id ?? null, selectedEntry?.updated_at ?? null,
+    )
+    // Manual section-modal saves (ActiveModal onSaved) — Plan 21 Phase 1 persistence.
+    // No-ops in raw-resume / localStorage-draft mode (selectedEntry is null there).
+    const saveManualEdit = useCallback((section: string, before: unknown, after: unknown, nextState: ResumeEditorState) => {
+        if (!selectedEntry?.id) return
+        const id = selectedEntry.id
+        void persistEditorState(id, nextState, {
+            section, operation: 'replace', before, after, source: 'manual', coverage: assistant.coverage,
+        }, selectedEntry.updated_at).then(result => {
+            if (result.ok || result.stale) {
+                setSelectedEntry(prev => (prev && prev.id === id ? { ...prev, updated_at: result.updated_at } : prev))
+            }
+        })
+    }, [selectedEntry, assistant.coverage])
     // ── Mobile state ──
     const [isMobile, setIsMobile] = useState(false)
     const [mobileTab, setMobileTab] = useState<'sections' | 'templates'>('sections')
@@ -5344,7 +5370,7 @@ export default function ResumesPage() {
 
             {/* ── Section editor modal ── */}
             {openModalSection && (
-                <ActiveModal key={openModalSection} sectionKey={openModalSection} state={editorState} update={setEditorState} onClose={() => setOpenModalSection(null)} isMobile={isMobile} />
+                <ActiveModal key={openModalSection} sectionKey={openModalSection} state={editorState} update={setEditorState} onClose={() => setOpenModalSection(null)} isMobile={isMobile} onSaved={saveManualEdit} />
             )}
 
             {/* ── Template picker modal ── */}
@@ -5647,6 +5673,7 @@ export default function ResumesPage() {
                 state={editorState}
                 update={setEditorState}
                 onClose={() => setOpenModalSection(null)}
+                onSaved={saveManualEdit}
             />
         )}
 
