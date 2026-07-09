@@ -551,13 +551,35 @@ export function useAssistant(
         setActiveCard(null)
     }, [auditItems, setEditorState, persist])
 
+    // Architecture doc §5 Layer 2 — real re-score of the edited artifact,
+    // debounced 30s client-side (a fresh gpt-4.1-mini call costs real quota).
+    const lastRescoredAtRef = useRef(0)
     const onRescore = useCallback(() => {
         if (rescoring) return
+        const id = optimizedResumeIdRef.current
+        if (!id) return
+        if (Date.now() - lastRescoredAtRef.current < 30_000) return
         setRescoring(true)
-        setTimeout(() => {
-            setRescoring(false)
-            setRescoredCaption('match scored just now · 86%')
-        }, 3000)
+        fetch('/api/resume-edit/rescore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ optimizedResumeId: id, editorState: editorStateRef.current }),
+        })
+            .then(async res => ({ ok: res.ok, data: await res.json().catch(() => ({})) }))
+            .then(({ ok, data }) => {
+                setRescoring(false)
+                if (ok && typeof data.score === 'number') {
+                    lastRescoredAtRef.current = Date.now()
+                    setRescoredCaption(`match scored just now · ${data.score}%`)
+                } else {
+                    setRescoredCaption(typeof data.error === 'string' ? data.error : 'Re-score failed — try again')
+                }
+            })
+            .catch(err => {
+                console.error('[resume-edit] rescore failed:', err)
+                setRescoring(false)
+                setRescoredCaption('Re-score failed — try again')
+            })
     }, [rescoring])
 
     const dismissToast = useCallback((id: string) => setToasts(prev => prev.filter(t => t.id !== id)), [])
