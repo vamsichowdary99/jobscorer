@@ -1,5 +1,12 @@
+// resuscore/src/lib/resume-edit/apply.ts
+//
+// Reads/writes a ResumeEditorState at a Proposal's target. Shared between the
+// client (Accept/Undo in useAssistant.ts) and the server (propose_edit's
+// `before` computation in tools.ts) — moved here from
+// components/resume-editor/applyProposal.ts so both sides use the identical
+// addressing logic instead of two copies that could drift.
 import type { ResumeEditorState } from '@/lib/types'
-import type { Proposal } from './types'
+import type { Proposal } from '@/components/resume-editor/types'
 
 /** Reads the current text at a proposal's target from live editor state. */
 export function readProposalTarget(state: ResumeEditorState, target: Proposal['target']): string {

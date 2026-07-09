@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ResumeEditorState } from '@/lib/types'
 import type { Proposal, ProposalTarget, AuditItem, AssistantEvent, AssistantAdapter, AssistantButton } from './types'
 import type { DecorationsMap } from './types'
-import { applyProposal, readProposalTarget } from './applyProposal'
+import { applyProposal, readProposalTarget } from '@/lib/resume-edit/apply'
 import { decorationKey } from './PreviewDecorations'
 import { persistEditorState } from '@/lib/resume-edit/persist'
+import { createApiAssistantAdapter } from './apiAdapter'
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 let seq = 0
@@ -243,7 +244,6 @@ export function useAssistant(
     optimizedResumeId: string | null,
     updatedAt: string | null,
 ): AssistantController {
-    const adapterRef = useRef<AssistantAdapter>(createMockAssistantAdapter(jobTitle))
     const editorStateRef = useRef(editorState)
     editorStateRef.current = editorState
 
@@ -260,6 +260,24 @@ export function useAssistant(
     }, [optimizedResumeId])
 
     const [messages, setMessages] = useState<ChatMessage[]>([])
+    const messagesRef = useRef(messages)
+    messagesRef.current = messages
+
+    // Adapter selection (Plan 21 Phase 2) — env-flagged, default mock until
+    // NEXT_PUBLIC_ASSISTANT_MODE=live is set. Real adapter reads
+    // optimizedResumeId/history through getters (not closed-over values) so it
+    // never goes stale across renders/resume switches.
+    const adapterRef = useRef<AssistantAdapter>(
+        process.env.NEXT_PUBLIC_ASSISTANT_MODE === 'live'
+            ? createApiAssistantAdapter(
+                () => optimizedResumeIdRef.current,
+                () => messagesRef.current
+                    .filter((m): m is ChatMessage & { text: string } => (m.kind === 'user' || m.kind === 'assistant') && typeof m.text === 'string')
+                    .map(m => ({ role: m.kind as 'user' | 'assistant', content: m.text })),
+            )
+            : createMockAssistantAdapter(jobTitle)
+    )
+
     const [isTyping, setIsTyping] = useState(false)
     const [coverage, setCoverage] = useState(74)
     // Fixed session-start baseline for the "Keyword coverage 68 →" header line —
