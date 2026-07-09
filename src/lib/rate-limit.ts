@@ -47,11 +47,14 @@ function limiters() {
     learning: makeLimiter(20, 300, 'rl:learning'),
     // Gap detection runs a cheaper analysis; cap to block hammering the DB/LLM.
     'gap-detection': makeLimiter(30, 60, 'rl:gap-detection'),
+    // Resume Editor Agent — hits OpenAI (paid) per message, same abuse-floor
+    // shape as chat but slightly tighter since each turn can carry more tools.
+    'resume-edit': makeLimiter(15, 60, 'rl:resume-edit'),
   };
   return _limiters;
 }
 
-export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume' | 'chat' | 'build-plan' | 'learning' | 'gap-detection';
+export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume' | 'chat' | 'build-plan' | 'learning' | 'gap-detection' | 'resume-edit';
 
 /**
  * Check the limiter for a user. Returns null if the request is allowed

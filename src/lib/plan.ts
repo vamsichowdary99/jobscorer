@@ -20,14 +20,15 @@ export type Feature =
   | 'company_research'
   | 'build_plan'
   | 'chat'
-  | 'learning_path';
+  | 'learning_path'
+  | 'resume_edit';
 
 const UNLIMITED = -1;
 
 export const PLAN_QUOTAS: Record<Plan, Record<Feature, number>> = {
-  free: { job_search: 5,   score: 3,  optimize: 1,  company_research: 2,  build_plan: 1,  chat: 10,  learning_path: 1 },
-  pro:  { job_search: 60,  score: 30, optimize: 20, company_research: 20, build_plan: 10, chat: 200, learning_path: 15 },
-  max:  { job_search: 200, score: 80, optimize: 40, company_research: 40, build_plan: 30, chat: 600, learning_path: 30 },
+  free: { job_search: 5,   score: 3,  optimize: 1,  company_research: 2,  build_plan: 1,  chat: 10,  learning_path: 1, resume_edit: 10 },
+  pro:  { job_search: 60,  score: 30, optimize: 20, company_research: 20, build_plan: 10, chat: 200, learning_path: 15, resume_edit: 150 },
+  max:  { job_search: 200, score: 80, optimize: 40, company_research: 40, build_plan: 30, chat: 600, learning_path: 30, resume_edit: 500 },
 };
 
 // Stored-resource caps (row counts, not monthly). -1 = unlimited. Mirrors plans/15 §1.
@@ -46,6 +47,7 @@ const FEATURE_LABELS: Record<Feature, { one: string; many: string }> = {
   build_plan:       { one: 'build plan',              many: 'build plans' },
   chat:             { one: 'chat message',            many: 'chat messages' },
   learning_path:    { one: 'learning path',           many: 'learning paths' },
+  resume_edit:      { one: 'resume edit message',     many: 'resume edit messages' },
 };
 
 let _svc: ReturnType<typeof createClient> | null = null;
