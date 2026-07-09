@@ -55,7 +55,7 @@ export async function PATCH(
     const sb = supabase as any
     const { data: row, error: fetchErr } = await sb
         .from('optimized_resumes')
-        .select('id, optimized_data, edit_history, updated_at')
+        .select('id, optimized_data, edit_history, updated_at, suggestions')
         .eq('id', id)
         .eq('user_id', user.id)
         .maybeSingle()
@@ -88,10 +88,17 @@ export async function PATCH(
         ? [...history, { ...edit_entry, at: new Date().toISOString() }].slice(-EDIT_HISTORY_CAP)
         : history
 
+    // Every accepted edit ages the cached AI audit (architecture doc §3): once
+    // edits_since crosses the threshold, /api/resume-edit/audit regenerates
+    // instead of serving the stale cache. No-op if no audit has run yet.
+    const suggestions = edit_entry && row.suggestions
+        ? { ...row.suggestions, edits_since: (row.suggestions.edits_since ?? 0) + 1 }
+        : row.suggestions
+
     const updated_at = new Date().toISOString()
     const { error: updateErr } = await sb
         .from('optimized_resumes')
-        .update({ optimized_data, edit_history, updated_at })
+        .update({ optimized_data, edit_history, updated_at, suggestions })
         .eq('id', id)
         .eq('user_id', user.id)
 

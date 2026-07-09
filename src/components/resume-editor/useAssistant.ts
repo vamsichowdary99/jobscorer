@@ -218,22 +218,14 @@ export function createMockAssistantAdapter(jobTitle: string | null): AssistantAd
     }
 }
 
-// ── Seed audit items ────────────────────────────────────────
-function seedAuditItems(jobTitle: string | null): AuditItem[] {
-    const kw = summaryKeyword(jobTitle)
-    return [
-        { id: 'quantify', text: 'Quantify your first experience bullet', score: 4, done: false },
-        { id: 'bitbucket', text: `Summary could mention "${kw}"`, score: 2, done: false },
-        { id: 'verbs', text: 'Tighten your longest bullet', score: 1, done: false },
-        { id: 'seed-1', text: 'Add measurable impact to a recent project', score: 6, done: true },
-        { id: 'seed-2', text: 'Remove duplicate skill listing', score: 1, done: true },
-    ]
+interface AuditApiItem {
+    title: string
+    prompt: string
+    impact: number
 }
 
-const AUDIT_TRIGGER_TEXT: Record<string, string> = {
-    quantify: 'quantify my internship bullet',
-    bitbucket: 'fix summary keyword',
-    verbs: 'shorten resume',
+interface AuditApiResponse {
+    items: AuditApiItem[]
 }
 
 function prefersReducedMotion(): boolean {
@@ -330,15 +322,38 @@ export function useAssistant(
             coverageStartRef.current = next
             coverageStartSetRef.current = true
         }
-        // editorState is intentionally the only trigger for "did the resume change";
-        // atsKeywords is included so coverage recomputes once real keywords land.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editorState, atsKeywords])
 
     const [floatDelta, setFloatDelta] = useState<{ value: string; key: number } | null>(null)
     const [rescoring, setRescoring] = useState(false)
     const [rescoredCaption, setRescoredCaption] = useState('Not re-scored yet')
-    const [auditItems, setAuditItems] = useState<AuditItem[]>(() => seedAuditItems(jobTitle))
+
+    // Real AI audit (Plan 21 Phase 3) — replaces the mock UI's hardcoded
+    // seedAuditItems(). Fetched (and generated + cached server-side) on mount /
+    // resume switch, same eager-load pattern the mock used. Regardless of
+    // NEXT_PUBLIC_ASSISTANT_MODE: audit/coverage are real data-fetching
+    // features, not part of the chat-adapter mock/live split.
+    const [auditItems, setAuditItems] = useState<AuditItem[]>([])
+    useEffect(() => {
+        if (!optimizedResumeId) { setAuditItems([]); return }
+        let cancelled = false
+        fetch('/api/resume-edit/audit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ optimizedResumeId, editorState: editorStateRef.current }),
+        })
+            .then(res => (res.ok ? res.json() : null))
+            .then((data: AuditApiResponse | null) => {
+                if (cancelled || !data) return
+                setAuditItems((data.items ?? []).map(item => ({
+                    id: `audit-${Math.random().toString(36).slice(2, 10)}`,
+                    text: item.title, score: item.impact, done: false, prompt: item.prompt,
+                })))
+            })
+            .catch(err => console.error('[resume-edit] audit fetch failed:', err))
+        return () => { cancelled = true }
+    }, [optimizedResumeId])
+
     const [activeCard, setActiveCard] = useState<ActiveCard | null>(null)
     const [decorations, setDecorations] = useState<DecorationsMap>(new Map())
     const [toasts, setToasts] = useState<Toast[]>([])
@@ -436,7 +451,7 @@ export function useAssistant(
 
     const onAuditItemClick = useCallback((id: string) => {
         const item = auditItems.find(a => a.id === id)
-        const trigger = item?.prompt ?? AUDIT_TRIGGER_TEXT[id]
+        const trigger = item?.prompt
         if (trigger) sendMessage(trigger)
     }, [sendMessage, auditItems])
 
@@ -509,22 +524,16 @@ export function useAssistant(
     }, [])
 
     const onApplyAll = useCallback(async () => {
-        const pending = auditItems.filter(a => !a.done && (a.prompt ?? AUDIT_TRIGGER_TEXT[a.id]))
+        const pending = auditItems.filter(a => !a.done && a.prompt)
         for (const item of pending) {
             await sleep(300)
-            const trigger = item.prompt ?? AUDIT_TRIGGER_TEXT[item.id]
             // Run the flow silently (no chat bubbles) to get a proposal, then auto-apply it.
+            // If the agent asks a clarifying question instead of proposing (e.g. no
+            // verifiable metric was available), this item is silently skipped rather
+            // than guessed — Apply All never invents a number either.
             let proposal: Proposal | null = null
-            for await (const event of adapterRef.current.send(trigger, editorStateRef.current)) {
+            for await (const event of adapterRef.current.send(item.prompt!, editorStateRef.current)) {
                 if (event.type === 'proposal') proposal = event.proposal
-            }
-            // The mock's "quantify" flow asks a clarifying question on its first send()
-            // instead of yielding a proposal immediately — feed a default number to
-            // unblock it silently. Real (Phase 2+) proposals never hit this branch.
-            if (item.id === 'quantify' && !proposal) {
-                for await (const event of adapterRef.current.send('20', editorStateRef.current)) {
-                    if (event.type === 'proposal') proposal = event.proposal
-                }
             }
             if (proposal) {
                 const before = readProposalTarget(editorStateRef.current, proposal.target)
