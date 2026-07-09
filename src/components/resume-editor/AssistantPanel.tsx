@@ -19,7 +19,7 @@ export function AssistantPanel({ controller: a }: { controller: AssistantControl
             />
 
             <div style={{ padding: '10px 14px 0', flexShrink: 0, maxHeight: '30vh', overflowY: 'auto' }}>
-                <AuditCard items={a.auditItems} allDone={a.allDone} onItemClick={a.onAuditItemClick} onApplyAll={a.onApplyAll} />
+                <AuditCard items={a.auditItems} allDone={a.allDone} coverage={a.coverage} onItemClick={a.onAuditItemClick} onApplyAll={a.onApplyAll} />
             </div>
 
             <MessageList messages={a.messages} isTyping={a.isTyping} />

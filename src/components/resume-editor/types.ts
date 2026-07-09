@@ -27,6 +27,9 @@ export interface AuditItem {
     text: string
     score: number
     done: boolean
+    // Real AI-generated audit items (Plan 21 Phase 3) carry their own trigger
+    // prompt instead of relying on the mock's hardcoded AUDIT_TRIGGER_TEXT map.
+    prompt?: string
 }
 
 export interface AssistantButton {

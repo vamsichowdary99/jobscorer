@@ -4,9 +4,10 @@ import React, { useState } from 'react'
 import { M } from './tokens'
 import type { AuditItem } from './types'
 
-export function AuditCard({ items, allDone, onItemClick, onApplyAll }: {
+export function AuditCard({ items, allDone, coverage, onItemClick, onApplyAll }: {
     items: AuditItem[]
     allDone: boolean
+    coverage: number
     onItemClick: (id: string) => void
     onApplyAll: () => void
 }) {
@@ -17,7 +18,7 @@ export function AuditCard({ items, allDone, onItemClick, onApplyAll }: {
             <div style={{ background: M.greenLight, border: `1px solid ${M.greenBorder}`, borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={M.green} strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
                 <div>
-                    <div style={{ fontSize: '0.875rem', fontWeight: 700, color: M.green, fontFamily: M.fontHeading }}>Nothing left to fix · Coverage 82</div>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 700, color: M.green, fontFamily: M.fontHeading }}>Nothing left to fix · Coverage {coverage}</div>
                     <div style={{ fontSize: '0.75rem', color: M.green, fontFamily: M.fontBody }}>All improvements applied</div>
                 </div>
             </div>

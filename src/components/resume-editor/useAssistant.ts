@@ -8,6 +8,8 @@ import { applyProposal, readProposalTarget } from '@/lib/resume-edit/apply'
 import { decorationKey } from './PreviewDecorations'
 import { persistEditorState } from '@/lib/resume-edit/persist'
 import { createApiAssistantAdapter } from './apiAdapter'
+import { computeKeywordCoverage, type AtsKeyword, type AtsKeywordsData } from '@/lib/resume-edit/coverage'
+import { generateATSText } from '@/lib/resume-edit/atsText'
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 let seq = 0
@@ -36,6 +38,11 @@ export interface AssistantController {
     coverage: number
     coverageStart: number
     coverageMax: number
+    // Exposed so callers outside this hook (page.tsx's manual section-modal
+    // save) can compute a coverage snapshot for their own edit_history entries
+    // using the same computeKeywordCoverage(atsKeywords, generateATSText(state))
+    // pure functions, without racing this hook's own async state updates.
+    atsKeywords: AtsKeyword[]
     floatDelta: { value: string; key: number } | null
     rescoring: boolean
     rescoredCaption: string
@@ -279,16 +286,58 @@ export function useAssistant(
     )
 
     const [isTyping, setIsTyping] = useState(false)
-    const [coverage, setCoverage] = useState(74)
+
+    // Real keyword coverage (Plan 21 Phase 3 / architecture doc §5 Layer 1) —
+    // replaces the mock UI's hardcoded 68/74/82. Keywords are fetched (and
+    // generated + cached server-side, once ever per artifact) on mount / resume
+    // switch; coverage recomputes reactively off editorState so it stays correct
+    // whether the edit came from AI apply/undo or a manual section-modal save.
+    const [atsKeywords, setAtsKeywords] = useState<AtsKeyword[]>([])
+    const atsKeywordsRef = useRef<AtsKeyword[]>([])
+    atsKeywordsRef.current = atsKeywords
+
+    const [coverage, setCoverage] = useState(0)
     // Fixed session-start baseline for the "Keyword coverage 68 →" header line —
-    // captured once and never updated, so the arrow always shows "where this
-    // session began", not a value that shifts on every apply.
-    const coverageStartRef = useRef(68)
-    const coverageRef = useRef(74)
+    // captured once (the first time real keywords are available) and never
+    // updated again, so the arrow always shows "where this session began".
+    const coverageStartRef = useRef(0)
+    const coverageStartSetRef = useRef(false)
+    const coverageRef = useRef(0)
     coverageRef.current = coverage
+
+    useEffect(() => {
+        coverageStartSetRef.current = false
+        if (!optimizedResumeId) { setAtsKeywords([]); return }
+        let cancelled = false
+        fetch('/api/resume-edit/keywords', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ optimizedResumeId }),
+        })
+            .then(res => (res.ok ? res.json() : null))
+            .then((data: AtsKeywordsData | null) => {
+                if (cancelled || !data) return
+                setAtsKeywords(data.keywords ?? [])
+            })
+            .catch(err => console.error('[resume-edit] keyword fetch failed:', err))
+        return () => { cancelled = true }
+    }, [optimizedResumeId])
+
+    useEffect(() => {
+        const next = computeKeywordCoverage(atsKeywords, generateATSText(editorState))
+        setCoverage(next)
+        if (!coverageStartSetRef.current && atsKeywords.length > 0) {
+            coverageStartRef.current = next
+            coverageStartSetRef.current = true
+        }
+        // editorState is intentionally the only trigger for "did the resume change";
+        // atsKeywords is included so coverage recomputes once real keywords land.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editorState, atsKeywords])
+
     const [floatDelta, setFloatDelta] = useState<{ value: string; key: number } | null>(null)
     const [rescoring, setRescoring] = useState(false)
-    const [rescoredCaption, setRescoredCaption] = useState('match scored 2m ago · 79%')
+    const [rescoredCaption, setRescoredCaption] = useState('Not re-scored yet')
     const [auditItems, setAuditItems] = useState<AuditItem[]>(() => seedAuditItems(jobTitle))
     const [activeCard, setActiveCard] = useState<ActiveCard | null>(null)
     const [decorations, setDecorations] = useState<DecorationsMap>(new Map())
@@ -386,9 +435,10 @@ export function useAssistant(
     const sendChip = useCallback((chip: string) => sendMessage(chip), [sendMessage])
 
     const onAuditItemClick = useCallback((id: string) => {
-        const trigger = AUDIT_TRIGGER_TEXT[id]
+        const item = auditItems.find(a => a.id === id)
+        const trigger = item?.prompt ?? AUDIT_TRIGGER_TEXT[id]
         if (trigger) sendMessage(trigger)
-    }, [sendMessage])
+    }, [sendMessage, auditItems])
 
     // Fire-and-forget PATCH — one per explicit user action (apply/undo), no debounce.
     // No-ops when the loaded resume isn't a saved optimized_resumes row.
@@ -413,9 +463,10 @@ export function useAssistant(
         flash(proposal.target)
 
         const cur = coverageRef.current
-        const next = Math.min(82, cur + proposal.est)
+        const next = computeKeywordCoverage(atsKeywordsRef.current, generateATSText(nextState))
+        const delta = next - cur
         setCoverage(next)
-        showFloat(`+${proposal.est}`)
+        showFloat(delta === 0 ? '±0' : delta > 0 ? `+${delta}` : `${delta}`)
 
         if (proposal.auditId) setAuditItems(prev => prev.map(a => (a.id === proposal.auditId ? { ...a, done: true } : a)))
 
@@ -428,7 +479,7 @@ export function useAssistant(
         const undo = () => {
             const reverted = applyProposal(editorStateRef.current, proposal, previousValue)
             setEditorState(reverted)
-            const coverageAfterUndo = Math.max(0, coverageRef.current - proposal.est)
+            const coverageAfterUndo = computeKeywordCoverage(atsKeywordsRef.current, generateATSText(reverted))
             setCoverage(coverageAfterUndo)
             if (proposal.auditId) setAuditItems(prev => prev.map(a => (a.id === proposal.auditId ? { ...a, done: false } : a)))
             setToasts(prev => prev.filter(t => t.id !== toastId))
@@ -439,7 +490,7 @@ export function useAssistant(
             })
         }
 
-        addMessage({ kind: 'applied', text: proposal.sectionLabel, pts: proposal.est, onUndo: undo })
+        addMessage({ kind: 'applied', text: proposal.sectionLabel, pts: delta, onUndo: undo })
         setToasts(prev => [...prev, { id: toastId, text: `Applied — ${proposal.sectionLabel}`, onUndo: undo }])
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== toastId)), 6000)
 
@@ -458,31 +509,38 @@ export function useAssistant(
     }, [])
 
     const onApplyAll = useCallback(async () => {
-        const pending = auditItems.filter(a => !a.done && AUDIT_TRIGGER_TEXT[a.id])
+        const pending = auditItems.filter(a => !a.done && (a.prompt ?? AUDIT_TRIGGER_TEXT[a.id]))
         for (const item of pending) {
             await sleep(300)
-            const trigger = AUDIT_TRIGGER_TEXT[item.id]
-            // Run the scripted flow silently (no chat bubbles) to get a proposal, then auto-apply it.
+            const trigger = item.prompt ?? AUDIT_TRIGGER_TEXT[item.id]
+            // Run the flow silently (no chat bubbles) to get a proposal, then auto-apply it.
             let proposal: Proposal | null = null
             for await (const event of adapterRef.current.send(trigger, editorStateRef.current)) {
                 if (event.type === 'proposal') proposal = event.proposal
             }
-            // The "quantify" flow asks a clarifying question on its first send() instead of
-            // yielding a proposal immediately — feed a default number to unblock it silently.
+            // The mock's "quantify" flow asks a clarifying question on its first send()
+            // instead of yielding a proposal immediately — feed a default number to
+            // unblock it silently. Real (Phase 2+) proposals never hit this branch.
             if (item.id === 'quantify' && !proposal) {
                 for await (const event of adapterRef.current.send('20', editorStateRef.current)) {
                     if (event.type === 'proposal') proposal = event.proposal
                 }
             }
             if (proposal) {
-                setEditorState(s => applyProposal(s, proposal!))
-                const cur = coverageRef.current
-                setCoverage(Math.min(82, cur + proposal.est))
+                const before = readProposalTarget(editorStateRef.current, proposal.target)
+                const nextState = applyProposal(editorStateRef.current, proposal)
+                setEditorState(nextState)
+                const next = computeKeywordCoverage(atsKeywordsRef.current, generateATSText(nextState))
+                setCoverage(next)
                 setAuditItems(prev => prev.map(a => (a.id === item.id ? { ...a, done: true } : a)))
+                persist(nextState, {
+                    section: proposal.target.section, operation: 'replace', index: proposal.target.index,
+                    before, after: proposal.after, rationale: proposal.why, source: 'ai', coverage: next,
+                })
             }
         }
         setActiveCard(null)
-    }, [auditItems, setEditorState])
+    }, [auditItems, setEditorState, persist])
 
     const onRescore = useCallback(() => {
         if (rescoring) return
@@ -498,7 +556,7 @@ export function useAssistant(
     const allDone = auditItems.every(a => a.done)
 
     return {
-        messages, isTyping, coverage, coverageStart: coverageStartRef.current, coverageMax: 82, floatDelta, rescoring, rescoredCaption,
+        messages, isTyping, coverage, coverageStart: coverageStartRef.current, coverageMax: 100, atsKeywords, floatDelta, rescoring, rescoredCaption,
         auditItems, allDone, activeCard, decorations, toasts, inputValue, setInputValue,
         sendMessage: (t: string) => sendMessage(t), sendChip, onAuditItemClick, onApplyAll, onRescore,
         applyActiveCard, rejectActiveCard, editActiveCard, dismissToast,

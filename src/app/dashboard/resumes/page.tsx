@@ -11,6 +11,8 @@ import { A } from '@/components/resume-editor/tokens'
 import { AssistantPanel } from '@/components/resume-editor/AssistantPanel'
 import { useAssistant } from '@/components/resume-editor/useAssistant'
 import { persistEditorState } from '@/lib/resume-edit/persist'
+import { generateATSText } from '@/lib/resume-edit/atsText'
+import { computeKeywordCoverage } from '@/lib/resume-edit/coverage'
 import { M } from '@/lib/meridianTokens'
 
 interface SavedResumeEntry {
@@ -209,47 +211,6 @@ function sectionSummaryText(sectionKey: string, state: ResumeEditorState): strin
     if (sectionKey === 'achievements') return state.achievements[0] || 'Add awards & recognitions'
     if (sectionKey === 'leadership') return state.leadership[0]?.org || 'Add clubs, orgs & roles'
     return ''
-}
-
-function generateATSText(state: ResumeEditorState): string {
-    const lines: string[] = []
-    if (state.profile.name) lines.push(state.profile.name.toUpperCase())
-    const contact = [state.profile.email, state.profile.phone, state.profile.location, state.profile.linkedin, state.profile.github].filter(Boolean)
-    if (contact.length) lines.push(contact.join(' | '))
-    lines.push('')
-    if (state.summary) { lines.push('SUMMARY'); lines.push(state.summary); lines.push('') }
-    if (state.experience.length) {
-        lines.push('EXPERIENCE')
-        for (const exp of state.experience) {
-            lines.push(`${exp.title} | ${exp.company}`)
-            if (exp.startDate || exp.endDate) lines.push(`${exp.startDate || ''} – ${exp.endDate || 'Present'}`)
-            for (const b of exp.bullets) lines.push(`- ${b}`)
-            lines.push('')
-        }
-    }
-    if (state.education.length) {
-        lines.push('EDUCATION')
-        for (const edu of state.education) {
-            lines.push(`${edu.degree} | ${edu.school}`)
-            if (edu.date) lines.push(edu.date)
-            if (edu.gpa) lines.push(`GPA: ${edu.gpa}`)
-        }
-        lines.push('')
-    }
-    const allSkills = [state.skills.languages, state.skills.tools, state.skills.frameworks, state.skills.soft].filter(Boolean).join(', ')
-    if (allSkills) { lines.push('SKILLS'); lines.push(allSkills); lines.push('') }
-    if (state.projects.length) {
-        lines.push('PROJECTS')
-        for (const proj of state.projects) {
-            lines.push(proj.name)
-            if (proj.tech) lines.push(`Tech: ${proj.tech}`)
-            for (const b of proj.bullets) lines.push(`- ${b}`)
-            lines.push('')
-        }
-    }
-    if (state.certifications.length) { lines.push('CERTIFICATIONS'); lines.push(...state.certifications); lines.push('') }
-    if (state.achievements.length) { lines.push('ACHIEVEMENTS'); lines.push(...state.achievements); lines.push('') }
-    return lines.join('\n')
 }
 
 // ── Section Modal Shell ─────────────────────────────────────
@@ -4823,17 +4784,21 @@ export default function ResumesPage() {
     )
     // Manual section-modal saves (ActiveModal onSaved) — Plan 21 Phase 1 persistence.
     // No-ops in raw-resume / localStorage-draft mode (selectedEntry is null there).
+    // Coverage is computed here (not read from assistant.coverage) because that
+    // state hasn't re-rendered yet at this point — update(local) just scheduled
+    // it — so reading it now would stamp the PRE-edit value onto edit_history.
     const saveManualEdit = useCallback((section: string, before: unknown, after: unknown, nextState: ResumeEditorState) => {
         if (!selectedEntry?.id) return
         const id = selectedEntry.id
+        const coverage = computeKeywordCoverage(assistant.atsKeywords, generateATSText(nextState))
         void persistEditorState(id, nextState, {
-            section, operation: 'replace', before, after, source: 'manual', coverage: assistant.coverage,
+            section, operation: 'replace', before, after, source: 'manual', coverage,
         }, selectedEntry.updated_at).then(result => {
             if (result.ok || result.stale) {
                 setSelectedEntry(prev => (prev && prev.id === id ? { ...prev, updated_at: result.updated_at } : prev))
             }
         })
-    }, [selectedEntry, assistant.coverage])
+    }, [selectedEntry, assistant.atsKeywords])
     // ── Mobile state ──
     const [isMobile, setIsMobile] = useState(false)
     const [mobileTab, setMobileTab] = useState<'sections' | 'templates'>('sections')
