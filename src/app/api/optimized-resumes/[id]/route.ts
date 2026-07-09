@@ -67,7 +67,11 @@ export async function PATCH(
         return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    if (expected_updated_at && expected_updated_at !== row.updated_at) {
+    // Compare as instants, not strings: Postgres/PostgREST returns "...+00:00"
+    // while this route's own JSON responses use Date#toISOString's "...Z" — the
+    // same instant, different suffix, so a raw string compare here would flag
+    // every save after the first one as stale.
+    if (expected_updated_at && new Date(expected_updated_at).getTime() !== new Date(row.updated_at).getTime()) {
         return NextResponse.json({ stale: true, updated_at: row.updated_at }, { status: 409 })
     }
 
