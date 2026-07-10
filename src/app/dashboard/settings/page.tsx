@@ -111,6 +111,7 @@ const USAGE_FEATURE_LABELS: Record<string, string> = {
     build_plan: 'Build Plans',
     chat: 'AI Chat Messages',
     learning_path: 'Learning Paths',
+    cover_letter: 'Cover Letters',
 }
 
 type PlanUsage = { plan: 'free' | 'pro' | 'max'; usage: { feature: string; used: number; limit: number }[] }

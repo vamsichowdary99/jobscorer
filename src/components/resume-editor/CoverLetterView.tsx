@@ -156,12 +156,13 @@ function sanitizeForFilename(s: string): string {
 interface ActionButtonProps {
     onClick: () => void
     disabled?: boolean
-    variant?: 'primary' | 'secondary'
+    variant?: 'primary' | 'secondary' | 'error'
     children: React.ReactNode
 }
 
 function ActionButton({ onClick, disabled, variant = 'secondary', children }: ActionButtonProps) {
     const isPrimary = variant === 'primary'
+    const isError = variant === 'error'
     return (
         <button
             onClick={onClick}
@@ -169,10 +170,10 @@ function ActionButton({ onClick, disabled, variant = 'secondary', children }: Ac
             style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '9px 16px', borderRadius: 8,
-                background: isPrimary ? (disabled ? '#334155' : `linear-gradient(135deg, ${M.accent}, ${M.accentMid})`) : M.white,
-                color: isPrimary ? '#fff' : M.textMuted,
-                border: isPrimary ? 'none' : `1.5px solid ${M.border}`,
-                fontWeight: isPrimary ? 700 : 600, fontSize: '0.8125rem',
+                background: isError ? M.red : isPrimary ? (disabled ? '#334155' : `linear-gradient(135deg, ${M.accent}, ${M.accentMid})`) : M.white,
+                color: isPrimary || isError ? '#fff' : M.textMuted,
+                border: isPrimary || isError ? 'none' : `1.5px solid ${M.border}`,
+                fontWeight: isPrimary || isError ? 700 : 600, fontSize: '0.8125rem',
                 cursor: disabled ? 'wait' : 'pointer', fontFamily: M.fontBody,
                 boxShadow: isPrimary && !disabled ? `0 2px 10px -2px ${M.accent}66` : 'none',
                 transition: 'all 0.15s',
@@ -199,6 +200,7 @@ export function CoverLetterView({ controller, entry, job, profileState, compact 
     const { letter, status, error, generate } = controller
     const [copied, setCopied] = useState(false)
     const [pdfLoading, setPdfLoading] = useState(false)
+    const [pdfError, setPdfError] = useState(false)
 
     const handleCopy = useCallback(() => {
         if (!letter) return
@@ -212,6 +214,7 @@ export function CoverLetterView({ controller, entry, job, profileState, compact 
     const handleDownloadPdf = useCallback(async () => {
         if (!letter) return
         setPdfLoading(true)
+        setPdfError(false)
         try {
             const [renderer, pdfDoc] = await Promise.all([
                 import('@react-pdf/renderer'),
@@ -229,6 +232,8 @@ export function CoverLetterView({ controller, entry, job, profileState, compact 
             URL.revokeObjectURL(url)
         } catch (err) {
             console.error('Cover letter PDF error:', err)
+            setPdfError(true)
+            setTimeout(() => setPdfError(false), 3000)
         } finally {
             setPdfLoading(false)
         }
@@ -274,9 +279,9 @@ export function CoverLetterView({ controller, entry, job, profileState, compact 
                 )}
                 {copied ? 'Copied' : 'Copy'}
             </ActionButton>
-            <ActionButton onClick={handleDownloadPdf} disabled={pdfLoading} variant="primary">
+            <ActionButton onClick={handleDownloadPdf} disabled={pdfLoading} variant={pdfError ? 'error' : 'primary'}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
-                {pdfLoading ? 'Generating…' : 'Download PDF'}
+                {pdfLoading ? 'Generating…' : pdfError ? 'Failed — Retry' : 'Download PDF'}
             </ActionButton>
         </div>
     )
