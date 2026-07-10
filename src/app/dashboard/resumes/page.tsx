@@ -10,6 +10,7 @@ import { usePreviewDecorations, decorationKey, PreviewDecorationsProvider } from
 import { A } from '@/components/resume-editor/tokens'
 import { AssistantPanel } from '@/components/resume-editor/AssistantPanel'
 import { useAssistant } from '@/components/resume-editor/useAssistant'
+import { CoverLetterView, useCoverLetter } from '@/components/resume-editor/CoverLetterView'
 import { persistEditorState } from '@/lib/resume-edit/persist'
 import { generateATSText } from '@/lib/resume-edit/atsText'
 import { computeKeywordCoverage } from '@/lib/resume-edit/coverage'
@@ -4288,14 +4289,19 @@ function TemplateSwitcher({
 
 function MeridianPreviewPanel({
     state, templateId, onTemplateChange, onMoreTemplates, downloadButton,
+    coverLetterController, entry, job, profileState,
 }: {
     state: ResumeEditorState
     templateId: string
     onTemplateChange: (t: string) => void
     onMoreTemplates: () => void
     downloadButton: React.ReactNode
+    coverLetterController: ReturnType<typeof useCoverLetter>
+    entry: { resume_id: string; job_id: string } | null
+    job: { title?: string | null; company?: string | null; location?: string | null } | null
+    profileState: ResumeEditorState['profile']
 }) {
-    const [desktopPreviewTab, setDesktopPreviewTab] = useState<'recruiters' | 'ats'>('recruiters')
+    const [desktopPreviewTab, setDesktopPreviewTab] = useState<'recruiters' | 'cover-letter'>('recruiters')
 
     const renderPreview = () => {
         switch (templateId) {
@@ -4365,7 +4371,7 @@ function MeridianPreviewPanel({
             {/* Recruiter / ATS tab bar */}
             <div style={{ flexShrink: 0, background: M.white, borderBottom: `1px solid ${M.border}`, padding: '8px 20px', display: 'flex', gap: 6 }}>
                 <button onClick={() => setDesktopPreviewTab('recruiters')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: desktopPreviewTab === 'recruiters' ? '#0f172a' : 'transparent', color: desktopPreviewTab === 'recruiters' ? '#fff' : M.textMuted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What Recruiters See</button>
-                <button onClick={() => setDesktopPreviewTab('ats')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: desktopPreviewTab === 'ats' ? '#0f172a' : 'transparent', color: desktopPreviewTab === 'ats' ? '#fff' : M.textMuted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What ATS Sees</button>
+                <button onClick={() => setDesktopPreviewTab('cover-letter')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: desktopPreviewTab === 'cover-letter' ? '#0f172a' : 'transparent', color: desktopPreviewTab === 'cover-letter' ? '#fff' : M.textMuted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>Cover Letter</button>
             </div>
 
             {/* Paper */}
@@ -4383,12 +4389,7 @@ function MeridianPreviewPanel({
                     </div>
                 </div>
             ) : (
-                <div style={{ flex: 1, overflowY: 'auto', padding: '28px', background: M.surface }}>
-                    <div style={{ maxWidth: 700, margin: '0 auto', background: '#fff', borderRadius: 8, padding: 24, boxShadow: '0 2px 12px rgba(15,30,64,0.08)', fontFamily: M.fontBody }}>
-                        <div style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#94a3b8', marginBottom: 10 }}>ATS Plain Text Extract</div>
-                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, color: '#374151', lineHeight: 1.7, margin: 0 }}>{generateATSText(state)}</pre>
-                    </div>
-                </div>
+                <CoverLetterView controller={coverLetterController} entry={entry} job={job} profileState={profileState} />
             )}
         </div>
     )
@@ -4782,6 +4783,9 @@ export default function ResumesPage() {
         editorState, setEditorState, selectedEntry?.job?.title ?? null,
         selectedEntry?.id ?? null, selectedEntry?.updated_at ?? null,
     )
+    // Shared between the desktop panel and the mobile overlay so cache state
+    // and the in-flight guard survive a tab switch — see CoverLetterView.tsx.
+    const coverLetterController = useCoverLetter(selectedEntry?.resume_id ?? null, selectedEntry?.job_id ?? null)
     // Manual section-modal saves (ActiveModal onSaved) — Plan 21 Phase 1 persistence.
     // No-ops in raw-resume / localStorage-draft mode (selectedEntry is null there).
     // Coverage is computed here (not read from assistant.coverage) because that
@@ -4804,7 +4808,7 @@ export default function ResumesPage() {
     const [mobileTab, setMobileTab] = useState<'sections' | 'templates'>('sections')
     const [showAllResumesSheet, setShowAllResumesSheet] = useState(false)
     const [showMobilePreview, setShowMobilePreview] = useState(false)
-    const [previewTab, setPreviewTab] = useState<'recruiters' | 'ats'>('recruiters')
+    const [previewTab, setPreviewTab] = useState<'recruiters' | 'cover-letter'>('recruiters')
     const [mobileSrcDropOpen, setMobileSrcDropOpen] = useState(false)
     const mobileSrcDropRef = useRef<HTMLDivElement>(null)
     const [previewingTemplate, setPreviewingTemplate] = useState<{ id: string; name: string; imageUrl: string } | null>(null)
@@ -5360,7 +5364,7 @@ export default function ResumesPage() {
                             {/* Recruiter / ATS tabs */}
                             <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '8px 14px', display: 'flex', gap: 6, flexShrink: 0 }}>
                                 <button onClick={() => setPreviewTab('recruiters')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'recruiters' ? '#0f172a' : 'transparent', color: previewTab === 'recruiters' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What Recruiters See</button>
-                                <button onClick={() => setPreviewTab('ats')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'ats' ? '#0f172a' : 'transparent', color: previewTab === 'ats' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What ATS Sees</button>
+                                <button onClick={() => setPreviewTab('cover-letter')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'cover-letter' ? '#0f172a' : 'transparent', color: previewTab === 'cover-letter' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>Cover Letter</button>
                             </div>
                             {previewTab === 'recruiters' ? (
                                 <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#f1f5f9', padding: '8px 6px 16px' }}>
@@ -5371,12 +5375,7 @@ export default function ResumesPage() {
                                     </div>
                                 </div>
                             ) : (
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', background: '#f8fafc' }}>
-                                    <div style={{ background: '#fff', borderRadius: 8, padding: 14, boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
-                                        <div style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#94a3b8', marginBottom: 10 }}>ATS Plain Text Extract</div>
-                                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 11.5, color: '#374151', lineHeight: 1.7, margin: 0 }}>{generateATSText(editorState)}</pre>
-                                    </div>
-                                </div>
+                                <CoverLetterView controller={coverLetterController} entry={selectedEntry} job={meridianJob} profileState={editorState.profile} compact />
                             )}
                             <div style={{ padding: '10px 14px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, flexShrink: 0 }}>
                                 <button onClick={() => { setShowMobilePreview(false); setShowTemplatePicker(true) }} style={{ flex: 1, padding: 10, border: `1.5px solid ${M.border}`, borderRadius: 9, background: '#fff', fontSize: '12.5px', fontWeight: 600, color: M.textMuted, cursor: 'pointer', fontFamily: M.fontBody }}>Change Template</button>
@@ -5625,6 +5624,10 @@ export default function ResumesPage() {
                         }}
                         onMoreTemplates={() => setShowTemplatePicker(true)}
                         downloadButton={null}
+                        coverLetterController={coverLetterController}
+                        entry={selectedEntry}
+                        job={meridianJob}
+                        profileState={editorState.profile}
                     />
                 </PreviewDecorationsProvider>
             </div>
