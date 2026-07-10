@@ -50,11 +50,14 @@ function limiters() {
     // Resume Editor Agent — hits OpenAI (paid) per message, same abuse-floor
     // shape as chat but slightly tighter since each turn can carry more tools.
     'resume-edit': makeLimiter(15, 60, 'rl:resume-edit'),
+    // Cover letter generation hits OpenAI (paid) per call — same abuse-floor
+    // window as optimize/build-plan since it's an equivalent pre-generation flow.
+    'cover-letter': makeLimiter(20, 300, 'rl:cover-letter'),
   };
   return _limiters;
 }
 
-export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume' | 'chat' | 'build-plan' | 'learning' | 'gap-detection' | 'resume-edit';
+export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume' | 'chat' | 'build-plan' | 'learning' | 'gap-detection' | 'resume-edit' | 'cover-letter';
 
 /**
  * Check the limiter for a user. Returns null if the request is allowed

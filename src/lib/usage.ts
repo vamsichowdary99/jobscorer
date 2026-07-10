@@ -65,6 +65,7 @@ const ACTION_ESTIMATE: Record<string, { model: string; prompt: number; completio
   company_research: { model: 'gpt-4.1-mini', prompt: 8000, completion: 1500 },
   build_plan:       { model: 'gpt-4.1',      prompt: 4000, completion: 2000 },
   learning_path:    { model: 'gpt-4.1',      prompt: 3000, completion: 2500 },
+  cover_letter:     { model: 'gpt-4.1-mini', prompt: 4000, completion: 600 },
 };
 
 /**
