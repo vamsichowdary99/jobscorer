@@ -32,8 +32,14 @@ export function useCoverLetter(resumeId: string | null, jobId: string | null): C
 
     // Keeps idsRef in sync for the staleness check inside generate()'s async
     // callback — a plain sync effect, no setState, so it's a one-way mirror.
+    // Also clears inFlightRef: it's a single guard shared by the whole hook,
+    // not scoped per pair, so without this a click on a newly-selected resume
+    // would be silently dropped while a stale fetch for the OLD resume is
+    // still in flight (that stale response is separately neutralized by
+    // isStale() below, so clearing the guard here is safe).
     useEffect(() => {
         idsRef.current = { resumeId, jobId }
+        inFlightRef.current = false
     }, [resumeId, jobId])
 
     // Reset state when the selected (resume, job) pair changes. Adjusted

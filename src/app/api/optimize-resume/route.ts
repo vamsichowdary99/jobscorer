@@ -125,6 +125,22 @@ export async function POST(req: NextRequest) {
       }
       // Fresh (non-cached) optimization ran the n8n AI workflow — log its cost.
       void logEstimatedUsage({ userId: user_id, feature: 'optimize' })
+      // optimized_data just changed, so any previously-generated cover letter
+      // was written against the old content and is now stale. The n8n
+      // upsert above only writes {optimized_data, keyword_alignment_score,
+      // optimization_notes, ai_feedback} (resolution=merge-duplicates), so it
+      // never touches cover_letter — clear it here or the Cover Letter tab
+      // would keep serving the outdated letter.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: clearLetterError } = await (supabase as any)
+        .from('optimized_resumes')
+        .update({ cover_letter: null })
+        .eq('user_id', user_id)
+        .eq('resume_id', resume_id)
+        .eq('job_id', job_id)
+      if (clearLetterError) {
+        console.error('[/api/optimize-resume] failed to clear stale cover_letter:', clearLetterError)
+      }
       return NextResponse.json(data)
     } catch (fetchError: any) {
       clearTimeout(timeout)

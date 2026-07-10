@@ -41,7 +41,17 @@ export async function POST(req: NextRequest) {
       .eq('job_id', job_id)
       .single()
 
-    if (rowError || !row) {
+    // PGRST116 = no matching row ("not optimized yet") — the expected miss.
+    // Any other error is a real DB/network failure and must not be reported
+    // as "not_optimized", which would wrongly send the user to re-optimize.
+    if (rowError && rowError.code !== 'PGRST116') {
+      console.error('[/api/cover-letter] cache lookup failed:', rowError)
+      return NextResponse.json(
+        { success: false, error: 'Could not check cover letter cache' },
+        { status: 500 }
+      )
+    }
+    if (!row) {
       return NextResponse.json(
         { success: false, error: 'not_optimized' },
         { status: 409 }
@@ -57,86 +67,98 @@ export async function POST(req: NextRequest) {
     const overQuota = await checkQuota(user_id, 'cover_letter')
     if (overQuota) return overQuota
 
-    // ── Forward to n8n cover-letter webhook ───────────────────
-    const webhookUrl = process.env.N8N_COVER_LETTER_WEBHOOK_URL
-
-    if (!webhookUrl) {
-      return NextResponse.json(
-        { success: false, error: 'N8N_COVER_LETTER_WEBHOOK_URL not configured' },
-        { status: 500 }
-      )
-    }
-
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 120_000)
+    // Refunded in the finally block below unless generation actually succeeds —
+    // otherwise a timeout or n8n failure permanently burns the user's monthly
+    // credit for a letter they never received.
+    let generated = false
 
     try {
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, resume_id, job_id }),
-        signal: controller.signal,
-      })
+      // ── Forward to n8n cover-letter webhook ───────────────────
+      const webhookUrl = process.env.N8N_COVER_LETTER_WEBHOOK_URL
 
-      clearTimeout(timeout)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        // Log full upstream detail server-side; return a generic message.
-        console.error('[/api/cover-letter] n8n error:', response.status, errorText)
+      if (!webhookUrl) {
         return NextResponse.json(
-          { success: false, error: 'Cover letter generation failed' },
-          { status: response.status }
+          { success: false, error: 'N8N_COVER_LETTER_WEBHOOK_URL not configured' },
+          { status: 500 }
         )
       }
 
-      const rawText = await response.text()
-      if (!rawText || !rawText.trim()) {
-        return NextResponse.json(
-          { success: false, error: 'n8n workflow returned empty response — check n8n execution logs for the error' },
-          { status: 502 }
-        )
-      }
-      let data: any
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 120_000)
+
       try {
-        data = JSON.parse(rawText)
-      } catch {
-        return NextResponse.json(
-          { success: false, error: `n8n returned non-JSON response: ${rawText.slice(0, 200)}` },
-          { status: 502 }
-        )
-      }
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id, resume_id, job_id }),
+          signal: controller.signal,
+        })
 
-      // The optimized_resumes row was deleted between our cache check and the
-      // n8n PATCH — same guard as the workflow's own orphan check.
-      if (data.error === 'not_optimized') {
-        return NextResponse.json(
-          { success: false, error: 'not_optimized' },
-          { status: 409 }
-        )
-      }
+        clearTimeout(timeout)
 
-      if (!data.success) {
-        console.error('[/api/cover-letter] n8n returned failure:', data)
-        return NextResponse.json(
-          { success: false, error: data.error || 'Cover letter generation failed' },
-          { status: 502 }
-        )
-      }
+        if (!response.ok) {
+          const errorText = await response.text()
+          // Log full upstream detail server-side; return a generic message.
+          console.error('[/api/cover-letter] n8n error:', response.status, errorText)
+          return NextResponse.json(
+            { success: false, error: 'Cover letter generation failed' },
+            { status: response.status }
+          )
+        }
 
-      // Fresh (non-cached) generation ran the n8n AI workflow — log its cost.
-      void logEstimatedUsage({ userId: user_id, feature: 'cover_letter' })
-      return NextResponse.json({ success: true, cover_letter: data.cover_letter })
-    } catch (fetchError: any) {
-      clearTimeout(timeout)
+        const rawText = await response.text()
+        if (!rawText || !rawText.trim()) {
+          return NextResponse.json(
+            { success: false, error: 'n8n workflow returned empty response — check n8n execution logs for the error' },
+            { status: 502 }
+          )
+        }
+        let data: any
+        try {
+          data = JSON.parse(rawText)
+        } catch {
+          return NextResponse.json(
+            { success: false, error: `n8n returned non-JSON response: ${rawText.slice(0, 200)}` },
+            { status: 502 }
+          )
+        }
 
-      if (fetchError.name === 'AbortError') {
-        return NextResponse.json(
-          { success: false, error: 'Cover letter request timed out after 120 seconds' },
-          { status: 504 }
-        )
+        // The optimized_resumes row was deleted between our cache check and the
+        // n8n PATCH — same guard as the workflow's own orphan check.
+        if (data.error === 'not_optimized') {
+          return NextResponse.json(
+            { success: false, error: 'not_optimized' },
+            { status: 409 }
+          )
+        }
+
+        if (!data.success) {
+          console.error('[/api/cover-letter] n8n returned failure:', data)
+          return NextResponse.json(
+            { success: false, error: data.error || 'Cover letter generation failed' },
+            { status: 502 }
+          )
+        }
+
+        // Fresh (non-cached) generation ran the n8n AI workflow — log its cost.
+        generated = true
+        void logEstimatedUsage({ userId: user_id, feature: 'cover_letter' })
+        return NextResponse.json({ success: true, cover_letter: data.cover_letter })
+      } catch (fetchError: any) {
+        clearTimeout(timeout)
+
+        if (fetchError.name === 'AbortError') {
+          return NextResponse.json(
+            { success: false, error: 'Cover letter request timed out after 120 seconds' },
+            { status: 504 }
+          )
+        }
+        throw fetchError
       }
-      throw fetchError
+    } finally {
+      if (!generated) {
+        void checkQuota(user_id, 'cover_letter', -1)
+      }
     }
   } catch (error: any) {
     console.error('Cover letter proxy error:', error)
