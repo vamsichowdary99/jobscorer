@@ -581,6 +581,17 @@ export interface OptimizedResume {
     ats_keywords: unknown | null   // Phase 3: {keywords:[{term,weight,variants[]}], extracted_at}
     live_score: unknown | null     // Phase 3: {score, matched_skills, missing_skills, reasoning, scored_at}
     suggestions: unknown | null    // Phase 3: cached AI audit {items[], generated_at, edits_since}
+    cover_letter: CoverLetter | null // Plan 22: AI cover letter, generated on-demand. See migrations/12-cover-letter.sql.
+}
+
+// AI cover letter, generated on-demand by the "Cover Letter Generator" n8n workflow.
+export interface CoverLetter {
+    greeting: string
+    body_paragraphs: string[]
+    closing: string
+    signature: string
+    generated_at: string
+    model: string
 }
 
 // ── Build Plan (recommendation popup before resume creation) ──────────────
