@@ -489,12 +489,16 @@ const MODAL_CSS = `
 }
 .bp-header__sub { font-size: 13.5px; color: #64748B; line-height: 1.6; margin: 0; }
 
+/* Desktop: basis 'auto' (not 0) so the card grows to fit content up to max-height
+   90vh, then the body scrolls. With basis 0 these collapse to 0 height in a
+   content-sized flex column, leaving only the footer visible. Mobile overrides
+   both (flex:1 / flex:none) in the @media block below, so it's unaffected. */
 .bp-scroll-body {
-    flex: 1 1 0; min-height: 0; overflow: hidden;
+    flex: 1 1 auto; min-height: 0; overflow: hidden;
     display: flex; flex-direction: column;
 }
 .bp-body {
-    flex: 1 1 0; min-height: 0;
+    flex: 1 1 auto; min-height: 0;
     overflow-y: auto; padding: 4px 30px 8px;
     display: flex; flex-direction: column; gap: 22px;
 }

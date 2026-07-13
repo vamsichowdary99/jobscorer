@@ -47,11 +47,18 @@ function limiters() {
     learning: makeLimiter(20, 300, 'rl:learning'),
     // Gap detection runs a cheaper analysis; cap to block hammering the DB/LLM.
     'gap-detection': makeLimiter(30, 60, 'rl:gap-detection'),
+    // Roadmap generation hits n8n + GPT-4.1 per call; same window as
+    // build-plan/optimize/learning since it's an equivalent pre-generation flow.
+    roadmap: makeLimiter(20, 300, 'rl:roadmap'),
+    // Project Coach (teach-me/stuck/review-work) hits OpenAI directly per call,
+    // but is inline per-task guidance during an active work session — same
+    // cadence as chat since it's the same "ask, get an answer" shape.
+    'project-coach': makeLimiter(20, 60, 'rl:project-coach'),
   };
   return _limiters;
 }
 
-export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume' | 'chat' | 'build-plan' | 'learning' | 'gap-detection';
+export type LimiterName = 'ingest' | 'score' | 'company' | 'optimize' | 'resume' | 'chat' | 'build-plan' | 'learning' | 'gap-detection' | 'roadmap' | 'project-coach';
 
 /**
  * Check the limiter for a user. Returns null if the request is allowed

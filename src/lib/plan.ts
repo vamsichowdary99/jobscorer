@@ -20,14 +20,19 @@ export type Feature =
   | 'company_research'
   | 'build_plan'
   | 'chat'
-  | 'learning_path';
+  | 'learning_path'
+  | 'project_roadmap'
+  | 'project_coach';
 
 const UNLIMITED = -1;
 
+// project_coach covers the 3 Project Coach actions (teach-me cache misses, stuck,
+// review-work) combined — one monthly pool, not per-action. Cache hits on teach-me
+// never reach checkQuota() so they stay free regardless of this limit.
 export const PLAN_QUOTAS: Record<Plan, Record<Feature, number>> = {
-  free: { job_search: 5,   score: 3,  optimize: 1,  company_research: 2,  build_plan: 1,  chat: 10,  learning_path: 1 },
-  pro:  { job_search: 60,  score: 30, optimize: 20, company_research: 20, build_plan: 10, chat: 200, learning_path: 15 },
-  max:  { job_search: 200, score: 80, optimize: 40, company_research: 40, build_plan: 30, chat: 600, learning_path: 30 },
+  free: { job_search: 5,   score: 3,  optimize: 1,  company_research: 2,  build_plan: 1,  chat: 10,  learning_path: 1,  project_roadmap: 1,  project_coach: 10 },
+  pro:  { job_search: 60,  score: 30, optimize: 20, company_research: 20, build_plan: 10, chat: 200, learning_path: 15, project_roadmap: 10, project_coach: 75 },
+  max:  { job_search: 200, score: 80, optimize: 40, company_research: 40, build_plan: 30, chat: 600, learning_path: 30, project_roadmap: 30, project_coach: 250 },
 };
 
 // Stored-resource caps (row counts, not monthly). -1 = unlimited. Mirrors plans/15 §1.
@@ -46,6 +51,8 @@ const FEATURE_LABELS: Record<Feature, { one: string; many: string }> = {
   build_plan:       { one: 'build plan',              many: 'build plans' },
   chat:             { one: 'chat message',            many: 'chat messages' },
   learning_path:    { one: 'learning path',           many: 'learning paths' },
+  project_roadmap:  { one: 'project roadmap',         many: 'project roadmaps' },
+  project_coach:    { one: 'project coach action',    many: 'project coach actions' },
 };
 
 let _svc: ReturnType<typeof createClient> | null = null;

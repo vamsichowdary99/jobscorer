@@ -1531,7 +1531,7 @@ export default function SearchPage() {
             if (err instanceof RateLimitError) {
                 setIngestStatus(`Slow down — try again in ${err.retryAfterSec}s.`)
             } else {
-                setIngestStatus('Failed to trigger ingestion. Is n8n running on localhost:5678?')
+                setIngestStatus('Failed to trigger ingestion. Check n8n cloud is active and webhook URLs are correct.')
             }
             ingestingRef.current = false
             setIngesting(false)

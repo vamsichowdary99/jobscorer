@@ -79,7 +79,7 @@ export async function enqueue(
 }
 
 async function wakeQueueProcessor(): Promise<void> {
-    const url = process.env.N8N_QUEUE_WAKE_URL || 'http://localhost:5678/webhook/queue-wake';
+    const url = process.env.N8N_QUEUE_WAKE_URL || 'https://chowdaryjobscorer.app.n8n.cloud/webhook/queue-wake';
     try {
         const ctrl = new AbortController();
         const timeout = setTimeout(() => ctrl.abort(), 2000);
