@@ -88,7 +88,8 @@ ${jobDescription.slice(0, 4000)}
 Extract 20-30 ATS keywords a recruiter's applicant-tracking system would scan a resume for, given this job. Return JSON: {"keywords":[{"term":"...", "weight":1|2|3, "variants":["...","..."]}]}. weight 3 = explicitly required/critical, 2 = mentioned/important, 1 = nice-to-have/implied. variants = common alternate spellings/abbreviations (e.g. "JavaScript" -> ["JS"], "Amazon Web Services" -> ["AWS"]). Include both missing skills (so the candidate can see what to add) and matched skills (so coverage reflects what's already there).`
 
     let keywords: AtsKeyword[]
-    let usage: { prompt_tokens?: number; completion_tokens?: number } = {}
+    let usage: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } = {}
+    const t0 = Date.now()
     try {
         const response = await getOpenAI().chat.completions.create({
             model: 'gpt-4.1-mini',
@@ -122,6 +123,8 @@ Extract 20-30 ATS keywords a recruiter's applicant-tracking system would scan a 
         model: 'gpt-4.1-mini',
         promptTokens: usage.prompt_tokens ?? 0,
         completionTokens: usage.completion_tokens ?? 0,
+        cachedTokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
+        latencyMs: Date.now() - t0,
     })
 
     const ats_keywords: AtsKeywordsData = { keywords, extracted_at: new Date().toISOString() }

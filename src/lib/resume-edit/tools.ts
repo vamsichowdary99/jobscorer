@@ -161,9 +161,12 @@ function buildSectionLabel(state: ResumeEditorState, target: ProposalTarget): st
     return ''
 }
 
-// Priority: a user-typed number is the most concrete signal; evidence beats a
-// bare "it's already on the resume" citation since it names actual proof.
-function deriveSourceBadge(metricSources: MetricSource[]): ProposalBadge {
+// Priority: an unverified skill claim overrides everything else — the user
+// needs to see that warning regardless of what else is going on with the
+// edit. Otherwise a user-typed number is the most concrete signal; evidence
+// beats a bare "it's already on the resume" citation since it names actual proof.
+function deriveSourceBadge(metricSources: MetricSource[], unverifiedSkill: boolean): ProposalBadge {
+    if (unverifiedSkill) return 'unverified'
     if (metricSources.length === 0) return 'ai'
     if (metricSources.some(s => s.source === 'user_message')) return 'message'
     if (metricSources.some(s => s.source === 'project_evidence')) return 'evidence'
@@ -212,6 +215,8 @@ async function proposeEdit(args: Record<string, unknown>, userId: string, ctx: E
         target = { section: section as 'experience' | 'projects', index, bulletIndex }
     }
 
+    const unverifiedSkill = args.unverified_skill === true
+
     const metricSources: MetricSource[] = Array.isArray(args.metric_sources)
         ? (args.metric_sources as MetricSource[]).filter(s =>
             s && typeof s.value === 'string' && typeof s.quote === 'string' && VALID_METRIC_SOURCES.has(s.source))
@@ -240,7 +245,7 @@ async function proposeEdit(args: Record<string, unknown>, userId: string, ctx: E
         id: crypto.randomUUID(),
         target,
         sectionLabel: buildSectionLabel(ctx.editorState, target),
-        badge: deriveSourceBadge(metricSources),
+        badge: deriveSourceBadge(metricSources, unverifiedSkill),
         before,
         after: newValue,
         why: typeof args.rationale === 'string' ? args.rationale : '',

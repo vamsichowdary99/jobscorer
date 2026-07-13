@@ -15,9 +15,17 @@ function getOpenAI() {
     return new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 }
 
-// Static prefix — kept first (before the per-turn state suffix) so OpenAI's
-// automatic prompt-prefix caching can discount it across turns (architecture
-// doc §6 scale lever, cheap to do now).
+// Kept as the ENTIRE system message — never mixed with the mutable resume
+// state — so it's a byte-identical prefix on every call. Combined with the
+// tools array (also static) and conversationHistory (only ever appended to,
+// never rewritten), this maximizes what OpenAI's automatic prompt-cache can
+// discount (75% off gpt-4.1-mini's cached-token rate). The resume state
+// lives on the FINAL user message instead (see `messages` below) — it's the
+// only thing that changes every turn, so it's the only part that must stay
+// uncached. (Post-Phase-3 cost pass: this used to be concatenated onto the
+// resume state in one system message, which meant every accepted edit
+// changed the system message and broke caching for the whole prefix,
+// including conversation history that hadn't changed at all.)
 const SYSTEM_PROMPT = `You are the Resume Studio editing assistant for JobScorer. You propose small, targeted edits to ONE resume section at a time — you never invent facts, and you never write anything yourself. Every change goes through the propose_edit tool and the user must click Accept in the UI.
 
 THE ONE HARD RULE — NEVER INVENT A NUMBER, PERCENTAGE, DOLLAR AMOUNT, OR DURATION. A number is only allowed in new_value if it already appears somewhere in the resume state you were given, or the user typed it in this conversation. If you want to add a number that isn't already verifiable, you MUST ask the user for it conversationally instead of guessing — offer concrete options (e.g. "keep it as your estimate", "remove the number", "rewrite it without a number").
@@ -34,9 +42,11 @@ propose_edit targets exactly one of: the whole summary, one technical-skills fie
 
 For every number in new_value, include a metric_sources entry: source:"original_resume" with a verbatim quote from the resume state below, or source:"user_message" with a verbatim quote from something the user typed. If propose_edit rejects your proposal with an "unverified_metrics" error, do NOT retry with the same number — ask the user conversationally per the rule above.
 
-ANOTHER HARD RULE — NEVER CLAIM AN UNVERIFIED SKILL. If the user asks you to add a skill or technology that is not already visible in the resume state below, you MUST call get_user_evidence (optionally with that skill) BEFORE proposing anything. If it returns no matching evidence, do not add the skill as if it were proven — tell the user you couldn't verify it in their completed JobScorer work, name what you DID find instead if anything, and offer either to add it as a plain unverified claim (their choice) or to start a roadmap that builds real evidence for it. If get_user_evidence DOES return a matching completed project, you may cite it: metric_sources source:"project_evidence" with a verbatim quote from that tool's result.
+ANOTHER HARD RULE — ALWAYS CHECK BEFORE CLAIMING A SKILL, BUT NEVER REFUSE THE USER. If the user asks you to add a skill or technology that is not already visible in the resume state below, you MUST call get_user_evidence (optionally with that skill) BEFORE proposing anything. If it returns a matching completed project, propose the edit and cite it: metric_sources source:"project_evidence" with a verbatim quote from that tool's result. If it returns NO matching evidence, still propose the edit exactly as the user asked — call propose_edit with unverified_skill:true. This puts a clear warning badge on the card in the UI; the user decides whether to Accept or Reject it themselves. Do NOT silently add an unverified skill without unverified_skill:true, and do NOT refuse to propose it outright — that decision belongs to the user, not you. You may briefly mention in your reply that you couldn't verify it in their completed JobScorer work, but still call propose_edit in the same turn.
 
-Tool routing: call get_job_context and get_match_details before tailoring content to the target job or making ATS-friendliness claims. Call get_ats_keywords before claiming a keyword is missing. Keep responses short — 1-3 sentences — since the UI shows the actual proposed change in a diff card, not in your text.`
+Tool routing: call get_job_context and get_match_details before tailoring content to the target job or making ATS-friendliness claims. Call get_ats_keywords before claiming a keyword is missing. Keep responses short — 1-3 sentences — since the UI shows the actual proposed change in a diff card, not in your text.
+
+BATCH REQUESTS: if the user's message lists multiple improvements to apply at once (e.g. a numbered list), call propose_edit once for EACH one, in the same turn — you can make several tool calls before your final reply. Do not stop after the first one and wait to be asked again.`
 
 export const maxDuration = 60
 
@@ -95,15 +105,18 @@ export async function POST(req: NextRequest) {
         atsKeywords = row?.ats_keywords?.keywords ?? []
     }
 
-    const systemContent = `${SYSTEM_PROMPT}\n\n## Current resume state (JSON) — always reflects the latest edits, including ones the user just made manually\n${JSON.stringify(editorState)}`
-
+    // Resume state goes on the newest user turn, not the system message — see
+    // the comment on SYSTEM_PROMPT above for why (prompt-cache preservation).
     const messages: OpenAI.ChatCompletionMessageParam[] = [
-        { role: 'system', content: systemContent },
+        { role: 'system', content: SYSTEM_PROMPT },
         ...(conversationHistory ?? []).map((msg) => ({
             role: msg.role as 'user' | 'assistant',
             content: msg.content,
         })),
-        { role: 'user', content: message },
+        {
+            role: 'user',
+            content: `## Current resume state (JSON) — always reflects the latest edits, including ones the user just made manually\n${JSON.stringify(editorState)}\n\n## User message\n${message}`,
+        },
     ]
 
     const abortSignal = req.signal
@@ -119,11 +132,13 @@ export async function POST(req: NextRequest) {
                 }
             }
 
+            const t0 = Date.now()
             try {
                 let iterations = 0
                 let assistantMessage: OpenAI.ChatCompletionMessage | null = null
                 let promptTokens = 0
                 let completionTokens = 0
+                let cachedTokens = 0
 
                 while (iterations < 5) {
                     if (abortSignal.aborted) throw new Error('aborted')
@@ -140,6 +155,7 @@ export async function POST(req: NextRequest) {
                     )
                     promptTokens += response.usage?.prompt_tokens ?? 0
                     completionTokens += response.usage?.completion_tokens ?? 0
+                    cachedTokens += response.usage?.prompt_tokens_details?.cached_tokens ?? 0
                     const choice = response.choices[0]
                     if (!choice) throw new Error('No completion choice returned from model')
                     assistantMessage = choice.message
@@ -185,6 +201,8 @@ export async function POST(req: NextRequest) {
                     model: CHAT_MODEL,
                     promptTokens,
                     completionTokens,
+                    cachedTokens,
+                    latencyMs: Date.now() - t0,
                 })
 
                 const finalText =

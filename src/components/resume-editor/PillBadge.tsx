@@ -9,6 +9,7 @@ const VARIANTS: Record<ProposalBadge, { bg: string; border: string; color: strin
     project: { bg: M.greenLight, border: M.greenBorder, color: M.green, label: 'From your resume' },
     ai: { bg: M.surfaceAlt, border: M.border, color: M.textMid, label: 'AI wording — no facts added' },
     evidence: { bg: M.greenLight, border: M.greenBorder, color: M.green, label: 'From your completed project' },
+    unverified: { bg: M.amberLight, border: M.amberBorder, color: M.amber, label: '⚠ Unverified — review before accepting' },
 }
 
 export function PillBadge({ type }: { type: ProposalBadge }) {

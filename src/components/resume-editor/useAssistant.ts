@@ -48,6 +48,12 @@ export interface AssistantController {
     rescoredCaption: string
     auditItems: AuditItem[]
     allDone: boolean
+    // Audit generation is manual (button-triggered), not auto-fetched on
+    // resume load — see onFindImprovements. auditGenerated distinguishes
+    // "never asked" from "asked, everything already fixed" (both look like
+    // an empty/all-done items array otherwise).
+    auditGenerated: boolean
+    auditLoading: boolean
     activeCard: ActiveCard | null
     decorations: DecorationsMap
     toasts: Toast[]
@@ -56,6 +62,7 @@ export interface AssistantController {
     sendMessage: (text: string) => void
     sendChip: (chip: string) => void
     onAuditItemClick: (id: string) => void
+    onFindImprovements: () => void
     onApplyAll: () => void
     onRescore: () => void
     applyActiveCard: (text?: string) => void
@@ -82,6 +89,10 @@ function firstBulletTarget(state: ResumeEditorState): (ProposalTarget & { entryL
     const exp = state.experience[0]
     if (!exp || exp.bullets.length === 0) return null
     return { section: 'experience', index: 0, bulletIndex: 0, entryLabel: exp.company || 'Experience', text: exp.bullets[0] }
+}
+
+function sameTarget(a: ProposalTarget | null, b: ProposalTarget): boolean {
+    return !!a && a.section === b.section && a.index === b.index && a.bulletIndex === b.bulletIndex && a.skillsField === b.skillsField
 }
 
 function summaryKeyword(jobTitle: string | null): string {
@@ -329,35 +340,53 @@ export function useAssistant(
     const [rescoredCaption, setRescoredCaption] = useState('Not re-scored yet')
 
     // Real AI audit (Plan 21 Phase 3) — replaces the mock UI's hardcoded
-    // seedAuditItems(). Fetched (and generated + cached server-side) on mount /
-    // resume switch, same eager-load pattern the mock used. Regardless of
-    // NEXT_PUBLIC_ASSISTANT_MODE: audit/coverage are real data-fetching
-    // features, not part of the chat-adapter mock/live split.
+    // seedAuditItems(). Regardless of NEXT_PUBLIC_ASSISTANT_MODE: audit/coverage
+    // are real data-fetching features, not part of the chat-adapter mock/live
+    // split. Generation is user-triggered (onFindImprovements below), not
+    // auto-fetched on load — see the reset-on-switch effect further down for
+    // why: eager-loading fired on every resume click regardless of which tab
+    // was open, spending a real LLM call on resumes the user only previewed.
     const [auditItems, setAuditItems] = useState<AuditItem[]>([])
-    useEffect(() => {
-        if (!optimizedResumeId) { setAuditItems([]); return }
-        let cancelled = false
-        fetch('/api/resume-edit/audit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ optimizedResumeId, editorState: editorStateRef.current }),
-        })
-            .then(res => (res.ok ? res.json() : null))
-            .then((data: AuditApiResponse | null) => {
-                if (cancelled || !data) return
-                setAuditItems((data.items ?? []).map(item => ({
-                    id: `audit-${Math.random().toString(36).slice(2, 10)}`,
-                    text: item.title, score: item.impact, done: false, prompt: item.prompt,
-                })))
-            })
-            .catch(err => console.error('[resume-edit] audit fetch failed:', err))
-        return () => { cancelled = true }
-    }, [optimizedResumeId])
+    const auditItemsRef = useRef(auditItems)
+    auditItemsRef.current = auditItems
+    const [auditGenerated, setAuditGenerated] = useState(false)
+    const auditGeneratedRef = useRef(auditGenerated)
+    auditGeneratedRef.current = auditGenerated
+    const [auditLoading, setAuditLoading] = useState(false)
 
     const [activeCard, setActiveCard] = useState<ActiveCard | null>(null)
+    const activeCardRef = useRef(activeCard)
+    activeCardRef.current = activeCard
+    // Tracks the target of whichever ghost decoration is currently "live",
+    // updated manually at every setGhost/clearGhost call site rather than
+    // mirrored from activeCard via the render body. activeCardRef only
+    // updates once React actually commits a render; when a batch request
+    // yields several 'proposal' events back-to-back with no await between
+    // them (the adapter can parse multiple complete events out of one
+    // network chunk), activeCardRef.current is still stale at the second
+    // event, so the "clear the superseded ghost" check silently no-ops and
+    // both ghosts stay stuck. This ref is synchronous with the code that
+    // sets it, so it can't go stale within a single batch.
+    const currentGhostTargetRef = useRef<ProposalTarget | null>(null)
     const [decorations, setDecorations] = useState<DecorationsMap>(new Map())
+    const decorationsRef = useRef(decorations)
+    decorationsRef.current = decorations
     const [toasts, setToasts] = useState<Toast[]>([])
     const [inputValue, setInputValue] = useState('')
+
+    // Session-local memory of each resume's Assistant state, keyed by
+    // optimizedResumeId — so switching away and back restores exactly where
+    // you left off (chat history, a still-pending suggestion card, its
+    // highlight, and the audit results) instead of everything reverting to
+    // empty. Not persisted beyond this page load; a fresh reload starts
+    // clean, same as it always has.
+    const resumeSessionCacheRef = useRef<Map<string, {
+        messages: ChatMessage[]
+        activeCard: ActiveCard | null
+        decorations: DecorationsMap
+        auditItems: AuditItem[]
+        auditGenerated: boolean
+    }>>(new Map())
 
     const addMessage = useCallback((m: Omit<ChatMessage, 'id'>) => {
         setMessages(prev => [...prev, { id: uid(), ...m }])
@@ -373,7 +402,7 @@ export function useAssistant(
     const setGhost = useCallback((target: ProposalTarget, text: string) => {
         setDecorations(prev => {
             const next = new Map(prev)
-            next.set(decorationKey(target.section, target.index, target.bulletIndex), { kind: 'ghost', text })
+            next.set(decorationKey(target.section, target.index, target.bulletIndex, target.skillsField), { kind: 'ghost', text })
             return next
         })
     }, [])
@@ -381,14 +410,14 @@ export function useAssistant(
     const clearGhost = useCallback((target: ProposalTarget) => {
         setDecorations(prev => {
             const next = new Map(prev)
-            next.delete(decorationKey(target.section, target.index, target.bulletIndex))
+            next.delete(decorationKey(target.section, target.index, target.bulletIndex, target.skillsField))
             return next
         })
     }, [])
 
     const flash = useCallback((target: ProposalTarget) => {
         if (prefersReducedMotion()) return
-        const key = decorationKey(target.section, target.index, target.bulletIndex)
+        const key = decorationKey(target.section, target.index, target.bulletIndex, target.skillsField)
         setDecorations(prev => { const next = new Map(prev); next.set(key, { kind: 'flash' }); return next })
         setTimeout(() => setDecorations(prev => { const next = new Map(prev); next.delete(key); return next }), 600)
     }, [])
@@ -402,7 +431,68 @@ export function useAssistant(
     // call claims a generation id and stops applying state updates the moment a newer call starts.
     const requestGenerationRef = useRef(0)
 
-    const runAdapter = useCallback(async (text: string) => {
+    // Resume-switch handling. On entry, restore this resume's remembered
+    // session state from resumeSessionCacheRef if we've visited it before
+    // this page load (chat history, a still-pending suggestion card + its
+    // highlight, and audit results) — otherwise start empty, same as opening
+    // it for the very first time. The cleanup function (runs right before the
+    // NEXT switch) saves the OUTGOING resume's current state into that cache
+    // first, reading via refs rather than the closed-over state — the
+    // closure would otherwise capture whatever these were when this effect
+    // instance was created, not their latest values at the moment you
+    // actually switch away.
+    //
+    // This also prevents the original bug this effect was added for: without
+    // it, chat history from a DIFFERENT resume leaked into the new one's
+    // conversation context, and a still-pending diff card — whose target
+    // coordinates (section/index/bulletIndex) refer to the OLD resume's
+    // structure — could get applied against the wrong location once
+    // editorState pointed at the NEW resume. Bumping requestGenerationRef
+    // also stops any in-flight runAdapter loop from the old resume from
+    // applying further updates after the switch.
+    useEffect(() => {
+        requestGenerationRef.current++
+        const remembered = optimizedResumeId ? resumeSessionCacheRef.current.get(optimizedResumeId) : undefined
+        setMessages(remembered?.messages ?? [])
+        setActiveCard(remembered?.activeCard ?? null)
+        setDecorations(remembered?.decorations ?? new Map())
+        setAuditItems(remembered?.auditItems ?? [])
+        setAuditGenerated(remembered?.auditGenerated ?? false)
+        setToasts([])
+        setIsTyping(false)
+        setInputValue('')
+        setAuditLoading(false)
+
+        return () => {
+            if (optimizedResumeId) {
+                // A 'pending' card is a skeleton awaiting a response that will
+                // never arrive once requestGenerationRef invalidates it above —
+                // don't cache it, or returning to this resume would show a
+                // permanently stuck skeleton.
+                const outgoingCard = activeCardRef.current?.state === 'pending' ? null : activeCardRef.current
+                // resumeSessionCacheRef.current is a plain Map, never
+                // reassigned after init (unlike a DOM ref), so it can't go
+                // stale/null by cleanup time — exhaustive-deps can't tell
+                // the difference.
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+                resumeSessionCacheRef.current.set(optimizedResumeId, {
+                    messages: messagesRef.current,
+                    activeCard: outgoingCard,
+                    decorations: decorationsRef.current,
+                    auditItems: auditItemsRef.current,
+                    auditGenerated: auditGeneratedRef.current,
+                })
+            }
+        }
+    }, [optimizedResumeId])
+
+    // auditId (when this call originated from onAuditItemClick) gets stamped
+    // onto the resulting proposal below. The real backend's propose_edit
+    // always returns auditId: null (it has no notion of the client's audit
+    // item ids) — without this, applying a "Fix this" suggestion in live
+    // mode never marked that item done in the "Found N improvements" list,
+    // because applyActiveCard's done-toggling only keys off proposal.auditId.
+    const runAdapter = useCallback(async (text: string, auditId?: string) => {
         const myGeneration = ++requestGenerationRef.current
         const isCurrent = () => requestGenerationRef.current === myGeneration
 
@@ -425,10 +515,25 @@ export function useAssistant(
             } else if (event.type === 'proposal_pending') {
                 setIsTyping(false)
                 setMessages(prev => prev.map(m => (m.streaming ? { ...m, streaming: false } : m)))
+                // Batch requests ("add X to both my skills fields") make the
+                // model call propose_edit more than once in a turn — each
+                // 'proposal' event below overwrites activeCard, so an earlier
+                // proposal's ghost highlight would otherwise never get
+                // cleared (nothing left references it to resolve it). Clear
+                // whatever card is being superseded before replacing it.
+                if (currentGhostTargetRef.current) {
+                    clearGhost(currentGhostTargetRef.current)
+                    currentGhostTargetRef.current = null
+                }
                 setActiveCard({ proposal: { id: 'pending', target: { section: 'summary' }, sectionLabel: '', badge: 'ai', before: '', after: '', why: '', est: 0, auditId: null }, state: 'pending' })
             } else if (event.type === 'proposal') {
-                setGhost(event.proposal.target, event.proposal.after)
-                setActiveCard({ proposal: event.proposal, state: 'active' })
+                if (currentGhostTargetRef.current) {
+                    clearGhost(currentGhostTargetRef.current)
+                }
+                const proposal = auditId ? { ...event.proposal, auditId } : event.proposal
+                setGhost(proposal.target, proposal.after)
+                currentGhostTargetRef.current = proposal.target
+                setActiveCard({ proposal, state: 'active' })
             } else if (event.type === 'buttons') {
                 setMessages(prev => prev.map(m => (m.streaming ? { ...m, streaming: false } : m)))
                 addMessage({ kind: 'buttons', buttons: event.buttons.map(b => ({ label: b.label, onClick: () => sendMessageRef.current(b.sendText, b.label) })) })
@@ -437,13 +542,13 @@ export function useAssistant(
                 setMessages(prev => prev.map(m => (m.streaming ? { ...m, streaming: false } : m)))
             }
         }
-    }, [addMessage, setGhost])
+    }, [addMessage, setGhost, clearGhost])
 
-    const sendMessage = useCallback((text: string, displayText?: string) => {
+    const sendMessage = useCallback((text: string, displayText?: string, auditId?: string) => {
         if (!text.trim() || isTyping) return
         if (!text.startsWith('__')) addMessage({ kind: 'user', text: displayText ?? text })
         setInputValue('')
-        void runAdapter(text)
+        void runAdapter(text, auditId)
     }, [isTyping, addMessage, runAdapter])
     sendMessageRef.current = sendMessage
 
@@ -452,15 +557,19 @@ export function useAssistant(
     const onAuditItemClick = useCallback((id: string) => {
         const item = auditItems.find(a => a.id === id)
         const trigger = item?.prompt
-        if (trigger) sendMessage(trigger)
+        if (trigger) sendMessage(trigger, undefined, id)
     }, [sendMessage, auditItems])
 
-    // Fire-and-forget PATCH — one per explicit user action (apply/undo), no debounce.
-    // No-ops when the loaded resume isn't a saved optimized_resumes row.
+    // One PATCH per explicit user action (apply/undo), no debounce. No-ops when
+    // the loaded resume isn't a saved optimized_resumes row. Returns the promise
+    // (existing call sites don't await it, same as the old fire-and-forget
+    // `void`) so onApplyAll's batch loop CAN await it — firing several PATCHes
+    // back-to-back without awaiting would race the optimistic-lock check, since
+    // updatedAtRef only advances once each one's response comes back.
     const persist = useCallback((state: ResumeEditorState, entry: Parameters<typeof persistEditorState>[2]) => {
         const id = optimizedResumeIdRef.current
-        if (!id) return
-        void persistEditorState(id, state, entry, updatedAtRef.current).then(result => {
+        if (!id) return Promise.resolve()
+        return persistEditorState(id, state, entry, updatedAtRef.current).then(result => {
             if (result.ok) updatedAtRef.current = result.updated_at
             else if (result.stale) updatedAtRef.current = result.updated_at
         })
@@ -475,6 +584,7 @@ export function useAssistant(
         const nextState = applyProposal(editorStateRef.current, proposal, finalText)
         setEditorState(nextState)
         clearGhost(proposal.target)
+        if (sameTarget(currentGhostTargetRef.current, proposal.target)) currentGhostTargetRef.current = null
         flash(proposal.target)
 
         const cur = coverageRef.current
@@ -515,6 +625,7 @@ export function useAssistant(
     const rejectActiveCard = useCallback(() => {
         if (!activeCard || activeCard.state === 'pending') return
         clearGhost(activeCard.proposal.target)
+        if (sameTarget(currentGhostTargetRef.current, activeCard.proposal.target)) currentGhostTargetRef.current = null
         addMessage({ kind: 'rejected', text: activeCard.proposal.sectionLabel })
         setActiveCard(null)
     }, [activeCard, clearGhost, addMessage])
@@ -523,30 +634,86 @@ export function useAssistant(
         setActiveCard(prev => (prev ? { ...prev, state: 'editing' } : prev))
     }, [])
 
+    // Manual trigger (post-Phase-3 cost pass) for the "Found N improvements"
+    // panel — see the comment on auditItems above for why this isn't
+    // auto-fetched anymore. Guards against a resume switch happening while
+    // the request is in flight: captures the target id up front and checks
+    // it's still the active resume before applying the response.
+    const onFindImprovements = useCallback(() => {
+        const targetId = optimizedResumeId
+        if (!targetId || auditLoading) return
+        setAuditLoading(true)
+        fetch('/api/resume-edit/audit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ optimizedResumeId: targetId, editorState: editorStateRef.current }),
+        })
+            .then(res => (res.ok ? res.json() : null))
+            .then((data: AuditApiResponse | null) => {
+                if (optimizedResumeIdRef.current !== targetId) return
+                setAuditLoading(false)
+                if (!data) return
+                setAuditItems((data.items ?? []).map(item => ({
+                    id: `audit-${Math.random().toString(36).slice(2, 10)}`,
+                    text: item.title, score: item.impact, done: false, prompt: item.prompt,
+                })))
+                setAuditGenerated(true)
+            })
+            .catch(err => {
+                if (optimizedResumeIdRef.current !== targetId) return
+                console.error('[resume-edit] audit fetch failed:', err)
+                setAuditLoading(false)
+            })
+    }, [optimizedResumeId, auditLoading])
+
+    // Batched (post-Phase-3 cost pass): ONE adapter.send() call asking the
+    // model to address every pending item, instead of one call per item — the
+    // model can call propose_edit multiple times in a single turn (see the
+    // BATCH REQUESTS rule in chat/route.ts's SYSTEM_PROMPT). Run silently (no
+    // chat bubbles), auto-applying each proposal as it streams in.
+    //
+    // Proposals are applied against a LOCAL `state` variable, not
+    // editorStateRef.current — that ref only updates on React's next render,
+    // so if two proposals arrive back-to-back in the same stream chunk (no
+    // real async gap between them), reading the ref for the second one would
+    // still see the state from before the first was applied and clobber it.
+    //
+    // "done" bookkeeping is all-or-nothing across the whole batch rather than
+    // per-item: Apply All has no per-item review card to correlate a specific
+    // returned proposal back to a specific audit item, and if the agent
+    // declines one (e.g. an unverified-skill claim it won't propose without
+    // confirmation — see get_user_evidence), there's no reliable signal for
+    // WHICH item that was. An item left unaddressed can still be asked for
+    // directly in chat, where the real unverified-skill warning card applies.
     const onApplyAll = useCallback(async () => {
         const pending = auditItems.filter(a => !a.done && a.prompt)
-        for (const item of pending) {
-            await sleep(300)
-            // Run the flow silently (no chat bubbles) to get a proposal, then auto-apply it.
-            // If the agent asks a clarifying question instead of proposing (e.g. no
-            // verifiable metric was available), this item is silently skipped rather
-            // than guessed — Apply All never invents a number either.
-            let proposal: Proposal | null = null
-            for await (const event of adapterRef.current.send(item.prompt!, editorStateRef.current)) {
-                if (event.type === 'proposal') proposal = event.proposal
-            }
-            if (proposal) {
-                const before = readProposalTarget(editorStateRef.current, proposal.target)
-                const nextState = applyProposal(editorStateRef.current, proposal)
-                setEditorState(nextState)
-                const next = computeKeywordCoverage(atsKeywordsRef.current, generateATSText(nextState))
-                setCoverage(next)
-                setAuditItems(prev => prev.map(a => (a.id === item.id ? { ...a, done: true } : a)))
-                persist(nextState, {
-                    section: proposal.target.section, operation: 'replace', index: proposal.target.index,
-                    before, after: proposal.after, rationale: proposal.why, source: 'ai', coverage: next,
-                })
-            }
+        if (pending.length === 0) { setActiveCard(null); return }
+
+        const combined = `Apply ALL of the following improvements. Call propose_edit once for each one, in the same order — don't stop after the first:\n\n${pending.map((item, i) => `${i + 1}. ${item.prompt}`).join('\n')}`
+
+        let state = editorStateRef.current
+        let appliedCount = 0
+        for await (const event of adapterRef.current.send(combined, state)) {
+            if (event.type !== 'proposal') continue
+            const proposal = event.proposal
+            const before = readProposalTarget(state, proposal.target)
+            state = applyProposal(state, proposal)
+            appliedCount++
+            // Awaited, not fire-and-forget: firing several PATCHes without
+            // waiting would make every one after the first look stale to the
+            // optimistic-lock check (updatedAtRef only advances on response).
+            await persist(state, {
+                section: proposal.target.section, operation: 'replace', index: proposal.target.index,
+                before, after: proposal.after, rationale: proposal.why, source: 'ai',
+                coverage: computeKeywordCoverage(atsKeywordsRef.current, generateATSText(state)),
+            })
+        }
+
+        if (appliedCount > 0) {
+            setEditorState(state)
+            setCoverage(computeKeywordCoverage(atsKeywordsRef.current, generateATSText(state)))
+            const ids = new Set(pending.map(a => a.id))
+            setAuditItems(prev => prev.map(a => (ids.has(a.id) ? { ...a, done: true } : a)))
         }
         setActiveCard(null)
     }, [auditItems, setEditorState, persist])
@@ -584,12 +751,15 @@ export function useAssistant(
 
     const dismissToast = useCallback((id: string) => setToasts(prev => prev.filter(t => t.id !== id)), [])
 
-    const allDone = auditItems.every(a => a.done)
+    // Gated on auditGenerated: an empty array before the user has ever clicked
+    // "Find improvements" would otherwise vacuously satisfy .every() and show
+    // the "Nothing left to fix" success state instead of the find-improvements prompt.
+    const allDone = auditGenerated && auditItems.every(a => a.done)
 
     return {
         messages, isTyping, coverage, coverageStart: coverageStartRef.current, coverageMax: 100, atsKeywords, floatDelta, rescoring, rescoredCaption,
-        auditItems, allDone, activeCard, decorations, toasts, inputValue, setInputValue,
-        sendMessage: (t: string) => sendMessage(t), sendChip, onAuditItemClick, onApplyAll, onRescore,
+        auditItems, allDone, auditGenerated, auditLoading, activeCard, decorations, toasts, inputValue, setInputValue,
+        sendMessage: (t: string) => sendMessage(t), sendChip, onAuditItemClick, onFindImprovements, onApplyAll, onRescore,
         applyActiveCard, rejectActiveCard, editActiveCard, dismissToast,
     }
 }

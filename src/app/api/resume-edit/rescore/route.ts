@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
     const prompt = buildPrompt(resumeText, job)
 
     let live_score: { score: number; matched_skills: unknown; missing_skills: unknown; reasoning: string; scored_at: string }
-    let usage: { prompt_tokens?: number; completion_tokens?: number } = {}
+    let usage: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } = {}
+    const t0 = Date.now()
     try {
         const response = await getOpenAI().chat.completions.create(
             {
@@ -109,6 +110,8 @@ export async function POST(req: NextRequest) {
         model: 'gpt-4.1-mini',
         promptTokens: usage.prompt_tokens ?? 0,
         completionTokens: usage.completion_tokens ?? 0,
+        cachedTokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
+        latencyMs: Date.now() - t0,
     })
 
     const { error: updateErr } = await sb

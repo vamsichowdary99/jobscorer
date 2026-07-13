@@ -106,7 +106,8 @@ ${jobDescription.slice(0, 2000)}
 You are auditing this resume for a Resume Studio "AI found N improvements" panel. Generate 3-6 specific, actionable improvement suggestions grounded in THIS resume and job — not generic advice. Each suggestion must target exactly ONE of: the summary, one technical-skills field, or one bullet in one experience/project entry (this editor can only edit existing text, not add or remove whole entries). Return JSON: {"items":[{"title":"short imperative label for a checklist, e.g. 'Quantify your first experience bullet'","section":"summary|skills|experience|projects","prompt":"a natural-language instruction to send to the resume editor chat agent that would produce this fix, phrased as the user would type it, e.g. 'quantify my first experience bullet'","impact":1-6}]}. Order items by impact descending.`
 
     let items: AuditSuggestionItem[]
-    let usage: { prompt_tokens?: number; completion_tokens?: number } = {}
+    let usage: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } = {}
+    const t0 = Date.now()
     try {
         const response = await getOpenAI().chat.completions.create({
             model: 'gpt-4.1-mini',
@@ -141,6 +142,8 @@ You are auditing this resume for a Resume Studio "AI found N improvements" panel
         model: 'gpt-4.1-mini',
         promptTokens: usage.prompt_tokens ?? 0,
         completionTokens: usage.completion_tokens ?? 0,
+        cachedTokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
+        latencyMs: Date.now() - t0,
     })
 
     const suggestions: CachedSuggestions = { items, generated_at: new Date().toISOString(), edits_since: 0 }

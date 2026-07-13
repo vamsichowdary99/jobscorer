@@ -18,6 +18,12 @@ import type { ChatCompletionTool } from 'openai/resources/chat/completions'
  * 'project_evidence' (architecture doc §1/§4) — the entity-hallucination
  * guard: before adding a skill/technology the model can't already see in the
  * resume, it must check for real proof (a completed project or milestone).
+ *
+ * Post-Phase-3 revision (user request): the guard no longer BLOCKS an
+ * unverified skill claim — it still checks get_user_evidence first, but if
+ * nothing comes back it proposes the edit anyway with unverified_skill:true,
+ * surfacing a warning badge on the diff card. The user's existing
+ * Accept/Reject buttons are the actual gate, not the model's refusal.
  */
 export const editorTools: ChatCompletionTool[] = [
     {
@@ -53,6 +59,10 @@ export const editorTools: ChatCompletionTool[] = [
                     rationale: {
                         type: 'string',
                         description: '1-2 sentences citing job requirements, ATS keywords, or resume evidence for why this change helps.',
+                    },
+                    unverified_skill: {
+                        type: 'boolean',
+                        description: 'Set true ONLY when new_value adds a skill/technology that get_user_evidence could NOT confirm (no matching completed project or roadmap). Still propose the edit as asked — this just marks the card with a warning badge so the user can decide to Accept or Reject it themselves. Omit or set false when the skill is already visible in the resume, or get_user_evidence confirmed it.',
                     },
                     metric_sources: {
                         type: 'array',

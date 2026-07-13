@@ -2,8 +2,8 @@
 import React, { createContext, useContext } from 'react'
 import type { DecorationsMap } from './types'
 
-export function decorationKey(section: string, index?: number, bulletIndex?: number): string {
-    return `${section}:${index ?? ''}:${bulletIndex ?? ''}`
+export function decorationKey(section: string, index?: number, bulletIndex?: number, skillsField?: string): string {
+    return `${section}:${index ?? ''}:${bulletIndex ?? ''}:${skillsField ?? ''}`
 }
 
 const PreviewDecorationsContext = createContext<DecorationsMap>(new Map())
