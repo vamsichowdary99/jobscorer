@@ -22,13 +22,14 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     // Override user_id with authenticated user
-    const { resume_id, job_id, force_refresh, gap_data, accepted_recommendations } = body
+    const { resume_id, job_id, force_refresh, gap_data, accepted_recommendations, completed_projects } = body
     const user_id = user.id
 
-    // The optimized_resumes cache key has no notion of accepted recommendations,
-    // so accepting any item must bypass the cache and re-run the optimizer.
+    // The optimized_resumes cache key has no notion of accepted recommendations or
+    // confirmed completed projects, so either one present must bypass the cache.
     const hasAccepted = Array.isArray(accepted_recommendations) && accepted_recommendations.length > 0
-    const skipCache = !!force_refresh || hasAccepted
+    const hasCompleted = Array.isArray(completed_projects) && completed_projects.length > 0
+    const skipCache = !!force_refresh || hasAccepted || hasCompleted
 
     // ── Validate required fields ──────────────────────────
     if (!user_id || !resume_id || !job_id) {
@@ -68,7 +69,6 @@ export async function POST(req: NextRequest) {
 
     // ── Forward to n8n optimise webhook ───────────────────
     const webhookUrl =
-      process.env.NEXT_PUBLIC_N8N_OPTIMIZE_WEBHOOK ||
       process.env.N8N_OPTIMIZE_WEBHOOK_URL
 
     if (!webhookUrl) {
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, resume_id, job_id, gap_data: gap_data ?? null, accepted_recommendations: hasAccepted ? accepted_recommendations : [] }),
+        body: JSON.stringify({ user_id, resume_id, job_id, gap_data: gap_data ?? null, accepted_recommendations: hasAccepted ? accepted_recommendations : [], completed_projects: hasCompleted ? completed_projects : [] }),
         signal: controller.signal,
       })
 

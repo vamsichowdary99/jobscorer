@@ -71,6 +71,36 @@ export interface Database {
                 Insert: Omit<ResumeEmbedding, 'id' | 'created_at'>
                 Update: Partial<Omit<ResumeEmbedding, 'id'>>
             }
+            project_roadmaps: {
+                Row: ProjectRoadmap
+                Insert: Omit<ProjectRoadmap, 'id' | 'created_at'>
+                Update: Partial<Omit<ProjectRoadmap, 'id'>>
+            }
+            project_milestones: {
+                Row: ProjectMilestone
+                Insert: Omit<ProjectMilestone, 'id' | 'created_at'>
+                Update: Partial<Omit<ProjectMilestone, 'id'>>
+            }
+            milestone_progress: {
+                Row: MilestoneProgress
+                Insert: Omit<MilestoneProgress, 'id' | 'created_at' | 'updated_at'>
+                Update: Partial<Omit<MilestoneProgress, 'id'>>
+            }
+            assistant_interactions: {
+                Row: AssistantInteraction
+                Insert: Omit<AssistantInteraction, 'id' | 'created_at'>
+                Update: Partial<Omit<AssistantInteraction, 'id'>>
+            }
+            project_evidence: {
+                Row: ProjectEvidence
+                Insert: Omit<ProjectEvidence, 'id' | 'completed_at'>
+                Update: Partial<Omit<ProjectEvidence, 'id'>>
+            }
+            user_achievements: {
+                Row: UserAchievement
+                Insert: Omit<UserAchievement, 'id' | 'earned_at'>
+                Update: Partial<Omit<UserAchievement, 'id'>>
+            }
         }
     }
 }
@@ -627,6 +657,14 @@ export interface AcceptedRecommendation {
     framing_hint: string
 }
 
+/** A Project Coach roadmap the user actually finished — passed to the optimizer with "built and deployed" framing, never "(in progress)". */
+export interface CompletedProjectForResume {
+    name: string
+    tech: string[]
+    resume_bullet: string
+    github_url: string | null
+}
+
 // Row in resume_build_recommendations (caches a generated BuildPlan).
 export interface ResumeBuildRecommendation {
     id: string
@@ -637,4 +675,148 @@ export interface ResumeBuildRecommendation {
     gap_snapshot: JobGap[] | null
     created_at: string
     updated_at: string
+}
+
+// ── Project Roadmap & Project Coach ─────────────────────────────────────────
+
+export interface MilestoneChecklistItem {
+    item: string
+    required: boolean
+}
+
+export interface MilestoneDeliverable {
+    name: string
+    description: string
+    example_snippet: string
+}
+
+export interface MilestoneResource {
+    title: string
+    url: string
+    type: 'doc' | 'repo' | 'tool'
+}
+
+export interface MilestoneGithubExample {
+    name: string
+    url: string
+    stars: number
+}
+
+export interface MilestoneTask {
+    title: string
+    description: string
+    checklist: MilestoneChecklistItem[]
+    deliverable: MilestoneDeliverable | null
+    resources: MilestoneResource[]
+    github_example: MilestoneGithubExample | null
+}
+
+export interface SkillProgression {
+    skill: string
+    from_level: 'none' | 'beginner' | 'intermediate' | 'advanced'
+    to_level: 'none' | 'beginner' | 'intermediate' | 'advanced'
+}
+
+export interface MilestoneScoreCurvePoint {
+    milestone: number
+    score_after: number
+}
+
+export interface ProjectRoadmap {
+    id: string
+    user_id: string
+    resume_id: string | null
+    job_id: string | null
+    build_plan_rec_id: string | null
+    build_plan_project_id: string
+    project_name: string
+    project_description: string | null
+    tech_stack: string[]
+    difficulty: 'beginner' | 'intermediate' | 'advanced'
+    estimated_weeks: number | null
+    skills_covered: string[]
+    expected_score_impact: number | null
+    project_theory: string | null
+    github_outcome: string | null
+    portfolio_outcome: string | null
+    milestone_score_curve: MilestoneScoreCurvePoint[] | null
+    skill_progressions: SkillProgression[] | null
+    status: 'not_started' | 'in_progress' | 'completed'
+    current_milestone: number
+    started_at: string | null
+    completed_at: string | null
+    created_at: string
+}
+
+export interface ProjectMilestone {
+    id: string
+    roadmap_id: string
+    milestone_number: number
+    title: string
+    goal: string
+    estimated_hours: number | null
+    tasks: MilestoneTask[]
+    created_at: string
+}
+
+export interface CheckpointResult {
+    passed: boolean
+    feedback: string
+    issues: string[]
+}
+
+export interface MilestoneProgress {
+    id: string
+    user_id: string
+    roadmap_id: string
+    milestone_id: string
+    status: 'in_progress' | 'checkpoint_pending' | 'completed'
+    checklist_state: boolean[]
+    github_url: string | null
+    notes: string | null
+    checkpoint_result: CheckpointResult | null
+    completed_at: string | null
+    created_at: string
+    updated_at: string
+}
+
+export interface AssistantInteraction {
+    id: string
+    user_id: string
+    roadmap_id: string
+    milestone_id: string
+    action_type: 'teach_me' | 'stuck' | 'review_work'
+    cache_key: string | null
+    user_input: string | null
+    ai_response: string
+    tokens_used: number | null
+    created_at: string
+}
+
+export interface ProjectEvidence {
+    id: string
+    user_id: string
+    roadmap_id: string
+    project_name: string
+    tech_used: string[]
+    github_url: string | null
+    description: string | null
+    resume_bullet: string | null
+    readme_draft: string | null
+    architecture_summary: string | null
+    skills_demonstrated: string[]
+    gaps_addressed: string[]
+    score_impact: number | null
+    showcase_slug: string | null
+    showcase_enabled: boolean
+    completed_at: string
+}
+
+export interface UserAchievement {
+    id: string
+    user_id: string
+    achievement: string
+    label: string
+    earned_at: string
+    roadmap_id: string | null
 }

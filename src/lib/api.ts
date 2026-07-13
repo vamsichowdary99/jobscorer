@@ -666,6 +666,8 @@ export async function triggerResumeOptimization(payload: {
     user_id: string; resume_id: string; job_id: string; force_refresh?: boolean; gap_data?: Record<string, any> | null
     /** Items the user accepted in the Build Plan modal — folded into the resume with honest "in progress" framing. */
     accepted_recommendations?: AcceptedRecommendation[]
+    /** Finished Project Coach roadmaps the user chose to include — folded in as real, "built and deployed" work. */
+    completed_projects?: import('./types').CompletedProjectForResume[]
 }): Promise<{ success: boolean; cached?: boolean; optimized_data?: any; keyword_alignment_score?: number; optimization_notes?: string[] }> {
     const res = await fetch('/api/optimize-resume', {
         method: 'POST',
@@ -677,6 +679,18 @@ export async function triggerResumeOptimization(payload: {
         throw await cleanError(res, 'Resume optimization failed. Please try again.')
     }
     return safeJson(res, 'Resume optimization')
+}
+
+/** All of a user's finished Project Coach projects, for the "Confirmed Projects" section on the Optimize page. */
+export async function fetchConfirmedProjects(userId: string): Promise<import('./types').ProjectEvidence[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+        .from('project_evidence')
+        .select('*')
+        .eq('user_id', userId)
+        .not('resume_bullet', 'is', null)
+        .order('completed_at', { ascending: false })
+    return (data ?? []) as import('./types').ProjectEvidence[]
 }
 
 export async function fetchOptimizedResume(userId: string, resumeId: string, jobId: string) {
@@ -858,6 +872,246 @@ export async function triggerLearningPathGeneration(payload: {
         throw await cleanError(res, 'Learning path generation failed. Please try again.')
     }
     return safeJson(res, 'Learning path generation')
+}
+
+// ── Project Roadmap & Project Coach ──────────────────────────
+
+export interface BuildPlanProjectSummary {
+    resume_id: string
+    job_id: string
+    build_plan_project_id: string
+    project: import('./types').BuildRecoProject
+    job_title: string
+    company_name: string
+}
+
+/**
+ * Every build-plan project across the user's scored jobs, flattened for the
+ * Projects tab. resume_build_recommendations has no FK to jobs (deliberately
+ * loose per the design doc — this feature treats it as read-only), so job
+ * title/company are joined in a second query rather than an embedded select.
+ */
+export async function fetchBuildPlanProjectSummaries(userId: string): Promise<BuildPlanProjectSummary[]> {
+    if (!userId) return []
+    const { data: recs, error } = await supabase
+        .from('resume_build_recommendations' as any)
+        .select('resume_id, job_id, recommendations')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+    if (error || !recs?.length) return []
+
+    const rows = recs as unknown as { resume_id: string; job_id: string; recommendations: BuildPlan }[]
+    const jobIds = Array.from(new Set(rows.map(r => r.job_id).filter(Boolean)))
+    let jobs: { id: string; title: string | null; company: string | null }[] = []
+    if (jobIds.length) {
+        const { data } = await supabase.from('jobs').select('id, title, company').in('id', jobIds)
+        jobs = (data ?? []) as unknown as typeof jobs
+    }
+    const jobById = new Map(jobs.map(j => [j.id, j]))
+
+    const out: BuildPlanProjectSummary[] = []
+    for (const r of rows) {
+        const projects = r.recommendations?.projects
+        if (!Array.isArray(projects)) continue
+        const job = jobById.get(r.job_id)
+        for (const project of projects) {
+            out.push({
+                resume_id: r.resume_id,
+                job_id: r.job_id,
+                build_plan_project_id: project.id,
+                project,
+                job_title: job?.title || 'Untitled role',
+                company_name: job?.company || 'Unknown company',
+            })
+        }
+    }
+    return out
+}
+
+export interface ProjectRoadmapSummary {
+    id: string
+    resume_id: string | null
+    job_id: string | null
+    build_plan_project_id: string
+    project_name: string
+    tech_stack: string[]
+    difficulty: 'beginner' | 'intermediate' | 'advanced'
+    estimated_weeks: number | null
+    expected_score_impact: number | null
+    milestone_score_curve: import('./types').MilestoneScoreCurvePoint[] | null
+    skill_progressions: import('./types').SkillProgression[] | null
+    status: 'not_started' | 'in_progress' | 'completed'
+    current_milestone: number
+    started_at: string | null
+    completed_at: string | null
+    created_at: string
+}
+
+/** All roadmaps for the authenticated user (Roadmap Library / Projects tab status). */
+export async function fetchProjectRoadmaps(): Promise<ProjectRoadmapSummary[]> {
+    const res = await fetch('/api/project-roadmap')
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.roadmaps ?? []
+}
+
+/** Generate (or return the cached) roadmap for a build-plan project. */
+export async function generateProjectRoadmap(payload: {
+    resume_id: string
+    job_id: string
+    build_plan_project_id: string
+}): Promise<{ success: boolean; cached?: boolean; roadmap_id?: string; error?: string }> {
+    const res = await fetch('/api/project-roadmap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    await check429(res)
+    if (!res.ok) {
+        const json = await res.json().catch(() => ({} as { error?: string }))
+        return { success: false, error: json.error || 'Roadmap generation failed' }
+    }
+    return safeJson(res, 'Roadmap generation')
+}
+
+export type ProjectMilestoneWithProgress = import('./types').ProjectMilestone & {
+    progress: import('./types').MilestoneProgress | null
+    locked: boolean
+}
+
+export async function fetchProjectRoadmapDetail(roadmapId: string): Promise<{
+    roadmap: import('./types').ProjectRoadmap
+    milestones: ProjectMilestoneWithProgress[]
+} | null> {
+    const res = await fetch(`/api/project-roadmap/${roadmapId}`)
+    if (!res.ok) return null
+    const json = await res.json()
+    if (!json.success) return null
+    return { roadmap: json.roadmap, milestones: json.milestones }
+}
+
+export async function startProjectRoadmap(roadmapId: string): Promise<boolean> {
+    const res = await fetch(`/api/project-roadmap/${roadmapId}/start`, { method: 'POST' })
+    return res.ok
+}
+
+/** Reads the AI-generated resume bullet/README for a completed roadmap, once the Evidence Generator has run. Null while still generating (or if the roadmap isn't complete yet). */
+export async function fetchProjectEvidence(roadmapId: string): Promise<import('./types').ProjectEvidence | null> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+        .from('project_evidence')
+        .select('*')
+        .eq('roadmap_id', roadmapId)
+        .maybeSingle()
+    return data ?? null
+}
+
+/** All achievements a user has ever earned, most recent first — a trophy case, not per-roadmap. */
+export async function fetchUserAchievements(userId: string): Promise<import('./types').UserAchievement[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+        .from('user_achievements')
+        .select('*')
+        .eq('user_id', userId)
+        .order('earned_at', { ascending: false })
+    return data ?? []
+}
+
+/** Debounced autosave target for milestone checklist state (called ~every 1.5s on change). */
+export async function saveMilestoneProgress(
+    milestoneId: string,
+    payload: { checklist_state: boolean[]; github_url?: string; notes?: string }
+): Promise<boolean> {
+    const res = await fetch(`/api/milestone/${milestoneId}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    return res.ok
+}
+
+/** Persists a passed Checkpoint Review — advances current_milestone, marks the roadmap complete if this was the last milestone. */
+export async function completeMilestone(
+    milestoneId: string,
+    payload: { checkpoint_result: import('./types').CheckpointResult; github_url?: string }
+): Promise<{
+    success: boolean
+    current_milestone?: number
+    roadmap_completed?: boolean
+    achievements_earned?: { achievement: string; label: string }[]
+    error?: string
+}> {
+    const res = await fetch(`/api/milestone/${milestoneId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+        const json = await res.json().catch(() => ({} as { error?: string }))
+        return { success: false, error: json.error || 'Failed to complete milestone' }
+    }
+    return safeJson(res, 'Complete milestone')
+}
+
+// ── Project Coach ────────────────────────────────────────────
+
+/** "Teach Me" — cached per (user, milestone, task_index); cache hits cost 0 credits. */
+export async function projectCoachTeachMe(payload: {
+    roadmap_id: string
+    milestone_id: string
+    task_index: number
+}): Promise<{ success: boolean; cached?: boolean; content?: string; error?: string }> {
+    const res = await fetch('/api/project-coach/teach-me', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    await check429(res)
+    if (!res.ok) {
+        const json = await res.json().catch(() => ({} as { error?: string }))
+        return { success: false, error: json.error || 'Teach Me failed' }
+    }
+    return safeJson(res, 'Teach Me')
+}
+
+/** "I'm Stuck" — never cached, always consumes a credit. */
+export async function projectCoachStuck(payload: {
+    roadmap_id: string
+    milestone_id: string
+    task_index: number
+    error_text?: string
+    context?: string
+}): Promise<{ success: boolean; content?: string; error?: string }> {
+    const res = await fetch('/api/project-coach/stuck', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    await check429(res)
+    if (!res.ok) {
+        const json = await res.json().catch(() => ({} as { error?: string }))
+        return { success: false, error: json.error || "I'm Stuck failed" }
+    }
+    return safeJson(res, "I'm Stuck")
+}
+
+/** "Review My Work" — never cached, always consumes a credit; same call backs Checkpoint Review. */
+export async function projectCoachReviewWork(payload: {
+    roadmap_id: string
+    milestone_id: string
+    github_url?: string
+}): Promise<{ success: boolean; passed?: boolean; feedback?: string; issues?: string[]; error?: string }> {
+    const res = await fetch('/api/project-coach/review-work', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    await check429(res)
+    if (!res.ok) {
+        const json = await res.json().catch(() => ({} as { error?: string }))
+        return { success: false, error: json.error || 'Review My Work failed' }
+    }
+    return safeJson(res, 'Review My Work')
 }
 
 // ── AI Analysis Helpers ─────────────────────────────────────

@@ -4,8 +4,15 @@ import { Suspense, useEffect, useMemo, useState, useCallback, useRef, type SVGPr
 import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { fetchLearningPaths, triggerLearningPathGeneration, fetchLearningPathSummaries, getPrimaryResumeId, type LearningPathSummary } from '@/lib/api'
-import type { LearningPath, LearningResource, Job } from '@/lib/types'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import {
+    fetchLearningPaths, triggerLearningPathGeneration, fetchLearningPathSummaries, getPrimaryResumeId, type LearningPathSummary,
+    fetchBuildPlanProjectSummaries, fetchProjectRoadmaps, generateProjectRoadmap, fetchProjectRoadmapDetail, startProjectRoadmap, saveMilestoneProgress,
+    projectCoachTeachMe, projectCoachStuck, projectCoachReviewWork, completeMilestone, fetchProjectEvidence, fetchUserAchievements,
+    type BuildPlanProjectSummary, type ProjectRoadmapSummary, type ProjectMilestoneWithProgress,
+} from '@/lib/api'
+import type { LearningPath, LearningResource, Job, MilestoneChecklistItem, MilestoneTask, CheckpointResult, ProjectEvidence, UserAchievement } from '@/lib/types'
 import { useAuth } from '@/components/providers/AuthProvider'
 
 /* ─── Design tokens (Split layout) ─────────────────────────────── */
@@ -833,11 +840,1515 @@ function useLibraryProgress(summaries: LearningPathSummary[]): Record<string, nu
     return map
 }
 
+/* ─── Milestone Workspace (ported from milestone-workspace.html) ──── */
+const WS_MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+
+type WsResIconKey = 'yt' | 'doc' | 'guide' | 'blog' | 'zap'
+const WS_RES_ICON: Record<WsResIconKey, { bg: string; fg: string }> = {
+    yt: { bg: '#FEE2E2', fg: '#DC2626' },
+    doc: { bg: '#DCFCE7', fg: '#15803D' },
+    guide: { bg: '#FFF7ED', fg: '#EA580C' },
+    blog: { bg: '#F5F3FF', fg: '#6D28D9' },
+    zap: { bg: '#FFF7ED', fg: '#EA580C' },
+}
+function WsResIcon({ k, size = 16 }: { k: WsResIconKey; size?: number }) {
+    const { fg } = WS_RES_ICON[k]
+    if (k === 'yt') return <svg width={size} height={size} viewBox="0 0 24 24" fill={fg}><path d="M23 12s0-3.85-.5-5.7a3 3 0 00-2.1-2.1C18.55 3.7 12 3.7 12 3.7s-6.55 0-8.4.5A3 3 0 001.5 6.3C1 8.15 1 12 1 12s0 3.85.5 5.7a3 3 0 002.1 2.1c1.85.5 8.4.5 8.4.5s6.55 0 8.4-.5a3 3 0 002.1-2.1c.5-1.85.5-5.7.5-5.7zM9.75 15.5v-7L15.5 12l-5.75 3.5z" /></svg>
+    if (k === 'doc') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth={2} strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+    if (k === 'guide') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth={2} strokeLinecap="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>
+    if (k === 'blog') return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth={2} strokeLinecap="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={fg} strokeWidth={2} strokeLinecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+}
+function wsInline(text: string): ReactElement {
+    const parts = text.split('`')
+    return (
+        <>
+            {parts.map((part, i) =>
+                i % 2 === 1
+                    ? <code key={i} style={{ fontFamily: WS_MONO, background: T.sand, padding: '1px 5px', borderRadius: 4, fontSize: '0.85em' }}>{part}</code>
+                    : <span key={i}>{part}</span>
+            )}
+        </>
+    )
+}
+
+/** Maps the real MilestoneResource.type ('doc'|'repo'|'tool') to a WsResIcon key for display. */
+function resIconFor(type: string): WsResIconKey {
+    if (type === 'repo') return 'guide'
+    if (type === 'tool') return 'zap'
+    return 'doc'
+}
+
+/** Flattens a milestone's per-task checklist items into one ordered list — this is
+ * the layout `milestone_progress.checklist_state` (a flat boolean[]) is indexed against. */
+function flattenChecklist(milestone: ProjectMilestoneWithProgress): { taskIdx: number; itemIdx: number; item: MilestoneChecklistItem }[] {
+    const out: { taskIdx: number; itemIdx: number; item: MilestoneChecklistItem }[] = []
+    milestone.tasks.forEach((task, taskIdx) => {
+        (task.checklist || []).forEach((item, itemIdx) => out.push({ taskIdx, itemIdx, item }))
+    })
+    return out
+}
+
+/** Per-task slice offsets into the flat checklist_state array, so each task can read/write its own items. */
+function taskChecklistOffsets(milestone: ProjectMilestoneWithProgress): number[] {
+    const offsets: number[] = []
+    let running = 0
+    milestone.tasks.forEach((task) => {
+        offsets.push(running)
+        running += (task.checklist || []).length
+    })
+    return offsets
+}
+
+/** True once every `required` checklist item across all tasks is checked (the Review My Work gate). */
+function allRequiredChecked(milestone: ProjectMilestoneWithProgress, checklistState: boolean[]): boolean {
+    const flat = flattenChecklist(milestone)
+    const required = flat.filter(f => f.item.required)
+    if (required.length === 0) return flat.length > 0 && flat.every((_, i) => checklistState[i])
+    return required.every((_, i) => {
+        const flatIdx = flat.findIndex(f => f === required[i])
+        return checklistState[flatIdx]
+    })
+}
+
+// ── Lightweight syntax highlighting for coach code blocks ──────────────────
+// A hand-rolled tokenizer, not a full grammar engine — these are short instructional
+// snippets (commands, configs, small files), not a code editor, so a regex pass over
+// comments/strings/numbers/keywords is enough for legibility without a new dependency.
+// Colors are drawn from this page's own palette (T.blue / T.green / T.amberText / T.muted2)
+// rather than an imported dark theme — code should read as JobScorer's, not a bolted-on IDE skin.
+
+const WS_LANG_KEYWORDS: Record<string, string[]> = {
+    bash: ['sudo', 'apt', 'apt-get', 'yum', 'dnf', 'brew', 'install', 'update', 'upgrade', 'cd', 'ls', 'mkdir', 'rm', 'cp', 'mv', 'echo', 'export', 'source', 'chmod', 'chown', 'curl', 'wget', 'git', 'docker', 'docker-compose', 'python', 'python3', 'pip', 'pip3', 'npm', 'npx', 'node', 'az', 'aws', 'gcloud', 'systemctl', 'service', 'yarn', 'if', 'then', 'else', 'fi', 'for', 'do', 'done', 'while', 'function', 'return', 'exit', 'cat', 'grep', 'find'],
+    python: ['def', 'class', 'import', 'from', 'as', 'return', 'if', 'elif', 'else', 'for', 'while', 'in', 'not', 'and', 'or', 'is', 'None', 'True', 'False', 'try', 'except', 'finally', 'with', 'pass', 'break', 'continue', 'lambda', 'yield', 'global', 'nonlocal', 'self', 'async', 'await', 'raise'],
+    javascript: ['const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'import', 'export', 'from', 'default', 'class', 'extends', 'new', 'this', 'async', 'await', 'try', 'catch', 'finally', 'typeof', 'instanceof', 'null', 'undefined', 'true', 'false'],
+    dockerfile: ['FROM', 'RUN', 'CMD', 'COPY', 'ADD', 'WORKDIR', 'EXPOSE', 'ENV', 'ARG', 'ENTRYPOINT', 'VOLUME', 'USER', 'LABEL', 'ONBUILD', 'STOPSIGNAL', 'HEALTHCHECK', 'SHELL'],
+    yaml: ['true', 'false', 'null'],
+}
+WS_LANG_KEYWORDS.sh = WS_LANG_KEYWORDS.shell = WS_LANG_KEYWORDS.zsh = WS_LANG_KEYWORDS.console = WS_LANG_KEYWORDS.bash
+WS_LANG_KEYWORDS.py = WS_LANG_KEYWORDS.python
+WS_LANG_KEYWORDS.js = WS_LANG_KEYWORDS.jsx = WS_LANG_KEYWORDS.javascript
+WS_LANG_KEYWORDS.ts = WS_LANG_KEYWORDS.tsx = WS_LANG_KEYWORDS.typescript = [...WS_LANG_KEYWORDS.javascript, 'interface', 'type', 'enum', 'implements', 'private', 'public', 'readonly', 'namespace']
+WS_LANG_KEYWORDS.docker = WS_LANG_KEYWORDS.dockerfile
+WS_LANG_KEYWORDS.yml = WS_LANG_KEYWORDS.yaml
+
+const WS_HASH_COMMENT_LANGS = new Set(['bash', 'sh', 'shell', 'zsh', 'console', 'python', 'py', 'yaml', 'yml', 'dockerfile', 'docker', 'toml'])
+const WS_SLASH_COMMENT_LANGS = new Set(['javascript', 'js', 'jsx', 'typescript', 'ts', 'tsx', 'json', 'jsonc', 'java', 'c', 'cpp', 'go', 'rust', 'rs'])
+
+function wsBuildTokenRegex(lang: string): RegExp | null {
+    const parts: string[] = []
+    if (WS_HASH_COMMENT_LANGS.has(lang)) parts.push('#[^\\n]*')
+    if (WS_SLASH_COMMENT_LANGS.has(lang)) parts.push('//[^\\n]*')
+    parts.push('"(?:[^"\\\\]|\\\\.)*"', "'(?:[^'\\\\]|\\\\.)*'")
+    parts.push('\\b\\d+(?:\\.\\d+)?\\b')
+    const kw = WS_LANG_KEYWORDS[lang]
+    if (kw && kw.length) parts.push(`\\b(?:${kw.join('|')})\\b`)
+    return parts.length ? new RegExp(parts.join('|'), 'g') : null
+}
+
+function wsHighlightCode(code: string, lang: string): ReactElement[] | string {
+    const regex = wsBuildTokenRegex(lang.toLowerCase())
+    if (!regex) return code
+    const out: ReactElement[] = []
+    let lastIndex = 0
+    let match: RegExpExecArray | null
+    let key = 0
+    while ((match = regex.exec(code))) {
+        if (match.index > lastIndex) out.push(<span key={key++}>{code.slice(lastIndex, match.index)}</span>)
+        const token = match[0]
+        const isComment = token.startsWith('#') || token.startsWith('//')
+        const isString = token.startsWith('"') || token.startsWith("'")
+        const isNumber = /^\d/.test(token)
+        const color = isComment ? T.muted2 : isString ? T.green : isNumber ? T.amberText : T.blue
+        out.push(
+            <span key={key++} style={{ color, fontWeight: !isComment && !isString && !isNumber ? 600 : 400, fontStyle: isComment ? 'italic' : 'normal' }}>
+                {token}
+            </span>
+        )
+        lastIndex = regex.lastIndex
+    }
+    if (lastIndex < code.length) out.push(<span key={key++}>{code.slice(lastIndex)}</span>)
+    return out
+}
+
+const WS_CODE_LANG_LABELS: Record<string, string> = {
+    bash: 'Terminal', sh: 'Terminal', shell: 'Terminal', zsh: 'Terminal', console: 'Terminal',
+    python: 'Python', py: 'Python',
+    javascript: 'JavaScript', js: 'JavaScript', jsx: 'JavaScript',
+    typescript: 'TypeScript', ts: 'TypeScript', tsx: 'TypeScript',
+    json: 'JSON', jsonc: 'JSON',
+    yaml: 'YAML', yml: 'YAML',
+    dockerfile: 'Dockerfile', docker: 'Dockerfile',
+    text: 'Text', plaintext: 'Text', txt: 'Text',
+}
+function wsCodeLangLabel(lang: string): string {
+    const l = lang.toLowerCase()
+    if (WS_CODE_LANG_LABELS[l]) return WS_CODE_LANG_LABELS[l]
+    return l ? l.charAt(0).toUpperCase() + l.slice(1) : 'Code'
+}
+
+/** Light, bordered code card (GitHub-Primer-style) with a language label + real copy-to-clipboard. */
+function WsCodeBlock({ code, lang }: { code: string; lang: string }) {
+    const [copied, setCopied] = useState(false)
+    const copy = () => {
+        navigator.clipboard.writeText(code).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1500)
+        })
+    }
+    return (
+        <div style={{ background: '#F8FAFC', border: `1px solid ${T.line}`, borderRadius: 10, overflow: 'hidden', margin: '4px 0 20px' }}>
+            <div style={{ padding: '7px 14px', borderBottom: `1px solid ${T.line}`, background: T.sand, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: WS_MONO, fontSize: 11, fontWeight: 700, color: T.muted2, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{wsCodeLangLabel(lang)}</span>
+                <button onClick={copy} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px', background: copied ? '#DCFCE7' : '#fff', border: `1px solid ${copied ? '#BBF7D0' : T.line}`, borderRadius: 6, fontSize: 11, fontWeight: 700, color: copied ? T.greenText : T.muted, cursor: 'pointer' }}>
+                    {copied ? '✓ Copied' : 'Copy'}
+                </button>
+            </div>
+            <pre style={{ margin: 0, padding: '14px 16px', overflowX: 'auto' }}>
+                <code style={{ fontFamily: WS_MONO, fontSize: '12.5px', color: T.ink2, lineHeight: 1.8, whiteSpace: 'pre' }}>{wsHighlightCode(code, lang)}</code>
+            </pre>
+        </div>
+    )
+}
+
+/** Renders AI coach output as styled markdown, matching this page's light, blue-accented design language. */
+const WS_DISPLAY_FONT = "'Outfit', sans-serif"
+
+function WsMarkdown({ content }: { content: string }) {
+    return (
+        <div style={{ fontSize: '13.5px', color: T.ink2, lineHeight: 1.75 }}>
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                    h1: (p) => <h3 style={{ fontFamily: WS_DISPLAY_FONT, fontSize: 21, fontWeight: 800, letterSpacing: '-0.02em', color: T.ink, margin: '0 0 14px' }}>{p.children}</h3>,
+                    h2: (p) => <h3 style={{ fontFamily: WS_DISPLAY_FONT, fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em', color: T.ink, margin: '32px 0 14px', paddingBottom: 10, borderBottom: `1px solid ${T.line2}` }}>{p.children}</h3>,
+                    h3: (p) => <h4 style={{ fontFamily: WS_DISPLAY_FONT, fontSize: 15, fontWeight: 700, color: T.ink, margin: '26px 0 10px' }}>{p.children}</h4>,
+                    h4: (p) => <h5 style={{ fontFamily: WS_DISPLAY_FONT, fontSize: 13.5, fontWeight: 700, color: T.ink, margin: '20px 0 8px' }}>{p.children}</h5>,
+                    p: (p) => <p style={{ margin: '0 0 16px' }}>{p.children}</p>,
+                    ul: (p) => <ul style={{ margin: '0 0 16px', paddingLeft: 20 }}>{p.children}</ul>,
+                    ol: (p) => <ol style={{ margin: '0 0 16px', paddingLeft: 20 }}>{p.children}</ol>,
+                    li: (p) => <li style={{ marginBottom: 9 }}>{p.children}</li>,
+                    strong: (p) => <strong style={{ color: T.ink, fontWeight: 700 }}>{p.children}</strong>,
+                    a: (p) => <a href={p.href} target="_blank" rel="noopener noreferrer" style={{ color: T.blue, fontWeight: 600 }}>{p.children}</a>,
+                    // `pre` is a passthrough — the `code` override below does all the rendering, so a
+                    // fenced block only needs one component deciding "is this a block or inline" (via className).
+                    pre: (p) => <>{p.children}</>,
+                    code: (p) => {
+                        const { className, children } = p as { className?: string; children?: ReactElement | string }
+                        const isBlock = /language-/.test(className || '')
+                        if (!isBlock) {
+                            return <code style={{ fontFamily: WS_MONO, fontSize: '12.5px', background: T.sand, padding: '2px 6px', borderRadius: 4, color: T.ink2 }}>{children}</code>
+                        }
+                        const text = typeof children === 'string' ? children.replace(/\n$/, '') : String(children ?? '')
+                        const langMatch = /language-(\w+)/.exec(className || '')
+                        return <WsCodeBlock code={text} lang={langMatch ? langMatch[1] : ''} />
+                    },
+                }}
+            >
+                {content}
+            </ReactMarkdown>
+        </div>
+    )
+}
+
+function WsCoachLoading({ label }: { label: string }) {
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', border: `3px solid ${T.line}`, borderTopColor: T.blue, animation: 'lp-spin 0.9s linear infinite' }} />
+            <div style={{ fontSize: '13.5px', color: T.muted }}>{label}</div>
+        </div>
+    )
+}
+
+function WsCoachError({ message, onRetry }: { message: string; onRetry: () => void }) {
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 40, textAlign: 'center' }}>
+            <div style={{ fontSize: '13.5px', color: T.redText }}>{message}</div>
+            <button onClick={onRetry} style={{ padding: '8px 18px', background: T.blue, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Try Again</button>
+        </div>
+    )
+}
+
+type WsCoach = 'teach-me' | 'stuck' | 'review' | null
+
+function WsCoachHeader({ icon, iconBg, iconBorder, title, sub, active, showReview = true, onBack, onSwitch }: {
+    icon: ReactElement; iconBg: string; iconBorder: string; title: string; sub: string
+    active: WsCoach; showReview?: boolean; onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void
+}) {
+    const allTabs: { key: Exclude<WsCoach, null>; label: string; color: string; icon: ReactElement }[] = [
+        { key: 'teach-me', label: 'Teach Me', color: T.blue, icon: <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg> },
+        { key: 'stuck', label: "I'm Stuck", color: '#DC2626', icon: <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg> },
+        { key: 'review', label: 'Review My Work', color: T.blue, icon: <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" /></svg> },
+    ]
+    const tabs = showReview ? allTabs : allTabs.filter(t => t.key !== 'review')
+    return (
+        <div style={{ flexShrink: 0, padding: '16px 32px 0', background: '#fff', borderBottom: `1px solid ${T.line2}` }}>
+            <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>
+                <span style={{ color: T.blue, cursor: 'pointer', fontWeight: 600 }} onClick={onBack}>Project Coach</span>
+                {' › '}<strong style={{ color: T.ink }}>{title}</strong>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 9, background: iconBg, border: `1px solid ${iconBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
+                    <div>
+                        <div style={{ fontFamily: WS_DISPLAY_FONT, fontSize: 20, fontWeight: 800, color: T.ink, letterSpacing: '-.02em' }}>{title}</div>
+                        <div style={{ fontSize: 13, color: T.muted }}>{sub}</div>
+                    </div>
+                </div>
+                <button onClick={onBack} style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${T.line}`, background: '#fff', cursor: 'pointer', fontSize: 16, color: T.muted }}>✕</button>
+            </div>
+            <div style={{ display: 'flex', gap: 0 }}>
+                {tabs.map(tb => (
+                    <button key={tb.key} onClick={() => onSwitch(tb.key)} style={{
+                        padding: '10px 18px', border: 'none', background: 'transparent',
+                        fontSize: '13.5px', fontWeight: active === tb.key ? 700 : 600,
+                        color: active === tb.key ? tb.color : T.muted, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 7,
+                        borderBottom: active === tb.key ? `2px solid ${tb.color}` : '2px solid transparent', marginBottom: -1,
+                    }}>{tb.icon}{tb.label}</button>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+function WsTeachMe({ roadmapId, milestoneId, taskIndex, milestoneTitle, task, cache, onCache, showReviewLink, onBack, onSwitch }: {
+    roadmapId: string; milestoneId: string; taskIndex: number; milestoneTitle: string; task: MilestoneTask | undefined
+    cache: Record<string, string>; onCache: (key: string, content: string) => void
+    showReviewLink: boolean
+    onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void
+}) {
+    const cacheKey = `${milestoneId}:${taskIndex}`
+    const [content, setContent] = useState<string | null>(cache[cacheKey] ?? null)
+    const [error, setError] = useState<string | null>(null)
+    const [loading, setLoading] = useState(!cache[cacheKey])
+
+    const load = useCallback(() => {
+        if (cache[cacheKey]) { setContent(cache[cacheKey]); setLoading(false); return }
+        setLoading(true)
+        setError(null)
+        projectCoachTeachMe({ roadmap_id: roadmapId, milestone_id: milestoneId, task_index: taskIndex }).then(res => {
+            if (res.success && res.content) {
+                onCache(cacheKey, res.content)
+                setContent(res.content)
+            } else {
+                setError(res.error || 'Teach Me is temporarily unavailable.')
+            }
+            setLoading(false)
+        }).catch(() => {
+            setError('Teach Me is temporarily unavailable.')
+            setLoading(false)
+        })
+        // `cache` is intentionally excluded — it changes identity on every write and would
+        // re-trigger this callback; the cache-hit check above already reads the latest value.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cacheKey, roadmapId, milestoneId, taskIndex])
+
+    useEffect(() => { load() }, [load])
+
+    const header = (
+        <WsCoachHeader
+            icon={<svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2.2} strokeLinecap="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>}
+            iconBg={T.blue50} iconBorder={T.blueLight} title="Teach Me" sub={task ? `${milestoneTitle} — ${task.title}` : milestoneTitle}
+            active="teach-me" showReview={showReviewLink} onBack={onBack} onSwitch={onSwitch}
+        />
+    )
+
+    if (loading || error) {
+        return (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
+                {header}
+                <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                    {loading ? <WsCoachLoading label="Preparing a walkthrough for this task…" /> : <WsCoachError message={error!} onRetry={load} />}
+                </div>
+            </div>
+        )
+    }
+
+    // Header scrolls away WITH the content (not pinned) — the whole panel scrolls as one unit.
+    return (
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
+            <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto' }}>
+                {header}
+                <div style={{ padding: '28px 32px' }}>
+                    <WsMarkdown content={content || ''} />
+                </div>
+            </div>
+            {task && (task.resources || []).length > 0 && (
+                <div style={{ width: 220, flexShrink: 0, minHeight: 0, borderLeft: `1px solid ${T.line2}`, overflowY: 'auto', background: '#fff', padding: '16px 14px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.muted2, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>Resources</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {task.resources.map((r, i) => (
+                            <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#fff', border: `1px solid ${T.line2}`, borderRadius: 10, textDecoration: 'none' }}>
+                                <div style={{ width: 32, height: 32, borderRadius: 8, background: WS_RES_ICON[resIconFor(r.type)].bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><WsResIcon k={resIconFor(r.type)} /></div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '12.5px', fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</div>
+                                    <div style={{ fontSize: 11, color: T.muted, textTransform: 'capitalize' }}>{r.type}</div>
+                                </div>
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+type WsStuckTurn = { query: string; content?: string; error?: string }
+
+function WsStuck({ roadmapId, milestoneId, taskIndex, history, onHistoryChange, showReviewLink, onBack, onSwitch }: {
+    roadmapId: string; milestoneId: string; taskIndex: number
+    history: Record<string, WsStuckTurn[]>; onHistoryChange: (key: string, turns: WsStuckTurn[]) => void
+    showReviewLink: boolean
+    onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void
+}) {
+    const cacheKey = `${milestoneId}:${taskIndex}`
+    const [turns, setTurns] = useState<WsStuckTurn[]>(history[cacheKey] ?? [])
+    const [query, setQuery] = useState('')
+    const [pending, setPending] = useState(false)
+    const scrollRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        const el = scrollRef.current
+        if (el) el.scrollTop = el.scrollHeight
+    }, [turns.length, pending])
+
+    const analyze = (q: string) => {
+        if (!q.trim() || pending) return
+        setPending(true)
+        setQuery('')
+        projectCoachStuck({ roadmap_id: roadmapId, milestone_id: milestoneId, task_index: taskIndex, error_text: q }).then(res => {
+            const turn: WsStuckTurn = res.success && res.content
+                ? { query: q, content: res.content }
+                : { query: q, error: res.error || "I'm Stuck is temporarily unavailable." }
+            const next = [...turns, turn]
+            onHistoryChange(cacheKey, next)
+            setTurns(next)
+            setPending(false)
+        }).catch(() => {
+            const next = [...turns, { query: q, error: "I'm Stuck is temporarily unavailable." }]
+            onHistoryChange(cacheKey, next)
+            setTurns(next)
+            setPending(false)
+        })
+    }
+
+    const header = (
+        <WsCoachHeader
+            icon={<svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth={2.2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>}
+            iconBg="#FEF2F2" iconBorder="#FECACA" title="I'm Stuck" sub="Describe your issue or paste an error — I'll diagnose and guide you step-by-step."
+            active="stuck" showReview={showReviewLink} onBack={onBack} onSwitch={onSwitch}
+        />
+    )
+
+    if (turns.length === 0 && !pending) {
+        return (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
+                {header}
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 60px', overflowY: 'auto' }}>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: T.ink, marginBottom: 8, letterSpacing: '-0.02em' }}>What&apos;s going wrong?</div>
+                    <div style={{ fontSize: 14, color: T.muted, marginBottom: 32 }}>Describe your error or paste a message — I&apos;ll diagnose it instantly.</div>
+                    <div style={{ width: '100%', maxWidth: 680, background: '#fff', border: `1.5px solid ${T.line}`, borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                        <div style={{ padding: '14px 16px' }}>
+                            <textarea
+                                value={query} onChange={e => setQuery(e.target.value)} rows={3}
+                                placeholder="Ask anything… paste your error, describe what's wrong"
+                                style={{ width: '100%', border: 'none', background: 'transparent', fontFamily: 'inherit', fontSize: 15, color: T.ink, outline: 'none', resize: 'none', lineHeight: 1.6, boxSizing: 'border-box' }}
+                            />
+                        </div>
+                        <div style={{ padding: '10px 16px 12px', display: 'flex', justifyContent: 'flex-end', borderTop: `1px solid ${T.line2}` }}>
+                            <button onClick={() => analyze(query)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 18px', background: '#DC2626', color: '#fff', border: 'none', borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><polyline points="22 2 11 13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>Analyze
+                            </button>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
+                        {['docker build . failed to solve: process npm install exited with code 1', 'npm install fails inside container', 'container exits immediately after start', 'permission denied on file inside container'].map(sug => (
+                            <button key={sug} onClick={() => analyze(sug)} style={{ padding: '7px 16px', border: `1.5px solid ${T.line}`, borderRadius: 20, background: '#fff', cursor: 'pointer', fontSize: '12.5px', color: T.muted }}>{sug.length > 34 ? sug.slice(0, 34) + '…' : sug}</button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    // Header scrolls away WITH the transcript (not pinned); only the input bar stays fixed at the bottom.
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
+            <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                {header}
+                <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {turns.map((t, i) => (
+                        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                <div style={{ maxWidth: '60%', background: T.blue, color: '#fff', borderRadius: '16px 16px 4px 16px', padding: '12px 18px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{t.query}</div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                                <div style={{ width: 34, height: 34, borderRadius: '50%', background: T.blue50, border: `2px solid ${T.blue}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                                    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2} strokeLinecap="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>
+                                </div>
+                                <div style={{ flex: 1, background: '#fff', border: `1px solid ${T.line}`, borderRadius: '4px 16px 16px 16px', padding: '18px 22px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                                    {t.error ? <div style={{ fontSize: '13.5px', color: T.redText }}>{t.error}</div> : <WsMarkdown content={t.content || ''} />}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {pending && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 34, height: 34, borderRadius: '50%', background: T.blue50, border: `2px solid ${T.blue}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2} strokeLinecap="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>
+                            </div>
+                            <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: '16px 16px 16px 4px', padding: '14px 18px', display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: T.muted, display: 'inline-block', animation: 'lp-spin 0.9s linear infinite' }} />
+                                <span style={{ fontSize: '12.5px', color: T.muted }}>Diagnosing…</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div style={{ flexShrink: 0, borderTop: `1px solid ${T.line2}`, padding: '12px 24px', background: '#fff', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                <textarea
+                    value={query} onChange={e => setQuery(e.target.value)} rows={1}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); analyze(query) } }}
+                    placeholder="Ask another question…"
+                    style={{ flex: 1, border: `1.5px solid ${T.line}`, borderRadius: 10, padding: '10px 14px', fontFamily: 'inherit', fontSize: 14, color: T.ink, outline: 'none', resize: 'none', lineHeight: 1.5, boxSizing: 'border-box' }}
+                />
+                <button onClick={() => analyze(query)} disabled={pending || !query.trim()} style={{ padding: '10px 18px', background: pending || !query.trim() ? T.line : '#DC2626', color: pending || !query.trim() ? T.muted : '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: pending || !query.trim() ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>Send</button>
+                {showReviewLink && (
+                    <button onClick={() => onSwitch('review')} style={{ padding: '10px 18px', background: '#fff', border: `1.5px solid ${T.line}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: T.ink, cursor: 'pointer', whiteSpace: 'nowrap' }}>Review My Work</button>
+                )}
+            </div>
+        </div>
+    )
+}
+
+function WsReview({ roadmapId, milestoneId, canReview, initialGithubUrl, onBack, onSwitch, onPassed }: {
+    roadmapId: string; milestoneId: string; canReview: boolean; initialGithubUrl: string
+    onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void
+    onPassed: (result: CheckpointResult, githubUrl: string) => Promise<boolean>
+}) {
+    const [phase, setPhase] = useState<'input' | 'loading' | 'results'>('input')
+    const [githubUrl, setGithubUrl] = useState(initialGithubUrl)
+    const [result, setResult] = useState<CheckpointResult | null>(null)
+    const [error, setError] = useState<string | null>(null)
+    const [continuing, setContinuing] = useState(false)
+    const [saveError, setSaveError] = useState<string | null>(null)
+
+    const analyze = () => {
+        if (!canReview) return
+        setPhase('loading')
+        setError(null)
+        projectCoachReviewWork({ roadmap_id: roadmapId, milestone_id: milestoneId, github_url: githubUrl || undefined }).then(res => {
+            if (res.success) {
+                setResult({ passed: !!res.passed, feedback: res.feedback || '', issues: res.issues || [] })
+                setPhase('results')
+            } else {
+                setError(res.error || 'Review My Work is temporarily unavailable.')
+                setPhase('input')
+            }
+        }).catch(() => {
+            setError('Review My Work is temporarily unavailable.')
+            setPhase('input')
+        })
+    }
+
+    const continueNext = async () => {
+        if (!result) return
+        setContinuing(true)
+        setSaveError(null)
+        let ok = false
+        try {
+            ok = await onPassed(result, githubUrl)
+        } catch {
+            ok = false
+        }
+        if (!ok) {
+            setContinuing(false)
+            setSaveError('Could not save your progress — please try again.')
+        }
+    }
+
+    const header = (
+        <WsCoachHeader
+            icon={<svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth={2.2} strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>}
+            iconBg="#DCFCE7" iconBorder="#BBF7D0" title="Review My Work" sub="Submit your GitHub repo (optional) and get an AI verdict on this milestone."
+            active="review" onBack={onBack} onSwitch={onSwitch}
+        />
+    )
+
+    // Results can be long (feedback + issue list) — header scrolls away with it instead of staying pinned.
+    if (phase === 'results' && result) {
+        return (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                    {header}
+                    <div style={{ display: 'flex', flexDirection: 'column', padding: '22px 28px 40px', gap: 18 }}>
+                        {result.passed ? (
+                            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 14, padding: '20px 24px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth={2.5} strokeLinecap="round"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" /></svg></div>
+                                    <span style={{ fontSize: 16, fontWeight: 800, color: T.greenText }}>Ready to advance</span>
+                                </div>
+                                <p style={{ fontSize: '13.5px', color: T.ink, lineHeight: 1.7, margin: '0 0 16px' }}>{result.feedback}</p>
+                                {saveError && <div style={{ fontSize: '12.5px', color: T.redText, marginBottom: 12 }}>{saveError}</div>}
+                                <button onClick={continueNext} disabled={continuing} style={{ padding: '10px 20px', background: T.blue, color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: continuing ? 'default' : 'pointer', opacity: continuing ? 0.6 : 1 }}>
+                                    {continuing ? 'Saving…' : 'Continue to Next Milestone'}
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 14, padding: '20px 24px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                                    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth={2.5} strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /></svg>
+                                    <span style={{ fontSize: 16, fontWeight: 800, color: '#92400E' }}>Fix {result.issues.length || 'a few'} thing{result.issues.length === 1 ? '' : 's'} before continuing</span>
+                                </div>
+                                {result.feedback && <p style={{ fontSize: '13.5px', color: '#78350F', lineHeight: 1.7, margin: '0 0 12px' }}>{result.feedback}</p>}
+                                {result.issues.length > 0 && (
+                                    <ol style={{ margin: '0 0 16px', paddingLeft: 20 }}>
+                                        {result.issues.map((issue, i) => <li key={i} style={{ fontSize: '13.5px', color: '#78350F', marginBottom: 6 }}>{issue}</li>)}
+                                    </ol>
+                                )}
+                                <button onClick={() => setPhase('input')} style={{ padding: '10px 20px', background: '#fff', border: '1.5px solid #F59E0B', borderRadius: 10, fontSize: 13, fontWeight: 700, color: '#92400E', cursor: 'pointer' }}>Review Again</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
+            {header}
+            {phase === 'input' && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 60px', gap: 20, overflowY: 'auto' }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: T.ink, letterSpacing: '-.02em' }}>Ready to submit this milestone?</div>
+                    <div style={{ fontSize: 14, color: T.muted, textAlign: 'center', maxWidth: 480 }}>The AI reviews your checklist and (optionally) your GitHub repo, then tells you if you&apos;re ready for the next milestone.</div>
+                    {!canReview && (
+                        <div style={{ padding: '10px 16px', background: T.amberBg, color: T.amberText, borderRadius: 10, fontSize: '12.5px', fontWeight: 600, maxWidth: 480, textAlign: 'center' }}>
+                            Complete all required checklist items in the Tasks tab before requesting a review.
+                        </div>
+                    )}
+                    <div style={{ width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <input
+                            value={githubUrl} onChange={e => setGithubUrl(e.target.value)}
+                            placeholder="https://github.com/you/your-repo (optional)"
+                            style={{ width: '100%', padding: '11px 14px', border: `1.5px solid ${T.line}`, borderRadius: 10, fontSize: 14, color: T.ink, outline: 'none', boxSizing: 'border-box' }}
+                        />
+                        {error && <div style={{ fontSize: '12.5px', color: T.redText }}>{error}</div>}
+                        <button onClick={analyze} disabled={!canReview} style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 28px',
+                            background: canReview ? T.blue : T.line, color: canReview ? '#fff' : T.muted, border: 'none', borderRadius: 10,
+                            fontSize: 14, fontWeight: 700, cursor: canReview ? 'pointer' : 'default', boxShadow: canReview ? '0 2px 8px rgba(37,99,235,.3)' : 'none',
+                        }}>
+                            <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>Review My Work
+                        </button>
+                    </div>
+                </div>
+            )}
+            {phase === 'loading' && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 60 }}>
+                    <div style={{ width: 56, height: 56, borderRadius: '50%', border: `3px solid ${T.line}`, borderTopColor: T.blue, marginBottom: 20, animation: 'lp-spin 0.9s linear infinite' }} />
+                    <div style={{ fontSize: 17, fontWeight: 700, color: T.ink, marginBottom: 6 }}>Reviewing your implementation…</div>
+                    <div style={{ fontSize: '13.5px', color: T.muted }}>Checking your checklist against the milestone goal</div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+function WsTaskRow({ task, idx, checklistState, onToggleItem, open, onToggleOpen }: {
+    task: MilestoneTask; idx: number; checklistState: boolean[]; onToggleItem: (itemIdx: number) => void
+    open: boolean; onToggleOpen: () => void
+}) {
+    const checklist = task.checklist || []
+    const requiredIdxs = checklist.map((c, i) => c.required ? i : -1).filter(i => i >= 0)
+    const gateIdxs = requiredIdxs.length ? requiredIdxs : checklist.map((_, i) => i)
+    const done = gateIdxs.length > 0 && gateIdxs.every(i => checklistState[i])
+
+    return (
+        <div style={{ borderBottom: `1px solid ${T.line2}` }}>
+            <div onClick={onToggleOpen} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', cursor: 'pointer' }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: T.sand, border: `1.5px solid ${T.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: WS_MONO, fontSize: 12, fontWeight: 700, color: T.muted }}>{idx + 1}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: done ? T.muted : T.ink, marginBottom: 2, textDecoration: done ? 'line-through' : 'none' }}>{task.title}</div>
+                    <div style={{ fontSize: '12.5px', color: T.muted }}>{wsInline(task.description)}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                    <span style={{ fontSize: '12.5px', fontWeight: 600, color: done ? T.greenText : T.muted }}>{done ? 'Done' : `${gateIdxs.filter(i => checklistState[i]).length}/${gateIdxs.length}`}</span>
+                    <span style={{ flexShrink: 0, color: T.muted2, display: 'flex', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>
+                        <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+                    </span>
+                </div>
+            </div>
+            {open && (
+                <div style={{ padding: '0 20px 18px 64px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    {checklist.length > 0 && (
+                        <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted2, marginBottom: 10 }}>Checklist</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {checklist.map((item, i) => {
+                                    const checked = !!checklistState[i]
+                                    return (
+                                        <div key={i} onClick={() => onToggleItem(i)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                                            <div style={{
+                                                width: 18, height: 18, borderRadius: 5, border: checked ? 'none' : '1.5px solid #CBD5E1',
+                                                background: checked ? '#22C55E' : '#fff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            }}>
+                                                {checked && <svg width={9} height={9} viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth={2.4} strokeLinecap="round"><path d="M1.5 5l2.5 2.5 4.5-4.5" /></svg>}
+                                            </div>
+                                            <span style={{ fontSize: 13, color: checked ? T.muted : T.ink, textDecoration: checked ? 'line-through' : 'none' }}>{item.item}</span>
+                                            {item.required && <span style={{ fontSize: 10, fontWeight: 700, color: T.muted2 }}>Required</span>}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+                    {task.deliverable && (
+                        <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted2, marginBottom: 10 }}>Deliverable</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 3 }}>{task.deliverable.name}</div>
+                            <div style={{ fontSize: '12.5px', color: T.muted, marginBottom: task.deliverable.example_snippet ? 10 : 0 }}>{task.deliverable.description}</div>
+                            {task.deliverable.example_snippet && (
+                                <pre style={{ fontFamily: WS_MONO, fontSize: '12.5px', color: '#E2E8F0', background: '#0F1117', margin: 0, padding: '14px 16px', borderRadius: 10, lineHeight: 1.8, whiteSpace: 'pre', overflowX: 'auto' }}>{task.deliverable.example_snippet}</pre>
+                            )}
+                        </div>
+                    )}
+                    {(task.resources || []).length > 0 && (
+                        <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.muted2, marginBottom: 10 }}>Resources</div>
+                            <div style={{ border: `1px solid ${T.line2}`, borderRadius: 10, overflow: 'hidden' }}>
+                                {task.resources.map((r, i) => (
+                                    <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderBottom: i < task.resources.length - 1 ? `1px solid ${T.line2}` : 'none', background: '#fff', textDecoration: 'none' }}>
+                                        <div style={{ width: 34, height: 34, borderRadius: 8, background: WS_RES_ICON[resIconFor(r.type)].bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><WsResIcon k={resIconFor(r.type)} /></div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, marginBottom: 1 }}>{r.title}</div>
+                                            <div style={{ fontSize: '11.5px', color: T.muted, textTransform: 'capitalize' }}>{r.type}</div>
+                                        </div>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: T.blue, fontSize: '12.5px', fontWeight: 700, flexShrink: 0 }}>
+                                            Open <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                                        </span>
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {task.github_example && (
+                        <a href={task.github_example.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', border: `1px solid ${T.line2}`, borderRadius: 10, textDecoration: 'none' }}>
+                            <div style={{ width: 34, height: 34, borderRadius: 8, background: T.sand, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <svg width={16} height={16} viewBox="0 0 24 24" fill={T.ink}><path d="M12 .5C5.65.5.5 5.65.5 12A11.5 11.5 0 008.4 23.15c.58.1.79-.25.79-.55v-2c-3.22.7-3.9-1.55-3.9-1.55-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.57-.29-5.28-1.28-5.28-5.7 0-1.26.45-2.29 1.2-3.1-.12-.3-.52-1.5.12-3.13 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.5 3.17-1.18 3.17-1.18.64 1.63.24 2.83.12 3.13.75.81 1.2 1.84 1.2 3.1 0 4.43-2.71 5.4-5.3 5.69.42.36.79 1.08.79 2.18v3.23c0 .3.2.66.8.55A11.5 11.5 0 0023.5 12c0-6.35-5.15-11.5-11.5-11.5z" /></svg>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{task.github_example.name}</div>
+                                <div style={{ fontSize: '11.5px', color: T.muted }}>★ {task.github_example.stars} · reference example</div>
+                            </div>
+                        </a>
+                    )}
+                </div>
+            )}
+        </div>
+    )
+}
+
+function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, openTask, onToggleOpenTask, onOpenCoach, isLastMilestone, canContinue, continuing, onContinue }: {
+    milestone: ProjectMilestoneWithProgress; checklistState: boolean[]; onToggleChecklistItem: (flatIdx: number) => void
+    openTask: number | null; onToggleOpenTask: (i: number) => void; onOpenCoach: (c: Exclude<WsCoach, null>) => void
+    isLastMilestone: boolean; canContinue: boolean; continuing: boolean; onContinue: () => void
+}) {
+    const [tab, setTab] = useState<'overview' | 'tasks' | 'coach'>('overview')
+    const offsets = useMemo(() => taskChecklistOffsets(milestone), [milestone])
+    const totalItems = checklistState.length
+    const checkedItems = checklistState.filter(Boolean).length
+    const pct = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0
+    const statusLabel = pct === 100 ? 'Complete' : pct > 0 ? 'In Progress' : 'Not Started'
+    const statusDot = pct === 100 ? '#22C55E' : pct > 0 ? T.blue : '#1E293B'
+    const dos = milestone.tasks.map(t => t.title)
+    const dels = milestone.tasks.filter(t => t.deliverable).map(t => t.deliverable!.name)
+    const alreadyCompleted = milestone.progress?.status === 'completed'
+
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: T.bgAlt, minHeight: 0 }}>
+            <div style={{ padding: '28px 36px 0', borderBottom: `1px solid ${T.line2}`, background: T.bgAlt }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 240 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: T.blue, marginBottom: 6 }}>Milestone {milestone.milestone_number}</div>
+                        <h2 style={{ fontSize: 30, fontWeight: 800, color: T.ink, letterSpacing: '-0.04em', margin: '0 0 8px' }}>{milestone.title}</h2>
+                        <div style={{ fontSize: 14, color: T.muted }}>{milestone.goal}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0, paddingTop: 4 }}>
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', marginBottom: 3 }}>
+                                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                                <span style={{ fontSize: 12, color: T.muted }}>Estimated Time</span>
+                            </div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: T.ink }}>{milestone.estimated_hours ? `${milestone.estimated_hours} Hours` : 'Not estimated'}</div>
+                        </div>
+                        <div style={{ width: 1, height: 14, background: T.line2 }} />
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: 12, color: T.muted, marginBottom: 3 }}>Status</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusDot }} />
+                                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{statusLabel}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: T.muted, whiteSpace: 'nowrap' }}>{pct}% Complete</div>
+                    <div style={{ flex: 1, height: 6, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden', maxWidth: 520 }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: T.blue, borderRadius: 99, transition: 'width .4s' }} />
+                    </div>
+                </div>
+                <div style={{ display: 'flex', gap: 0 }}>
+                    {(['overview', 'tasks', 'coach'] as const).map(tb => (
+                        <button key={tb} onClick={() => setTab(tb)} style={{
+                            padding: '10px 20px', border: 'none', background: 'transparent', fontSize: 14,
+                            fontWeight: tab === tb ? 700 : 500, color: tab === tb ? T.blue : T.muted, cursor: 'pointer',
+                            borderBottom: tab === tb ? `2.5px solid ${T.blue}` : '2.5px solid transparent', marginBottom: -1,
+                        }}>{tb === 'overview' ? 'Overview' : tb === 'tasks' ? 'Tasks' : 'Project Coach'}</button>
+                    ))}
+                </div>
+            </div>
+
+            {!isLastMilestone && !alreadyCompleted && (
+                <div style={{
+                    padding: '14px 36px', background: canContinue ? '#F0FDF4' : '#fff', borderBottom: `1px solid ${T.line2}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+                }}>
+                    <div style={{ fontSize: '13.5px', color: canContinue ? T.greenText : T.muted, fontWeight: canContinue ? 700 : 500 }}>
+                        {canContinue ? '✓ All required checklist items complete.' : 'Complete all required checklist items to continue.'}
+                    </div>
+                    <button onClick={onContinue} disabled={!canContinue || continuing} style={{
+                        padding: '9px 20px', background: canContinue ? T.blue : T.line, color: canContinue ? '#fff' : T.muted,
+                        border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+                        cursor: canContinue && !continuing ? 'pointer' : 'default', opacity: continuing ? 0.6 : 1,
+                    }}>{continuing ? 'Saving…' : 'Continue to Next Milestone →'}</button>
+                </div>
+            )}
+            {isLastMilestone && !alreadyCompleted && (
+                <div style={{ padding: '14px 36px', background: '#fff', borderBottom: `1px solid ${T.line2}` }}>
+                    <div style={{ fontSize: '13.5px', color: T.muted }}>
+                        This is the final milestone — pass <strong style={{ color: T.ink }}>Review My Work</strong> in the Project Coach tab to mark the whole project complete.
+                    </div>
+                </div>
+            )}
+
+            <div style={{ padding: '28px 36px 60px', flex: 1 }}>
+                {tab === 'overview' && (
+                    <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, border: `1px solid ${T.line}`, borderRadius: 14, overflow: 'hidden', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', marginBottom: 24 }}>
+                            <div style={{ padding: 28, borderRight: `1px solid ${T.line}` }}>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, marginBottom: 10 }}>Goal</div>
+                                <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.7, marginBottom: 22 }}>{milestone.goal}</div>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, marginBottom: 14 }}>What You&apos;ll Do</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {dos.map(d => (
+                                        <div key={d} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${T.blue}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke={T.blue} strokeWidth={2.4} strokeLinecap="round"><path d="M1.5 5l2.5 2.5 4.5-4.5" /></svg>
+                                            </div>
+                                            <span style={{ fontSize: 14, color: T.ink }}>{d}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div style={{ padding: 28 }}>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, marginBottom: 18 }}>Expected Deliverables</div>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    {dels.length === 0 && <div style={{ fontSize: 13, color: T.muted }}>No standalone deliverables for this milestone.</div>}
+                                    {dels.map((d, j) => (
+                                        <div key={d} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: j < dels.length - 1 ? `1px solid ${T.line2}` : 'none' }}>
+                                            <div style={{ width: 20, height: 20, borderRadius: 4, background: T.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth={2.4} strokeLinecap="round"><path d="M1.5 5l2.5 2.5 4.5-4.5" /></svg>
+                                            </div>
+                                            <span style={{ flex: 1, fontSize: 14, color: T.ink }}>{d}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                                <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2} strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                                <span style={{ fontSize: 16, fontWeight: 800, color: T.ink }}>Project Coach</span>
+                            </div>
+                            <div style={{ fontSize: 13, color: T.muted, marginBottom: 20 }}>I&apos;m here to help you with this milestone. Choose an option below or ask me anything.</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: isLastMilestone ? '1fr 1fr 1fr' : '1fr 1fr', gap: 12 }}>
+                                <WsCoachCard label="Teach Me" desc="Explain concepts step-by-step" onClick={() => onOpenCoach('teach-me')}
+                                    icon={<svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={1.8} strokeLinecap="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>} />
+                                <WsCoachCard label="I'm Stuck" desc="Get help with errors or issues" onClick={() => onOpenCoach('stuck')}
+                                    icon={<svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth={1.8} strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>} />
+                                {isLastMilestone && (
+                                    <WsCoachCard label="Review My Work" desc="Final AI review — completes the project" onClick={() => onOpenCoach('review')}
+                                        icon={<svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={1.8} strokeLinecap="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>} />
+                                )}
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {tab === 'tasks' && (
+                    <>
+                        <div style={{ marginBottom: 18 }}>
+                            <div style={{ fontSize: 20, fontWeight: 800, color: T.ink, letterSpacing: '-0.02em', marginBottom: 4 }}>Tasks</div>
+                            <div style={{ fontSize: '13.5px', color: T.muted }}>Follow these tasks to complete this milestone. Expand a task to see its resources.</div>
+                        </div>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                            {milestone.tasks.map((task, j) => {
+                                const offset = offsets[j]
+                                const slice = checklistState.slice(offset, offset + (task.checklist || []).length)
+                                return (
+                                    <WsTaskRow key={j} task={task} idx={j} checklistState={slice} open={openTask === j}
+                                        onToggleOpen={() => onToggleOpenTask(j)}
+                                        onToggleItem={(itemIdx) => onToggleChecklistItem(offset + itemIdx)} />
+                                )
+                            })}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: '#fff', border: `1px solid ${T.line}`, borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginTop: 16, gap: 12, flexWrap: 'wrap' }}>
+                            <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: T.blue, marginBottom: 3 }}>Need more help?</div>
+                                <div style={{ fontSize: '12.5px', color: T.muted }}>Ask the Project Coach for guidance specific to this milestone.</div>
+                            </div>
+                            <button onClick={() => setTab('coach')} style={{ padding: '10px 20px', background: T.blue, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>Ask Project Coach</button>
+                        </div>
+                    </>
+                )}
+
+                {tab === 'coach' && (
+                    <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" /></svg>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: T.ink, letterSpacing: '-0.02em' }}>Project Coach</div>
+                        </div>
+                        <div style={{ fontSize: '13.5px', color: T.muted, marginBottom: 20 }}>I&apos;m here to help you with this milestone. Choose an option below or ask me anything.</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: isLastMilestone ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: 10, marginBottom: 22 }}>
+                            <WsCoachCard label="Teach Me" desc="Explain concepts step-by-step" onClick={() => onOpenCoach('teach-me')}
+                                icon={<svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>} />
+                            <WsCoachCard label="I'm Stuck" desc="Get help with errors or issues" onClick={() => onOpenCoach('stuck')}
+                                icon={<svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M8 6l4-4 4 4" /><path d="M12 2v10.3" /><path d="M4.93 10.93A10 10 0 1021.07 10.93" /></svg>} />
+                            {isLastMilestone && (
+                                <WsCoachCard label="Review My Work" desc="Final AI review — completes the project" onClick={() => onOpenCoach('review')}
+                                    icon={<svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>} />
+                            )}
+                        </div>
+                        <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: '12.5px', fontWeight: 600, color: T.muted, marginBottom: 10, letterSpacing: '0.02em' }}>Suggested Questions</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {['How do I create a Node.js app?', 'What should my Dockerfile look like?', "I'm getting an error while building the image", 'How do I run the container?'].map(q => (
+                                    <button key={q} onClick={() => onOpenCoach('teach-me')} style={{ padding: '7px 14px', background: '#fff', border: `1.5px solid ${T.line}`, borderRadius: 20, fontSize: '12.5px', color: T.blue, fontWeight: 600, cursor: 'pointer' }}>{q}</button>
+                                ))}
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', background: '#fff', border: `1px solid ${T.line}`, borderRadius: 12, padding: '8px 8px 8px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                            <input type="text" placeholder="Ask the Project Coach anything about this milestone…" style={{ flex: 1, border: 'none', outline: 'none', fontSize: '13.5px', color: T.ink, background: 'transparent' }} />
+                            <button onClick={() => onOpenCoach('teach-me')} style={{ width: 36, height: 36, borderRadius: 9, background: T.blue, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                            </button>
+                        </div>
+                        <div style={{ textAlign: 'center', fontSize: 12, color: T.muted, marginTop: 12 }}>AI responses may not always be 100% accurate. Verify important steps.</div>
+                    </>
+                )}
+            </div>
+        </div>
+    )
+}
+
+function WsCoachCard({ icon, label, desc, onClick }: { icon: ReactElement; label: string; desc: string; onClick: () => void }) {
+    return (
+        <button onClick={onClick} className="ws-coach-card" style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 12, padding: '18px 12px', textAlign: 'center', cursor: 'pointer' }}>
+            <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center' }}>{icon}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: '11.5px', color: T.muted }}>{desc}</div>
+        </button>
+    )
+}
+
+function WsOverview({ roadmap, milestones, onStart, onSelectMilestone }: {
+    roadmap: import('@/lib/types').ProjectRoadmap; milestones: ProjectMilestoneWithProgress[]
+    onStart: () => void; onSelectMilestone: (i: number) => void
+}) {
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+    const curve = roadmap.milestone_score_curve || []
+    const N = curve.length
+    const totalGain = roadmap.expected_score_impact || 0
+    const baseScore = N > 0 ? Math.round(curve[0].score_after - (totalGain * 2) / (N * (N + 1))) : null
+    const finalScore = N > 0 ? curve[N - 1].score_after : null
+    const progressions = roadmap.skill_progressions || []
+    const alreadyKnow = progressions.filter(p => p.from_level !== 'none').map(p => p.skill)
+    const willLearn = progressions.map(p => p.skill)
+    const deliverables = Array.from(new Set(
+        milestones.flatMap(m => m.tasks.filter(t => t.deliverable).map(t => t.deliverable!.name))
+    ))
+
+    const { user } = useAuth()
+    const [evidence, setEvidence] = useState<ProjectEvidence | null>(null)
+    useEffect(() => {
+        if (roadmap.status !== 'completed') return
+        let cancelled = false
+        fetchProjectEvidence(roadmap.id).then(e => { if (!cancelled) setEvidence(e) })
+        return () => { cancelled = true }
+    }, [roadmap.id, roadmap.status])
+
+    const [achievements, setAchievements] = useState<UserAchievement[]>([])
+    useEffect(() => {
+        if (roadmap.status !== 'completed' || !user?.id) return
+        let cancelled = false
+        fetchUserAchievements(user.id).then(a => { if (!cancelled) setAchievements(a) })
+        return () => { cancelled = true }
+    }, [roadmap.status, user?.id])
+    const [bulletCopied, setBulletCopied] = useState(false)
+    const copyBullet = () => {
+        if (!evidence?.resume_bullet) return
+        navigator.clipboard.writeText(evidence.resume_bullet).then(() => {
+            setBulletCopied(true)
+            setTimeout(() => setBulletCopied(false), 1500)
+        })
+    }
+
+    return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
+            <div style={{ flexShrink: 0, padding: '13px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderBottom: `1px solid ${T.line2}`, gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: T.muted }}>
+                    <span>My Projects</span>
+                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={T.muted2} strokeWidth={2} strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+                    <span style={{ fontWeight: 600, color: T.ink }}>{roadmap.project_name}</span>
+                </div>
+                <button onClick={onStart} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', background: T.blue, color: '#fff', border: 'none', borderRadius: 10, fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(37,99,235,.25)' }}>
+                    <svg width={13} height={13} viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+                    Start Milestone 1
+                </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+                <div style={{ padding: '32px 40px 60px', maxWidth: 1440, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+
+                    {roadmap.status === 'completed' && (
+                        <div style={{ background: T.blue50, border: `1px solid ${T.blueLight}`, borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth={2.5} strokeLinecap="round"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" /></svg>
+                                <span style={{ fontSize: 15, fontWeight: 800, color: T.ink }}>Project Complete</span>
+                            </div>
+                            {evidence?.resume_bullet ? (
+                                <>
+                                    <p style={{ fontSize: 14, color: T.ink, fontStyle: 'italic', lineHeight: 1.7, margin: '0 0 12px' }}>&ldquo;{evidence.resume_bullet}&rdquo;</p>
+                                    <button onClick={copyBullet} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', background: bulletCopied ? '#DCFCE7' : '#fff', border: `1.5px solid ${bulletCopied ? '#BBF7D0' : T.blue}`, borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: bulletCopied ? T.greenText : T.blue, cursor: 'pointer' }}>
+                                        {bulletCopied ? '✓ Copied' : 'Copy Resume Bullet'}
+                                    </button>
+                                </>
+                            ) : (
+                                <p style={{ fontSize: '13.5px', color: T.muted, margin: 0 }}>Generating your resume bullet — check back in a moment.</p>
+                            )}
+                            {achievements.length > 0 && (
+                                <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.blueLight}` }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Achievements</div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                        {achievements.map(a => (
+                                            <span key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: T.greenBg, border: `1px solid #BBF7D0`, borderRadius: 999, fontSize: 12, fontWeight: 600, color: T.greenText }}>
+                                                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={T.greenText} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" /></svg>
+                                                {a.label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div style={{ marginBottom: 28 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                            <h1 style={{ fontSize: 30, fontWeight: 800, color: T.ink, letterSpacing: '-0.04em', margin: 0 }}>Project Overview</h1>
+                        </div>
+                        <p style={{ fontSize: 14, color: T.muted, marginBottom: 22 }}>Get a complete understanding of this project and what you will build.</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                            {[
+                                { icon: <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>, label: 'Estimated Time', big: roadmap.estimated_weeks ? `${roadmap.estimated_weeks} Week${roadmap.estimated_weeks === 1 ? '' : 's'}` : 'Not estimated', sub: `${milestones.length} milestones` },
+                                { icon: <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>, label: 'Difficulty', big: cap(roadmap.difficulty), sub: 'Great for building real-world skills' },
+                                { icon: <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>, label: 'Score Impact', big: totalGain ? `+${totalGain}%` : 'Not estimated', sub: 'Match score gain on completion' },
+                                { icon: <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>, label: 'Skills Covered', big: `${roadmap.tech_stack.length} Skill${roadmap.tech_stack.length === 1 ? '' : 's'}`, sub: roadmap.tech_stack.slice(0, 3).join(', ') || 'See tech stack below' },
+                            ].map(c => (
+                                <div key={c.label} style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 12, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                                        {c.icon}<span style={{ fontSize: 12, fontWeight: 600, color: T.muted }}>{c.label}</span>
+                                    </div>
+                                    <div style={{ fontSize: c.big.length > 14 ? 18 : 21, fontWeight: 800, color: T.ink, lineHeight: 1.25, marginBottom: 5 }}>{c.big}</div>
+                                    <div style={{ fontSize: 12, color: T.blue, fontWeight: 500 }}>{c.sub}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, marginBottom: 18 }}>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 14 }}>About This Project</div>
+                            <p style={{ fontSize: 14, color: T.muted, lineHeight: 1.8, marginBottom: 12, whiteSpace: 'pre-line' }}>
+                                {roadmap.project_theory || roadmap.project_description || 'No description generated yet.'}
+                            </p>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {roadmap.tech_stack.map(t => (
+                                    <span key={t} style={{ padding: '4px 10px', background: T.blue50, color: T.blue, fontSize: 12, fontWeight: 600, borderRadius: 6 }}>{t}</span>
+                                ))}
+                            </div>
+                        </div>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 14 }}>Why This Project?</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+                                {progressions.length === 0 && <div style={{ fontSize: 13, color: T.muted }}>Closes {roadmap.tech_stack.join(', ') || 'key'} gaps for this role.</div>}
+                                {progressions.map(p => (
+                                    <div key={p.skill} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: T.blue50, border: `1px solid ${T.blueLight}`, borderRadius: 10 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{p.skill}</div>
+                                        <span style={{ fontSize: '11.5px', color: T.blue, fontWeight: 600 }}>{cap(p.from_level)} → {cap(p.to_level)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            {baseScore !== null && finalScore !== null && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><span style={{ fontSize: 12, color: T.muted, fontWeight: 600 }}>Current Match</span><span style={{ fontSize: 12, fontWeight: 700, color: T.muted }}>{baseScore}%</span></div>
+                                        <div style={{ height: 8, background: T.sand, borderRadius: 99, overflow: 'hidden' }}><div style={{ width: `${baseScore}%`, height: '100%', background: '#94A3B8', borderRadius: 99 }} /></div>
+                                    </div>
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><span style={{ fontSize: 12, color: T.muted, fontWeight: 600 }}>After Completion</span><span style={{ fontSize: 12, fontWeight: 700, color: T.greenText }}>{finalScore}%</span></div>
+                                        <div style={{ height: 8, background: T.sand, borderRadius: 99, overflow: 'hidden' }}><div style={{ width: `${finalScore}%`, height: '100%', background: T.blue, borderRadius: 99 }} /></div>
+                                    </div>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: T.greenText, textAlign: 'right' }}>+{finalScore - baseScore}% improvement</div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)', marginBottom: 18, overflowX: 'auto' }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 22 }}>Your Milestone Journey</div>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative', minWidth: 560 }}>
+                            <div style={{ position: 'absolute', top: 19, left: '10%', right: '10%', height: 2, background: T.line2, zIndex: 0 }} />
+                            {milestones.map((m, i) => {
+                                const complete = m.progress?.status === 'completed'
+                                const active = m.milestone_number === roadmap.current_milestone
+                                const clickable = !m.locked
+                                return (
+                                    <div key={m.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, position: 'relative', zIndex: 1 }}>
+                                        <div onClick={() => clickable && onSelectMilestone(i)} style={{
+                                            width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontFamily: WS_MONO, fontSize: 14, fontWeight: 700, cursor: clickable ? 'pointer' : 'default',
+                                            background: complete ? '#22C55E' : active ? T.blue : '#fff',
+                                            border: complete ? 'none' : active ? `2.5px solid ${T.blue}` : `2px solid ${T.line}`,
+                                            color: complete || active ? '#fff' : T.muted2, opacity: m.locked ? 0.6 : 1,
+                                        }}>{complete ? '✓' : m.milestone_number}</div>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: 12, fontWeight: active ? 700 : 600, color: active ? T.blue : T.muted }}>{m.title}</div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 }}>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 16 }}>What You&apos;ll Be Able To Do</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+                                {milestones.length === 0 && <div style={{ fontSize: 13, color: T.muted }}>Milestone goals not available for this project.</div>}
+                                {milestones.map(m => (
+                                    <div key={m.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                                        <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${T.blue}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                                            <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke={T.blue} strokeWidth={2.4} strokeLinecap="round"><path d="M1.5 5l2.5 2.5 4.5-4.5" /></svg>
+                                        </div>
+                                        <span style={{ fontSize: '13.5px', color: T.ink, lineHeight: 1.6 }}>{m.goal}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 16 }}>Portfolio Outcome</div>
+                            <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.7, marginBottom: 10 }}>{roadmap.github_outcome || 'A working GitHub repo demonstrating this project.'}</p>
+                            <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.7, marginBottom: 20 }}>{roadmap.portfolio_outcome}</p>
+                            <div style={{ background: T.blue50, border: `1px solid ${T.blueLight}`, borderRadius: 10, padding: '14px 16px' }}>
+                                <div style={{ fontSize: '11.5px', fontWeight: 700, color: T.blue, marginBottom: 5 }}>Resume Bullet (unlocked on completion)</div>
+                                <div style={{ fontSize: '12.5px', color: T.muted, lineHeight: 1.6 }}>Generated automatically once every milestone passes review.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {progressions.length > 0 && (
+                        <div style={{ marginBottom: 32 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" /></svg>
+                                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.blue }}>Before You Start</span>
+                            </div>
+                            <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.6, marginBottom: 16 }}>Here&apos;s where you stand on the skills this project covers.</p>
+                            <div style={{ border: `1px solid ${T.line}`, borderRadius: 12, overflow: 'hidden' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+                                    <div style={{ borderRight: `1px solid ${T.line}` }}>
+                                        <div style={{ padding: '12px 16px', background: '#F0FDF4', borderBottom: '1px solid #BBF7D0' }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#15803D' }}>Some Experience Already</span>
+                                        </div>
+                                        <div style={{ padding: '8px 16px' }}>
+                                            {alreadyKnow.length === 0 && <div style={{ padding: '8px 0', fontSize: 12, color: T.muted }}>None yet — all new for you.</div>}
+                                            {alreadyKnow.map((s, i, arr) => (
+                                                <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 0', borderBottom: i < arr.length - 1 ? `1px solid ${T.line2}` : 'none' }}>
+                                                    <svg width={14} height={14} fill="#16A34A" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
+                                                    <span style={{ fontSize: 13, color: T.ink }}>{s}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style={{ padding: '12px 16px', background: '#fff', borderBottom: `1px solid ${T.line}` }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: T.ink }}>You Will Learn</span>
+                                        </div>
+                                        <div style={{ padding: '8px 16px' }}>
+                                            {willLearn.map((s, i, arr) => (
+                                                <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 0', borderBottom: i < arr.length - 1 ? `1px solid ${T.line2}` : 'none' }}>
+                                                    <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
+                                                    <span style={{ fontSize: 13, color: T.ink }}>{s}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {deliverables.length > 0 && (
+                        <div style={{ marginBottom: 32 }}>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: T.blue, marginBottom: 14 }}>FILES YOU&apos;LL PRODUCE</div>
+                            <div style={{ background: T.bgAlt, border: `1px solid ${T.line}`, borderRadius: 10, padding: '16px 20px', overflowX: 'auto' }}>
+                                <div style={{ fontFamily: WS_MONO, fontSize: '12.5px', color: T.ink, lineHeight: 2 }}>
+                                    {Array.from(new Set([...deliverables, 'README.md', '.gitignore'])).map(l => (
+                                        <div key={l} style={{ color: T.muted }}>├── {l}</div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <button onClick={onStart} style={{ padding: '14px 48px', background: T.blue, color: '#fff', border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(37,99,235,.3)', letterSpacing: '-0.01em' }}>Start Milestone 1 →</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    )
+}
+
+/**
+ * Bottom-right stack of transient achievement notifications. Uses the app's existing
+ * "verified" green (T.green*) rather than the brand blue — blue already means "the AI
+ * did this" throughout this page (Teach Me, Generate); green already means "you actually
+ * did this" (Confirmed Projects checkmarks, Ready-to-advance). An achievement is the
+ * latter, so it borrows that established color, not a new gamified one. Icon is a
+ * verification seal, not a star — professional register, not "unlocked" game language.
+ */
+function AchievementToastStack({ toasts }: { toasts: { id: string; label: string }[] }) {
+    if (toasts.length === 0) return null
+    return (
+        <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 60, display: 'flex', flexDirection: 'column-reverse', gap: 8 }}>
+            {toasts.map(t => (
+                <div key={t.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#fff',
+                    border: `1px solid ${T.line}`, borderLeftWidth: 3, borderLeftColor: T.green,
+                    borderRadius: 10, boxShadow: '0 8px 24px rgba(15,23,42,.12)', minWidth: 250, animation: 'lp-toast-in .25s ease',
+                }}>
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: T.greenBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" /></svg>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Achievement earned</div>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>{t.label}</div>
+                    </div>
+                </div>
+            ))}
+            <style>{`@keyframes lp-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+        </div>
+    )
+}
+
+function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: () => void }) {
+    const [loading, setLoading] = useState(true)
+    const [loadError, setLoadError] = useState<string | null>(null)
+    const [roadmap, setRoadmap] = useState<import('@/lib/types').ProjectRoadmap | null>(null)
+    const [milestones, setMilestones] = useState<ProjectMilestoneWithProgress[]>([])
+    const [view, setView] = useState<'overview' | 'ms'>('overview')
+    const [msIdx, setMsIdx] = useState(0)
+    const [coach, setCoach] = useState<WsCoach>(null)
+    const [checklistByMilestone, setChecklistByMilestone] = useState<boolean[][]>([])
+    const [openTask, setOpenTask] = useState<number | null>(null)
+    const [isNarrow, setIsNarrow] = useState(false)
+    const [railOpen, setRailOpen] = useState(false)
+    const [continuing, setContinuing] = useState(false)
+    const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+    const [teachMeCache, setTeachMeCache] = useState<Record<string, string>>({})
+    const [stuckHistory, setStuckHistory] = useState<Record<string, WsStuckTurn[]>>({})
+    const [achievementToasts, setAchievementToasts] = useState<{ id: string; label: string }[]>([])
+
+    useEffect(() => {
+        let cancelled = false
+        fetchProjectRoadmapDetail(roadmapId).then(detail => {
+            if (cancelled) return
+            if (!detail) { setLoadError('Could not load this roadmap.'); setLoading(false); return }
+            setRoadmap(detail.roadmap)
+            setMilestones(detail.milestones)
+            setChecklistByMilestone(detail.milestones.map(m => {
+                const total = flattenChecklist(m).length
+                const saved = m.progress?.checklist_state
+                if (Array.isArray(saved) && saved.length === total) return saved.slice()
+                return new Array(total).fill(false)
+            }))
+            setView(detail.roadmap.status === 'not_started' ? 'overview' : 'ms')
+            setMsIdx(Math.max(0, detail.roadmap.current_milestone - 1))
+            setLoading(false)
+        }).catch(() => { if (!cancelled) { setLoadError('Could not load this roadmap.'); setLoading(false) } })
+        return () => { cancelled = true }
+    }, [roadmapId])
+
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 1024px)')
+        setIsNarrow(mq.matches)
+        const handler = (e: MediaQueryListEvent) => setIsNarrow(e.matches)
+        mq.addEventListener('change', handler)
+        return () => mq.removeEventListener('change', handler)
+    }, [])
+
+    const goMilestone = (i: number) => { setMsIdx(i); setView('ms'); setCoach(null); setOpenTask(null); setRailOpen(false) }
+    const goOverview = () => { setView('overview'); setCoach(null); setRailOpen(false) }
+
+    const handleStart = () => {
+        goMilestone(0)
+        setRoadmap(r => {
+            if (r && r.status === 'not_started') {
+                void startProjectRoadmap(roadmapId)
+                return { ...r, status: 'in_progress', started_at: new Date().toISOString() }
+            }
+            return r
+        })
+    }
+
+    /** Persists a passed Checkpoint Review, advances current_milestone, and navigates on. Returns success. */
+    const handleMilestonePassed = async (result: CheckpointResult, githubUrl: string): Promise<boolean> => {
+        const milestone = milestones[msIdx]
+        if (!milestone) return false
+        let res: Awaited<ReturnType<typeof completeMilestone>>
+        try {
+            res = await completeMilestone(milestone.id, { checkpoint_result: result, github_url: githubUrl || undefined })
+        } catch {
+            return false
+        }
+        if (!res.success) return false
+
+        const newCurrent = res.current_milestone ?? milestone.milestone_number + 1
+        setMilestones(prev => prev.map(m => ({
+            ...m,
+            locked: m.milestone_number > newCurrent,
+            progress: m.id === milestone.id
+                ? { ...(m.progress ?? { id: '', user_id: '', roadmap_id: roadmapId, milestone_id: m.id, checklist_state: checklistByMilestone[msIdx] ?? [], github_url: null, notes: null, created_at: '', updated_at: '' }), status: 'completed', github_url: githubUrl || m.progress?.github_url || null, checkpoint_result: result, completed_at: new Date().toISOString() }
+                : m.progress,
+        })))
+        setRoadmap(r => r ? {
+            ...r,
+            current_milestone: newCurrent,
+            status: res.roadmap_completed ? 'completed' : r.status,
+            completed_at: res.roadmap_completed ? new Date().toISOString() : r.completed_at,
+        } : r)
+
+        if (res.achievements_earned && res.achievements_earned.length > 0) {
+            const toasts = res.achievements_earned.map(a => ({ id: `${a.achievement}-${Date.now()}`, label: a.label }))
+            setAchievementToasts(prev => [...prev, ...toasts])
+            toasts.forEach(t => {
+                setTimeout(() => setAchievementToasts(prev => prev.filter(x => x.id !== t.id)), 5000)
+            })
+        }
+
+        const nextIdx = msIdx + 1
+        if (nextIdx < milestones.length && milestones[nextIdx].milestone_number <= newCurrent) {
+            goMilestone(nextIdx)
+        } else {
+            goOverview()
+        }
+        return true
+    }
+
+    /** Non-final milestones: no AI review, just a checklist-gated advance. */
+    const handleSimpleContinue = async () => {
+        setContinuing(true)
+        const ok = await handleMilestonePassed(
+            { passed: true, feedback: 'All required checklist items completed.', issues: [] },
+            milestones[msIdx]?.progress?.github_url ?? ''
+        )
+        if (!ok) setContinuing(false)
+    }
+
+    const toggleChecklistItem = (milestoneIdx: number, flatIdx: number) => {
+        setChecklistByMilestone(prev => {
+            const next = prev.map(row => row.slice())
+            if (next[milestoneIdx]) next[milestoneIdx][flatIdx] = !next[milestoneIdx][flatIdx]
+            return next
+        })
+        const milestone = milestones[milestoneIdx]
+        if (!milestone) return
+        if (saveTimers.current[milestone.id]) clearTimeout(saveTimers.current[milestone.id])
+        saveTimers.current[milestone.id] = setTimeout(() => {
+            setChecklistByMilestone(current => {
+                const state = current[milestoneIdx]
+                if (state) void saveMilestoneProgress(milestone.id, { checklist_state: state })
+                return current
+            })
+        }, 1500)
+    }
+
+    if (loading) {
+        return (
+            <div style={{ height: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 28, height: 28, border: `2px solid ${T.line2}`, borderTopColor: T.blue, borderRadius: '50%', animation: 'lp-spin 0.8s linear infinite' }} />
+            </div>
+        )
+    }
+    if (loadError || !roadmap) {
+        return (
+            <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                <div style={{ fontSize: 15, color: T.muted }}>{loadError || 'Roadmap not found.'}</div>
+                <button onClick={onBack} style={{ padding: '8px 18px', background: T.blue, color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Back to Projects</button>
+            </div>
+        )
+    }
+
+    const activeMilestone = milestones[msIdx]
+
+    return (
+        <div style={{ height: 'calc(100vh - 64px)', overflow: 'hidden', background: T.bgAlt, minWidth: 320, display: 'flex', flexDirection: 'row', position: 'relative' }}>
+            <AchievementToastStack toasts={achievementToasts} />
+            {isNarrow && railOpen && (
+                <div onClick={() => setRailOpen(false)} style={{ position: 'fixed', inset: 0, top: 64, background: 'rgba(15,23,42,.4)', zIndex: 40 }} />
+            )}
+            {isNarrow && !railOpen && (
+                <button onClick={() => setRailOpen(true)} aria-label="Open milestone list" style={{
+                    position: 'absolute', top: 12, left: 12, zIndex: 30, width: 36, height: 36, borderRadius: 9,
+                    background: '#fff', border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,.08)',
+                }}>
+                    <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth={2.2} strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+                </button>
+            )}
+            <div style={{
+                width: 220, minWidth: 220, flexShrink: 0, height: '100%', background: '#fff', borderRight: `1px solid ${T.line}`,
+                display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                ...(isNarrow ? {
+                    position: 'fixed' as const, top: 64, bottom: 0, left: railOpen ? 0 : -221,
+                    transition: 'left .25s ease', zIndex: 41, boxShadow: railOpen ? '4px 0 24px rgba(15,23,42,.15)' : 'none',
+                } : {}),
+            }}>
+                <div style={{ padding: '18px 16px 12px' }}>
+                    <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', color: T.muted, fontSize: 12, fontWeight: 600, padding: 0, marginBottom: 14 }}>
+                        <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                        Back to Projects
+                    </button>
+                    <div style={{ fontFamily: WS_MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: T.muted2, marginBottom: 12 }}>Project Roadmap</div>
+                    <div onClick={goOverview} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, background: view === 'overview' ? T.blue50 : 'transparent', cursor: 'pointer' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 6, background: T.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.2} strokeLinecap="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>
+                        </div>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: T.ink, flex: 1 }}>Overview</span>
+                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={T.muted2} strokeWidth={2.2} strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+                    </div>
+                </div>
+
+                <div style={{ borderTop: `1px solid ${T.line2}`, overflowY: 'auto', flex: 1 }}>
+                    {milestones.map((m, i) => {
+                        const state = checklistByMilestone[i] ?? []
+                        const doneCount = state.filter(Boolean).length
+                        const complete = m.progress?.status === 'completed'
+                        const active = view === 'ms' && msIdx === i
+                        const locked = m.locked
+                        return (
+                            <button key={m.id} onClick={() => !locked && goMilestone(i)} disabled={locked} style={{
+                                display: 'flex', alignItems: 'flex-start', padding: '14px 16px', borderBottom: `1px solid ${T.line2}`,
+                                cursor: locked ? 'default' : 'pointer', background: active ? T.blue50 : 'transparent', border: 'none', borderLeft: 'none', borderRight: 'none', borderTop: 'none', width: '100%', textAlign: 'left',
+                                opacity: locked ? 0.55 : 1,
+                            }}>
+                                <div style={{ width: 22, flexShrink: 0, paddingTop: 2, fontSize: 12, fontWeight: 700, color: T.muted2, fontFamily: WS_MONO }}>{m.milestone_number}</div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: active ? T.blue : T.ink, lineHeight: 1.3, marginBottom: 2 }}>Milestone {m.milestone_number}</div>
+                                    <div style={{ fontSize: 12, color: T.muted, marginBottom: 6 }}>{m.title}</div>
+                                    {!locked && state.length > 0 && (
+                                        <div style={{ fontSize: 11, color: T.muted2 }}>{doneCount}/{state.length} checklist items</div>
+                                    )}
+                                </div>
+                                <div style={{ flexShrink: 0, marginLeft: 10, marginTop: 2 }}>
+                                    {locked ? (
+                                        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={T.muted2} strokeWidth={2} strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
+                                    ) : complete ? (
+                                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#22C55E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <svg width={11} height={11} viewBox="0 0 11 11" fill="none" stroke="white" strokeWidth={2.4} strokeLinecap="round"><path d="M1.5 5.5l3 3 5-5" /></svg>
+                                        </div>
+                                    ) : (
+                                        <div style={{ width: 22, height: 22, borderRadius: '50%', border: '1.5px solid #CBD5E1', background: '#fff' }} />
+                                    )}
+                                </div>
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                {coach === 'teach-me' && activeMilestone && (
+                    <WsTeachMe
+                        roadmapId={roadmapId} milestoneId={activeMilestone.id} taskIndex={openTask ?? 0}
+                        milestoneTitle={activeMilestone.title} task={activeMilestone.tasks[openTask ?? 0]}
+                        cache={teachMeCache} onCache={(key, content) => setTeachMeCache(prev => ({ ...prev, [key]: content }))}
+                        showReviewLink={activeMilestone.milestone_number === milestones.length}
+                        onBack={() => setCoach(null)} onSwitch={setCoach}
+                    />
+                )}
+                {coach === 'stuck' && activeMilestone && (
+                    <WsStuck
+                        roadmapId={roadmapId} milestoneId={activeMilestone.id} taskIndex={openTask ?? 0}
+                        history={stuckHistory} onHistoryChange={(key, turns) => setStuckHistory(prev => ({ ...prev, [key]: turns }))}
+                        showReviewLink={activeMilestone.milestone_number === milestones.length}
+                        onBack={() => setCoach(null)} onSwitch={setCoach}
+                    />
+                )}
+                {coach === 'review' && activeMilestone && (
+                    <WsReview
+                        roadmapId={roadmapId} milestoneId={activeMilestone.id}
+                        canReview={allRequiredChecked(activeMilestone, checklistByMilestone[msIdx] ?? [])}
+                        initialGithubUrl={activeMilestone.progress?.github_url ?? ''}
+                        onBack={() => setCoach(null)} onSwitch={setCoach}
+                        onPassed={handleMilestonePassed}
+                    />
+                )}
+                {coach === null && view === 'overview' && (
+                    <WsOverview roadmap={roadmap} milestones={milestones} onStart={handleStart}
+                        onSelectMilestone={(i) => !milestones[i].locked && goMilestone(i)} />
+                )}
+                {coach === null && view === 'ms' && activeMilestone && (
+                    <WsMilestoneDetail
+                        key={msIdx}
+                        milestone={activeMilestone}
+                        checklistState={checklistByMilestone[msIdx] ?? []}
+                        onToggleChecklistItem={(flatIdx) => toggleChecklistItem(msIdx, flatIdx)}
+                        openTask={openTask}
+                        onToggleOpenTask={(i) => setOpenTask(cur => cur === i ? null : i)}
+                        onOpenCoach={setCoach}
+                        isLastMilestone={activeMilestone.milestone_number === milestones.length}
+                        canContinue={allRequiredChecked(activeMilestone, checklistByMilestone[msIdx] ?? [])}
+                        continuing={continuing}
+                        onContinue={handleSimpleContinue}
+                    />
+                )}
+            </div>
+        </div>
+    )
+}
+
 type LibFilter = 'all' | 'inprogress' | 'complete' | 'new'
 
 function LearningHistoryIndex({ summaries }: { summaries: LearningPathSummary[] }) {
     const [filter, setFilter] = useState<LibFilter>('all')
     const [visible, setVisible] = useState(false)
+    const [section, setSection] = useState<'skills' | 'projects'>('skills')
+    const [activeRoadmapId, setActiveRoadmapId] = useState<string | null>(null)
+    const [projectCount, setProjectCount] = useState(0)
     const progressMap = useLibraryProgress(summaries)
     const total = summaries.length
 
@@ -856,6 +2367,10 @@ function LearningHistoryIndex({ summaries }: { summaries: LearningPathSummary[] 
         })
     }, [filter, summaries, progressMap])
 
+    if (activeRoadmapId) {
+        return <MilestoneWorkspace roadmapId={activeRoadmapId} onBack={() => setActiveRoadmapId(null)} />
+    }
+
     return (
         <div className="lib-page">
             <LibraryStyles />
@@ -870,70 +2385,100 @@ function LearningHistoryIndex({ summaries }: { summaries: LearningPathSummary[] 
                         </svg>
                         Learning Library
                     </div>
-                    <h1 className="lib-h1">Your learning paths</h1>
+                    <h1 className="lib-h1">
+                        {section === 'skills' ? 'Your learning paths' : 'Your projects'}
+                    </h1>
                     <p className="lib-sub">
-                        {total === 0
-                            ? 'No learning paths yet. Generate one from AI Matches.'
-                            : (<>You&rsquo;ve generated <b>{total} learning path{total !== 1 ? 's' : ''}</b>. Pick one to resume.</>)
+                        {section === 'skills'
+                            ? (total === 0
+                                ? 'No learning paths yet. Generate one from AI Matches.'
+                                : (<>You&rsquo;ve generated <b>{total} learning path{total !== 1 ? 's' : ''}</b>. Pick one to resume.</>))
+                            : 'Build real projects to close skill gaps — each one generates a GitHub-ready portfolio artifact.'
                         }
                     </p>
                 </header>
 
-                {/* ── Controls ── */}
-                {total > 0 && (
-                    <div className="lib-controls">
-                        <div className="lib-filter-group" role="tablist">
-                            {([
-                                { k: 'all', l: 'All' },
-                                { k: 'inprogress', l: 'In progress' },
-                                { k: 'complete', l: 'Complete' },
-                                { k: 'new', l: 'Not started' },
-                            ] as { k: LibFilter; l: string }[]).map(f => (
-                                <button
-                                    key={f.k}
-                                    role="tab"
-                                    aria-selected={filter === f.k}
-                                    className={'lib-filter' + (filter === f.k ? ' active' : '')}
-                                    onClick={() => setFilter(f.k)}
-                                >{f.l}</button>
-                            ))}
-                        </div>
-                        <button className="lib-sort" type="button">
-                            <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="15" y2="12" /><line x1="3" y1="18" x2="9" y2="18" />
-                            </svg>
-                            Most recent
-                        </button>
-                        <span className="lib-count">{filtered.length} path{filtered.length !== 1 ? 's' : ''}</span>
-                    </div>
-                )}
+                {/* ── Section tabs ── */}
+                <div className="lib-section-tabs" role="tablist">
+                    <button
+                        role="tab"
+                        aria-selected={section === 'skills'}
+                        className={'lib-section-tab' + (section === 'skills' ? ' active' : '')}
+                        onClick={() => setSection('skills')}
+                    >
+                        Skills
+                        <span className="lib-section-tab-badge">{total}</span>
+                    </button>
+                    <button
+                        role="tab"
+                        aria-selected={section === 'projects'}
+                        className={'lib-section-tab' + (section === 'projects' ? ' active' : '')}
+                        onClick={() => setSection('projects')}
+                    >
+                        Projects
+                        <span className="lib-section-tab-badge">{projectCount}</span>
+                    </button>
+                </div>
 
-                {/* ── Grid ── */}
-                <div className="lib-grid">
-                    {total === 0 && <LibraryEmptyState />}
-                    {total > 0 && filtered.length === 0 && (
-                        <div className="lib-empty">
-                            <div className="lib-empty-icon">
-                                <svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z" />
-                                    <path d="M19 14l.9 2.3L22 17l-2.1.7L19 20l-.9-2.3L16 17l2.1-.7z" />
-                                </svg>
+                {/* ── Skills content ── */}
+                {section === 'skills' && (<>
+                    {total > 0 && (
+                        <div className="lib-controls">
+                            <div className="lib-filter-group" role="tablist">
+                                {([
+                                    { k: 'all', l: 'All' },
+                                    { k: 'inprogress', l: 'In progress' },
+                                    { k: 'complete', l: 'Complete' },
+                                    { k: 'new', l: 'Not started' },
+                                ] as { k: LibFilter; l: string }[]).map(f => (
+                                    <button
+                                        key={f.k}
+                                        role="tab"
+                                        aria-selected={filter === f.k}
+                                        className={'lib-filter' + (filter === f.k ? ' active' : '')}
+                                        onClick={() => setFilter(f.k)}
+                                    >{f.l}</button>
+                                ))}
                             </div>
-                            <div className="lib-empty-h">Nothing here yet</div>
-                            <p className="lib-empty-sub">No paths match this filter. Try a different view or generate a new path from AI Matches.</p>
-                            <button className="lib-empty-cta" type="button" onClick={() => setFilter('all')}>Show all paths</button>
+                            <button className="lib-sort" type="button">
+                                <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="15" y2="12" /><line x1="3" y1="18" x2="9" y2="18" />
+                                </svg>
+                                Most recent
+                            </button>
+                            <span className="lib-count">{filtered.length} path{filtered.length !== 1 ? 's' : ''}</span>
                         </div>
                     )}
-                    {total > 0 && filtered.map((s, idx) => (
-                        <PathCard
-                            key={s.job_id}
-                            s={s}
-                            idx={idx}
-                            visible={visible}
-                            progress={progressMap[s.job_id] ?? 0}
-                        />
-                    ))}
-                </div>
+                    <div className="lib-grid">
+                        {total === 0 && <LibraryEmptyState />}
+                        {total > 0 && filtered.length === 0 && (
+                            <div className="lib-empty">
+                                <div className="lib-empty-icon">
+                                    <svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z" />
+                                        <path d="M19 14l.9 2.3L22 17l-2.1.7L19 20l-.9-2.3L16 17l2.1-.7z" />
+                                    </svg>
+                                </div>
+                                <div className="lib-empty-h">Nothing here yet</div>
+                                <p className="lib-empty-sub">No paths match this filter. Try a different view or generate a new path from AI Matches.</p>
+                                <button className="lib-empty-cta" type="button" onClick={() => setFilter('all')}>Show all paths</button>
+                            </div>
+                        )}
+                        {total > 0 && filtered.map((s, idx) => (
+                            <PathCard
+                                key={s.job_id}
+                                s={s}
+                                idx={idx}
+                                visible={visible}
+                                progress={progressMap[s.job_id] ?? 0}
+                            />
+                        ))}
+                    </div>
+                </>)}
+
+                {/* ── Projects content ── */}
+                {section === 'projects' && <ProjectsSection onOpen={setActiveRoadmapId} onCount={setProjectCount} />}
+
             </div>
         </div>
     )
@@ -1073,6 +2618,177 @@ function PathCard({ s, idx, visible, progress }: { s: LearningPathSummary; idx: 
                 </div>
             </div>
         </Link>
+    )
+}
+
+/* ─── Projects section ───────────────────────────────────────── */
+/** Joins a build-plan project with its roadmap (if one has been generated yet). */
+type ProjectEntry = { key: string; summary: BuildPlanProjectSummary; roadmap: ProjectRoadmapSummary | null }
+
+function ProjectsSection({ onOpen, onCount }: { onOpen: (roadmapId: string) => void; onCount: (n: number) => void }) {
+    const { user } = useAuth()
+    const [entries, setEntries] = useState<ProjectEntry[] | null>(null)
+    const [generating, setGenerating] = useState<Record<string, boolean>>({})
+    const [genError, setGenError] = useState<Record<string, string>>({})
+
+    useEffect(() => {
+        if (!user?.id) return
+        let cancelled = false
+        Promise.all([fetchBuildPlanProjectSummaries(user.id), fetchProjectRoadmaps()]).then(([summaries, roadmaps]) => {
+            if (cancelled) return
+            const joined = summaries.map(summary => {
+                const roadmap = roadmaps.find(r =>
+                    r.resume_id === summary.resume_id && r.job_id === summary.job_id && r.build_plan_project_id === summary.build_plan_project_id
+                ) ?? null
+                return { key: `${summary.resume_id}:${summary.job_id}:${summary.build_plan_project_id}`, summary, roadmap }
+            })
+            setEntries(joined)
+            onCount(joined.length)
+        }).catch(() => { if (!cancelled) { setEntries([]); onCount(0) } })
+        return () => { cancelled = true }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id])
+
+    const handleGetRoadmap = async (entry: ProjectEntry) => {
+        setGenerating(g => ({ ...g, [entry.key]: true }))
+        setGenError(e => ({ ...e, [entry.key]: '' }))
+        try {
+            const res = await generateProjectRoadmap({
+                resume_id: entry.summary.resume_id,
+                job_id: entry.summary.job_id,
+                build_plan_project_id: entry.summary.build_plan_project_id,
+            })
+            if (res.success && res.roadmap_id) {
+                onOpen(res.roadmap_id)
+            } else {
+                setGenError(e => ({ ...e, [entry.key]: res.error || 'Failed to generate roadmap' }))
+            }
+        } catch (err) {
+            setGenError(e => ({ ...e, [entry.key]: err instanceof Error ? err.message : 'Failed to generate roadmap' }))
+        } finally {
+            setGenerating(g => ({ ...g, [entry.key]: false }))
+        }
+    }
+
+    if (entries === null) {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+                <div style={{ width: 24, height: 24, border: `2px solid ${T.line2}`, borderTopColor: T.blue, borderRadius: '50%', animation: 'lp-spin 0.8s linear infinite' }} />
+            </div>
+        )
+    }
+
+    if (entries.length === 0) {
+        return (
+            <div className="lib-empty">
+                <div className="lib-empty-icon">
+                    <svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z" />
+                        <path d="M19 14l.9 2.3L22 17l-2.1.7L19 20l-.9-2.3L16 17l2.1-.7z" />
+                    </svg>
+                </div>
+                <div className="lib-empty-h">No projects yet</div>
+                <p className="lib-empty-sub">Score a job in AI Matches and generate a Build Plan to see project recommendations here.</p>
+                <Link className="lib-empty-cta" href="/dashboard/matches">
+                    Go to AI Matches
+                </Link>
+            </div>
+        )
+    }
+
+    return (
+        <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 24 }}>
+                <p style={{ fontSize: '.8125rem', color: T.muted, margin: 0, fontWeight: 500 }}>
+                    Build real projects to close skill gaps and prove it to recruiters.
+                </p>
+                <span style={{ fontSize: '.8125rem', color: T.muted, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    {entries.length} project{entries.length !== 1 ? 's' : ''}
+                </span>
+            </div>
+
+            <div className="lib-proj-grid">
+                {entries.map(entry => {
+                    const { summary, roadmap } = entry
+                    const p = summary.project
+                    const isGenerating = !!generating[entry.key]
+                    const error = genError[entry.key]
+                    const totalMilestones = roadmap?.milestone_score_curve?.length ?? null
+                    const status = roadmap?.status ?? 'not_started'
+                    const badgeLabel = status === 'completed' ? 'Completed' : status === 'in_progress' ? 'In progress' : 'Not started'
+                    const badgeClass = status === 'completed' ? 'lib-proj-badge-done' : status === 'in_progress' ? 'lib-proj-badge-ip' : 'lib-proj-badge-ns'
+
+                    return (
+                        <div key={entry.key} className="lib-proj-card">
+                            <div className="lib-proj-header">
+                                <div className="lib-proj-meta">
+                                    <span className={`lib-proj-badge ${badgeClass}`}>{badgeLabel}</span>
+                                    <span className="lib-proj-impact">
+                                        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                                            <polyline points="16 7 22 7 22 13" />
+                                        </svg>
+                                        +{p.impact_pct}% match score
+                                    </span>
+                                </div>
+                                <h3 className="lib-proj-title">{p.name}</h3>
+                                <p className="lib-proj-desc">{p.description}</p>
+                                <div style={{ fontSize: 11, color: T.muted2, marginTop: 4 }}>{summary.job_title} · {summary.company_name}</div>
+                            </div>
+
+                            <div className="lib-proj-tech">
+                                {p.tech.map(t => (
+                                    <span key={t} className="lib-proj-chip">{t}</span>
+                                ))}
+                            </div>
+
+                            <div className="lib-proj-foot">
+                                <div className="lib-proj-stats">
+                                    {roadmap?.estimated_weeks != null && (
+                                        <span className="lib-proj-stat">
+                                            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                                <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                                            </svg>
+                                            {roadmap.estimated_weeks} weeks
+                                        </span>
+                                    )}
+                                    {roadmap?.difficulty && (
+                                        <span className="lib-proj-stat">
+                                            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                            </svg>
+                                            {roadmap.difficulty.charAt(0).toUpperCase() + roadmap.difficulty.slice(1)}
+                                        </span>
+                                    )}
+                                    {totalMilestones != null && (
+                                        <span className="lib-proj-stat">
+                                            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+                                            </svg>
+                                            {status === 'not_started' ? totalMilestones : `${roadmap!.current_milestone}/${totalMilestones}`} milestones
+                                        </span>
+                                    )}
+                                </div>
+                                <button className="lib-proj-cta" type="button" disabled={isGenerating}
+                                    onClick={() => roadmap ? onOpen(roadmap.id) : handleGetRoadmap(entry)}>
+                                    {isGenerating ? 'Generating…' : roadmap
+                                        ? (status === 'completed' ? '✓ View Project' : status === 'in_progress' ? `Continue Milestone ${roadmap.current_milestone}` : 'Open Roadmap')
+                                        : 'Get Roadmap'}
+                                    {!isGenerating && (
+                                        <span className="lib-proj-cta-arrow">
+                                            <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M7 17L17 7M7 7h10v10" />
+                                            </svg>
+                                        </span>
+                                    )}
+                                </button>
+                            </div>
+                            {error && <div style={{ padding: '0 20px 16px', fontSize: 12, color: T.redText }}>{error}</div>}
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
     )
 }
 
@@ -1340,11 +3056,134 @@ function LibraryStyles() {
             }
             .lib-empty-cta:hover { transform: translateY(-1px); background: ${T.blue600}; }
 
+            /* Section tabs (Skills / Projects) */
+            .lib-section-tabs {
+                display: flex; gap: 0;
+                border-bottom: 2px solid ${T.line2};
+                margin-bottom: 32px; margin-top: -8px;
+            }
+            .lib-section-tab {
+                font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+                font-size: .9375rem; font-weight: 700;
+                color: ${T.muted}; padding: 0 24px 14px 0;
+                border: none; border-bottom: 2px solid transparent;
+                background: none; cursor: pointer;
+                transition: color .15s, border-color .15s;
+                margin-bottom: -2px;
+                display: inline-flex; align-items: center; gap: 8px;
+                letter-spacing: -.01em;
+            }
+            .lib-section-tab + .lib-section-tab { padding-left: 0; }
+            .lib-section-tab.active { color: ${T.ink}; border-bottom-color: ${T.blue}; }
+            .lib-section-tab:hover:not(.active) { color: ${T.ink2}; }
+            .lib-section-tab-badge {
+                font-size: .6rem; font-weight: 800; letter-spacing: .08em;
+                text-transform: uppercase; padding: 2px 7px; border-radius: 99px;
+                background: ${T.line2}; color: ${T.muted};
+                transition: background .15s, color .15s;
+            }
+            .lib-section-tab.active .lib-section-tab-badge {
+                background: ${T.blueLight}; color: ${T.blue};
+            }
+
+            /* Project cards */
+            .lib-proj-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+                gap: 18px;
+            }
+            .lib-proj-card {
+                background: #fff; border: 1px solid ${T.line};
+                border-radius: 14px; overflow: hidden;
+                display: flex; flex-direction: column;
+                cursor: pointer; text-decoration: none; color: ${T.ink};
+                transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+            }
+            .lib-proj-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 20px 40px -12px rgba(15,23,42,.1), 0 8px 16px -8px rgba(15,23,42,.05);
+                border-color: #BFDBFE;
+            }
+            .lib-proj-card:hover .lib-proj-cta-arrow { transform: translateX(2px); }
+            .lib-proj-header {
+                padding: 22px 24px 18px;
+                border-bottom: 1px solid ${T.line2};
+            }
+            .lib-proj-meta {
+                display: flex; align-items: center; gap: 8px;
+                margin-bottom: 10px;
+            }
+            .lib-proj-badge {
+                font-size: .6rem; font-weight: 800; letter-spacing: .1em;
+                text-transform: uppercase; padding: 3px 9px; border-radius: 99px;
+            }
+            .lib-proj-badge-ns { background: #F1F5F9; color: ${T.muted}; }
+            .lib-proj-badge-ip { background: ${T.blueLight}; color: ${T.blue}; }
+            .lib-proj-badge-done { background: ${T.greenBg}; color: ${T.green}; }
+            .lib-proj-impact {
+                margin-left: auto;
+                font-size: .75rem; font-weight: 700; color: ${T.green};
+                display: inline-flex; align-items: center; gap: 4px;
+            }
+            .lib-proj-title {
+                font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+                font-size: 1.125rem; font-weight: 700;
+                color: ${T.ink}; letter-spacing: -.025em; line-height: 1.3;
+                margin: 0 0 8px;
+            }
+            .lib-proj-desc {
+                font-size: .8125rem; color: ${T.muted}; line-height: 1.55;
+                margin: 0;
+                display: -webkit-box; -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical; overflow: hidden;
+            }
+            .lib-proj-tech {
+                padding: 14px 24px 16px;
+                border-bottom: 1px solid ${T.line2};
+                display: flex; gap: 6px; flex-wrap: wrap;
+            }
+            .lib-proj-chip {
+                font-size: .6875rem; font-weight: 700;
+                padding: 3px 10px; border-radius: 99px;
+                background: ${T.blue50}; color: ${T.blue700};
+                border: 1px solid ${T.blueLight};
+                letter-spacing: .01em;
+            }
+            .lib-proj-foot {
+                padding: 14px 24px;
+                display: flex; align-items: center; justify-content: space-between;
+                flex-wrap: wrap;
+                row-gap: 8px; column-gap: 12px;
+                background: #F8FAFD;
+            }
+            .lib-proj-stats {
+                display: flex; align-items: center; flex-wrap: wrap;
+                gap: 4px 14px;
+                min-width: 0;
+            }
+            .lib-proj-stat {
+                font-size: .75rem; color: ${T.muted}; font-weight: 500;
+                display: inline-flex; align-items: center; gap: 5px;
+                white-space: nowrap;
+            }
+            .lib-proj-cta {
+                font-size: .8125rem; font-weight: 700;
+                color: ${T.blue};
+                display: inline-flex; align-items: center; gap: 5px;
+                background: none; border: none; cursor: pointer;
+                padding: 0; font-family: inherit;
+                white-space: nowrap; flex-shrink: 0; margin-left: auto;
+                transition: color .15s;
+            }
+            .lib-proj-cta:hover { color: ${T.blue600}; }
+            .lib-proj-cta-arrow { transition: transform .18s ease; display: inline-flex; }
+
             /* Responsive */
             @media (max-width: 720px) {
                 .lib-shell { padding: 32px 20px 64px; }
                 .lib-h1 { font-size: 2rem; }
                 .lib-count { margin-left: 0; width: 100%; }
+                .lib-proj-grid { grid-template-columns: 1fr; }
             }
         `}</style>
     )

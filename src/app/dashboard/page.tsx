@@ -10,9 +10,13 @@ import {
     fetchAllOptimizedResumes,
     fetchResumes,
     fetchApplicationPipelineCounts,
+    fetchProjectRoadmaps,
+    fetchBuildPlanProjectSummaries,
     type DashboardStats,
     type DashboardActivityEvent,
     type ApplicationPipelineCounts,
+    type ProjectRoadmapSummary,
+    type BuildPlanProjectSummary,
 } from '@/lib/api'
 import type { Job, UserJobMatch } from '@/lib/types'
 
@@ -99,6 +103,55 @@ function ScoreRing({ score, size = 44 }: { score: number; size?: number }) {
     )
 }
 
+/**
+ * Career Progress Tracker — read-only summary of the user's active Project Roadmap
+ * (milestone progress, skills being built) plus the next highest-impact project
+ * they haven't started yet. Derived entirely from existing tables (no new schema).
+ * Renders nothing if there's neither an active project nor a suggestion to show.
+ */
+function CareerProgressStrip({ activeRoadmap, nextProject }: {
+    activeRoadmap: ProjectRoadmapSummary | null
+    nextProject: BuildPlanProjectSummary | null
+}) {
+    if (!activeRoadmap && !nextProject) return null
+    const totalMilestones = activeRoadmap?.milestone_score_curve?.length ?? 0
+    const buildingSkills = (activeRoadmap?.skill_progressions ?? []).slice(0, 2)
+    return (
+        <div style={{ ...S.card, marginBottom: 24, display: 'flex', flexWrap: 'wrap', gap: 20 }} className="rs-fade-in">
+            {activeRoadmap && (
+                <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                    <div style={S.cardTitle}>🚀 Active Project</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '8px 0 6px' }}>{activeRoadmap.project_name}</div>
+                    {totalMilestones > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <div style={{ flex: 1, height: 6, background: '#e2e8f0', borderRadius: 99, overflow: 'hidden', maxWidth: 160 }}>
+                                <div style={{ width: `${Math.min(100, ((activeRoadmap.current_milestone - 1) / totalMilestones) * 100)}%`, height: '100%', background: '#135bec', borderRadius: 99 }} />
+                            </div>
+                            <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                Milestone {Math.min(activeRoadmap.current_milestone, totalMilestones)}/{totalMilestones}
+                            </span>
+                        </div>
+                    )}
+                    {buildingSkills.length > 0 && (
+                        <div style={{ fontSize: 12, color: '#64748b' }}>
+                            Building: {buildingSkills.map(s => `${s.skill} (${s.from_level} → ${s.to_level})`).join(' · ')}
+                        </div>
+                    )}
+                    <Link href="/dashboard/learning" style={{ ...S.cardLink, display: 'inline-block', marginTop: 10 }}>Continue building →</Link>
+                </div>
+            )}
+            {nextProject && (
+                <div style={{ flex: '1 1 220px', minWidth: 0, borderLeft: activeRoadmap ? '1px solid #e2e8f0' : 'none', paddingLeft: activeRoadmap ? 20 : 0 }}>
+                    <div style={S.cardTitle}>⚡ Next Highest-Impact Project</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '8px 0 6px' }}>{nextProject.project.name}</div>
+                    <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, marginBottom: 8 }}>+{nextProject.project.impact_pct}% match score</div>
+                    <Link href="/dashboard/learning" style={{ ...S.cardLink, display: 'inline-block' }}>Get Roadmap →</Link>
+                </div>
+            )}
+        </div>
+    )
+}
+
 export default function DashboardHomePage() {
     const { user } = useAuth()
     const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -107,6 +160,8 @@ export default function DashboardHomePage() {
     const [resumes, setResumes] = useState<{ name: string; jobTitle: string; updatedAt: string }[]>([])
     const [hasResume, setHasResume] = useState<boolean | null>(null)
     const [appCounts, setAppCounts] = useState<ApplicationPipelineCounts | null>(null)
+    const [activeRoadmap, setActiveRoadmap] = useState<ProjectRoadmapSummary | null>(null)
+    const [nextProject, setNextProject] = useState<BuildPlanProjectSummary | null>(null)
     const [loading, setLoading] = useState(true)
     const [tipIdx, setTipIdx] = useState(0)
     const [nudgeDismissed, setNudgeDismissed] = useState(false)
@@ -172,6 +227,28 @@ export default function DashboardHomePage() {
             setAppCounts(appCountsRes)
             setLoading(false)
         })()
+        return () => { cancelled = true }
+    }, [user?.id])
+
+    // Career Progress Tracker — read-only, derived from Project Roadmap + Build Plan
+    // data that already exists elsewhere in the app. Separate effect so it never
+    // gates the main dashboard loading state.
+    useEffect(() => {
+        if (!user?.id) return
+        let cancelled = false
+        ;(async () => {
+            const [roadmaps, buildPlanProjects] = await Promise.all([
+                fetchProjectRoadmaps(),
+                fetchBuildPlanProjectSummaries(user.id),
+            ])
+            if (cancelled) return
+            setActiveRoadmap(roadmaps.find(r => r.status === 'in_progress') ?? null)
+            const roadmappedIds = new Set(roadmaps.map(r => r.build_plan_project_id))
+            const candidates = buildPlanProjects
+                .filter(p => !roadmappedIds.has(p.build_plan_project_id))
+                .sort((a, b) => (b.project.impact_pct || 0) - (a.project.impact_pct || 0))
+            setNextProject(candidates[0] ?? null)
+        })().catch(() => {})
         return () => { cancelled = true }
     }, [user?.id])
 
@@ -298,6 +375,9 @@ export default function DashboardHomePage() {
                     </div>
                 </div>
             )}
+
+            {/* ── CAREER PROGRESS TRACKER ── */}
+            <CareerProgressStrip activeRoadmap={activeRoadmap} nextProject={nextProject} />
 
             {/* ── BODY GRID ── */}
             <div style={{ ...S.bodyGrid, ...(isMobile ? { gap: 16, gridTemplateColumns: '1fr' } : {}) }} className="rs-body-grid">

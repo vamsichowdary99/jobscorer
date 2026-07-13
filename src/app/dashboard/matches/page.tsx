@@ -352,12 +352,13 @@ function MatchBadge({ score }: { score: number }) {
     )
 }
 
-/* ── Left panel job card ── */
+/* ── Left panel job card — company-first layout ── */
 function JobCard({ match, selected, onClick, idx }: {
     match: FullMatch; selected: boolean; onClick: () => void; idx: number
 }) {
     const job = match.job
     const score = match.relevance_score ?? 0
+    const sourceName = job.source ? job.source.replace(/_/g, ' ').split(' ')[0].toUpperCase() : null
     return (
         <div
             onClick={onClick}
@@ -379,59 +380,61 @@ function JobCard({ match, selected, onClick, idx }: {
             onMouseEnter={e => { if (!selected) { e.currentTarget.style.borderColor = '#c7d8f8'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)' } }}
             onMouseLeave={e => { if (!selected) { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)' } }}
         >
-            {/* Top row: icon + badge */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <CompanyIcon company={job.company} size={40} />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
-                    <MatchBadge score={score} />
-                    <RecommendationBadge rec={match.recommendation} size="sm" />
+            {/* Top row: company + source badge | match badge */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1, marginRight: 8 }}>
+                    {job.company && (
+                        <span style={{
+                            fontSize: '0.78rem', color: '#6b7280', fontWeight: 600,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>{job.company}</span>
+                    )}
+                    {sourceName && (
+                        <span style={{
+                            fontSize: '0.55rem', fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                            background: '#f1f5f9', color: '#94a3b8', letterSpacing: '0.04em', flexShrink: 0,
+                            border: '1px solid #e2e8f0',
+                        }}>{sourceName}</span>
+                    )}
                 </div>
+                <MatchBadge score={score} />
             </div>
 
             {/* Title */}
             <h3 style={{
                 fontSize: '0.9375rem', fontWeight: 700, color: '#111827',
-                lineHeight: 1.3, marginBottom: 3,
+                lineHeight: 1.3, marginBottom: 8,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>{job.title}</h3>
 
-            {/* Company · Location */}
-            <p style={{
-                fontSize: '0.8rem', color: '#6b7280', marginBottom: 10,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-                {job.company ?? 'Unknown'}{job.location ? ` • ${job.location}` : ''}
-            </p>
-
-            {/* Suspicious banner — pre-empts the click for likely ghost jobs */}
+            {/* Suspicious banner */}
             {job.legitimacy_tier === 'suspicious' && (
-                <div style={{ marginBottom: 10 }}>
+                <div style={{ marginBottom: 8 }}>
                     <LegitimacyBadge tier={job.legitimacy_tier} signals={job.legitimacy_signals} variant="strip" />
                 </div>
             )}
 
-            {/* Bottom row: salary + date + tier pill (verified/caution only) */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    {job.salary && (
-                        <span style={{
-                            fontSize: '0.75rem', padding: '3px 10px', borderRadius: 6,
-                            background: '#f3f4f6', color: '#374151', fontWeight: 600,
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>{job.salary}</span>
-                    )}
-                    {(job.legitimacy_tier === 'verified' || job.legitimacy_tier === 'proceed_with_caution') && (
-                        <LegitimacyBadge
-                            tier={job.legitimacy_tier}
-                            signals={job.legitimacy_signals}
-                            size="sm"
-                        />
-                    )}
-                </div>
+            {/* Metadata chips row */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
+                {job.schedule_type && (
+                    <span style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: 5, background: '#f8fafc', color: '#64748b', fontWeight: 500, border: '1px solid #e2e8f0' }}>{job.schedule_type}</span>
+                )}
+                {job.experience_level && (
+                    <span style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: 5, background: '#f8fafc', color: '#64748b', fontWeight: 500, border: '1px solid #e2e8f0', textTransform: 'capitalize' as const }}>{job.experience_level}</span>
+                )}
+                {job.salary && (
+                    <span style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: 5, background: '#f8fafc', color: '#64748b', fontWeight: 500, border: '1px solid #e2e8f0', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{job.salary}</span>
+                )}
                 {job.posted_date && (
-                    <span style={{ fontSize: '0.6875rem', color: '#9ca3af', whiteSpace: 'nowrap' }}>
-                        {formatDate(job.posted_date)}
-                    </span>
+                    <span style={{ fontSize: '0.67rem', color: '#9ca3af', marginLeft: 'auto' as const, whiteSpace: 'nowrap' as const }}>{formatDate(job.posted_date)}</span>
+                )}
+            </div>
+
+            {/* Bottom: recommendation tag + legitimacy */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                <RecommendationBadge rec={match.recommendation} size="sm" />
+                {(job.legitimacy_tier === 'verified' || job.legitimacy_tier === 'proceed_with_caution') && (
+                    <LegitimacyBadge tier={job.legitimacy_tier} signals={job.legitimacy_signals} size="sm" />
                 )}
             </div>
         </div>
@@ -464,7 +467,7 @@ function ScoreRing({ score, showQualityLabel = false, size = 130, tierLabel }: {
                     }}
                 />
                 <text x={cx} y={cy - 7 * scale} textAnchor="middle" fontSize={Math.round(30 * scale)} fontWeight="800" fill={color}
-                    style={{ fontFamily: "'Manrope', sans-serif" }}>
+                    style={{ fontFamily: "'JetBrains Mono', 'Manrope', sans-serif" }}>
                     {score}%
                 </text>
                 <text x={cx} y={cy + 11 * scale} textAnchor="middle" fontSize={Math.max(6, Math.round(10 * scale))} fontWeight="600" fill="#9ca3af"
@@ -698,69 +701,126 @@ function MobileScoreJourney({ currentScore, optimizedScore, projectedRangeStr }:
     )
 }
 
-/* ── Score Journey — 3-step progression card ── */
-function ScoreJourney({ currentScore, optimizedScore, projectedScore, isMobile }: {
-    currentScore: number; optimizedScore: number; projectedScore: number; isMobile: boolean
+/* ── Score Journey — horizontal timeline with integrated fastest-path steps ── */
+function ScoreJourney({ currentScore, optimizedScore, projectedRangeStr, fastestPath }: {
+    currentScore: number
+    optimizedScore: number
+    projectedRangeStr: string
+    fastestPath?: FastestPath | null
 }) {
-    const currentColor = getScoreColor(currentScore)
     const gain1 = optimizedScore - currentScore
-    const gain2 = projectedScore - optimizedScore
+
+    let fullLow: number, fullHigh: number
+    const rangeMatch = projectedRangeStr.match(/(\d+)[–\-](\d+)/)
+    if (rangeMatch) {
+        fullLow = parseInt(rangeMatch[1])
+        fullHigh = parseInt(rangeMatch[2])
+    } else {
+        const n = parseInt(projectedRangeStr)
+        fullLow = isNaN(n) ? Math.min(95, optimizedScore + 3) : n
+        fullHigh = isNaN(n) ? Math.min(99, optimizedScore + 8) : n + 5
+    }
+    const gain2 = fullLow - optimizedScore
+    const steps = fastestPath?.steps ?? []
+
+    const nowChipBg = currentScore >= 80 ? '#dcfce7' : currentScore >= 60 ? '#fef3c7' : '#fee2e2'
+    const nowChipColor = currentScore >= 80 ? '#15803d' : currentScore >= 60 ? '#d97706' : '#b91c1c'
+    const nowChipBorder = currentScore >= 80 ? '#86efac' : currentScore >= 60 ? '#fde68a' : '#fecaca'
+
+    const projectedNum = fastestPath?.projected_score_range
+        ? parseInt(String(fastestPath.projected_score_range).replace(/\D.*/, ''))
+        : Math.round((fullLow + fullHigh) / 2)
+
     return (
         <div style={{
             background: 'white', borderRadius: 14,
-            border: '1px solid #e8ecf4',
-            padding: isMobile ? '16px' : '20px 28px',
-            marginBottom: 20,
-            boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+            border: '1px solid #e8ecf4', padding: '14px 16px',
+            marginBottom: 10, boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
         }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <p style={{
-                    fontSize: '0.6rem', fontWeight: 800, color: '#6b7280',
-                    letterSpacing: '0.09em', textTransform: 'uppercase',
-                }}>Score Journey</p>
-                <span style={{ fontSize: '0.72rem', color: '#9ca3af', fontWeight: 500 }}>
-                    Your path from here to interview-ready
-                </span>
+            {/* Title */}
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: '#6b7280', marginBottom: 4 }}>
+                Score Journey
             </div>
-            <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                gap: isMobile ? 4 : 12, flexWrap: isMobile ? 'wrap' : 'nowrap',
-            }}>
-                <MiniScoreRing
-                    score={currentScore}
-                    topLabel="NOW"
-                    subLabel="Your profile today"
-                    color={currentColor}
-                />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                    <svg width="40" height="14" viewBox="0 0 40 14" fill="none">
-                        <path d="M2 7H34M28 2L36 7L28 12" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
+            {/* Subtitle */}
+            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 14 }}>
+                Your path from here to interview-ready
+            </div>
+
+            {/* Main row: alignItems center per reference */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+
+                {/* FROM: Now */}
+                <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#6b7280', marginBottom: 6 }}>Now</div>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: 7, fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 800, background: nowChipBg, color: nowChipColor, border: `1px solid ${nowChipBorder}` }}>
+                        {currentScore}%
+                    </span>
+                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>Your profile today</div>
+                </div>
+
+                {/* Connector 1 */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                     {gain1 > 0 && (
-                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#135bec' }}>+{gain1}%</span>
+                        <span style={{ padding: '2px 8px', borderRadius: 99, background: '#dcfce7', border: '1px solid #86efac', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 800, color: '#15803d', whiteSpace: 'nowrap' as const }}>
+                            +{gain1}%
+                        </span>
                     )}
-                </div>
-                <MiniScoreRing
-                    score={optimizedScore}
-                    topLabel="OPTIMIZED"
-                    subLabel="After resume tailoring"
-                    color="#135bec"
-                />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                    <svg width="40" height="14" viewBox="0 0 40 14" fill="none">
-                        <path d="M2 7H34M28 2L36 7L28 12" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2" strokeLinecap="round">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
                     </svg>
-                    {gain2 > 0 && (
-                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#6366f1' }}>+{gain2}%</span>
+                </div>
+
+                {/* Steps */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 2 }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#6b7280', marginBottom: 2 }}>
+                        After Resume Tailoring
+                    </div>
+                    {steps.length > 0 ? steps.map((step, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                            <div style={{ width: 20, height: 20, borderRadius: 6, background: '#eff6ff', color: '#135bec', fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {i + 1}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 500, color: '#1f2937', lineHeight: 1.4 }}>{step.action}</div>
+                                <div style={{ fontSize: 11, color: '#9ca3af' }}>{step.time}</div>
+                            </div>
+                        </div>
+                    )) : (
+                        <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' as const }}>Optimize your resume to unlock personalized steps</div>
                     )}
                 </div>
-                <MiniScoreRing
-                    score={projectedScore}
-                    topLabel="AFTER SKILLS"
-                    subLabel="Full potential"
-                    color="#6366f1"
-                    dashed
-                />
+
+                {/* Connector 2 */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    {gain2 > 0 && (
+                        <span style={{ padding: '2px 8px', borderRadius: 99, background: '#dcfce7', border: '1px solid #86efac', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 800, color: '#15803d', whiteSpace: 'nowrap' as const }}>
+                            +{gain2}%
+                        </span>
+                    )}
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2" strokeLinecap="round">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </div>
+
+                {/* TO: Full Potential */}
+                <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#6b7280', marginBottom: 6 }}>
+                        Full Potential Range
+                    </div>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: 7, fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, background: '#dcfce7', color: '#15803d', border: '1px solid #86efac' }}>
+                        {fullLow}–{fullHigh}%
+                    </span>
+                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>After skills</div>
+                </div>
+            </div>
+
+            {/* Footer with border-top divider */}
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: '#64748b' }}>Could reach</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#135bec', padding: '2px 10px', background: '#eff6ff', borderRadius: 7 }}>
+                    ~{projectedNum}%
+                </span>
+                <span style={{ fontSize: 13, color: '#64748b' }}>after completing these steps</span>
             </div>
         </div>
     )
@@ -1054,138 +1114,157 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
             {/* ── JOB HEADER ── */}
             <div style={{
                 background: 'white',
-                padding: isMobile ? '14px 16px 12px' : '28px 36px 24px',
+                padding: isMobile ? '14px 16px 12px' : '16px 24px',
                 borderBottom: '1px solid #f3f4f6',
-                ...(isMobile ? {} : { position: 'sticky' as const, top: 0, zIndex: 10 }),
             }}>
-                <div style={{ display: 'flex', gap: isMobile ? 10 : 18, alignItems: 'flex-start' }}>
-                    <CompanyIcon company={job.company} size={isMobile ? 40 : 56} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <h1 style={{
-                            fontSize: isMobile ? '1.05rem' : '1.5rem', fontWeight: 800, color: '#111827',
-                            letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 6,
-                        }}>{job.title}</h1>
-                        <div style={{ display: 'flex', gap: isMobile ? 8 : 16, alignItems: 'center', flexWrap: 'wrap' }}>
-                            {job.company && (
-                                <span style={{ fontSize: isMobile ? '0.8125rem' : '0.875rem', fontWeight: 600, color: '#135bec' }}>
-                                    {job.company}
-                                </span>
-                            )}
+                {/* ── Desktop header ── */}
+                {!isMobile && (
+                    <div>
+                        {/* Row 1: company icon + company info | date + bookmark right */}
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 7 }}>
+                            <CompanyIcon company={job.company} size={46} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                {job.company && (
+                                    <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#374151', lineHeight: 1.3 }}>{job.company}</div>
+                                )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                                    {job.source && (
+                                        <span style={{ fontSize: '0.58rem', fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: '#f1f5f9', color: '#64748b', letterSpacing: '0.05em', textTransform: 'uppercase' as const, border: '1px solid #e2e8f0' }}>
+                                            {job.source.replace(/_/g, ' ').split(' ')[0].toUpperCase()}
+                                        </span>
+                                    )}
+                                    {job.legitimacy_tier === 'verified' && (
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3L4.5 8.5L2 6"/></svg>
+                                            VERIFIED OPEN
+                                        </span>
+                                    )}
+                                    {job.legitimacy_tier === 'proceed_with_caution' && (
+                                        <LegitimacyBadge tier={job.legitimacy_tier} signals={job.legitimacy_signals} size="md" />
+                                    )}
+                                </div>
+                            </div>
+                            {/* Date + bookmark */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                {job.posted_date && (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: '#9ca3af' }}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                        {formatDate(job.posted_date)}
+                                    </span>
+                                )}
+                                <button style={{ width: 28, height: 28, borderRadius: 8, background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Title */}
+                        <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 7 }}>{job.title}</h1>
+
+                        {job.legitimacy_tier === 'suspicious' && (
+                            <div style={{ marginBottom: 8 }}>
+                                <LegitimacyBadge tier={job.legitimacy_tier} signals={job.legitimacy_signals} variant="strip" />
+                            </div>
+                        )}
+
+                        {/* Meta-row: chips + recommendation card RIGHT */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' as const, marginBottom: 10 }}>
                             {job.location && (
-                                <span style={{ fontSize: '0.8125rem', color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.8125rem', color: '#4b5563', fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e5e7eb' }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
                                     {job.location}
                                 </span>
                             )}
-                            {!isMobile && job.schedule_type && (
-                                <span style={{ fontSize: '0.8125rem', color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                                    {job.schedule_type}
-                                </span>
+                            {job.schedule_type && (
+                                <span style={{ fontSize: '0.8125rem', color: '#4b5563', fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e5e7eb' }}>{job.schedule_type}</span>
                             )}
                             {job.experience_level && (
-                                <span style={{
-                                    fontSize: '0.75rem', padding: '2px 9px', borderRadius: 20,
-                                    background: '#f3f4f6', color: '#6b7280', fontWeight: 600, textTransform: 'capitalize',
-                                }}>{job.experience_level}</span>
+                                <span style={{ fontSize: '0.8rem', color: '#4b5563', fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e5e7eb', textTransform: 'capitalize' as const }}>{job.experience_level}</span>
                             )}
-                            {!isMobile && (job.legitimacy_tier === 'verified' || job.legitimacy_tier === 'proceed_with_caution') && (
-                                <LegitimacyBadge
-                                    tier={job.legitimacy_tier}
-                                    signals={job.legitimacy_signals}
-                                    size="md"
-                                />
+                            {job.salary && (
+                                <span style={{ fontSize: '0.8rem', color: '#4b5563', fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e5e7eb' }}>{job.salary}</span>
+                            )}
+                            {match.recommendation && (
+                                <div style={{ marginLeft: 'auto' }}>
+                                    <RecommendationBadge rec={match.recommendation} size="lg" />
+                                </div>
                             )}
                         </div>
-                        {isMobile && job.legitimacy_tier === 'proceed_with_caution' && (
-                            <div style={{ marginTop: 7 }}>
-                                <span style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                                    padding: '3px 10px', borderRadius: 99,
-                                    background: '#fff7ed', border: '1px solid #fed7aa',
-                                    color: '#c2410c', fontSize: 11, fontWeight: 700,
-                                }}>
-                                    ⚠ CAUTION
-                                </span>
-                            </div>
-                        )}
-                        {!isMobile && job.legitimacy_tier === 'suspicious' && (
-                            <div style={{ marginTop: 12, maxWidth: 520 }}>
-                                <LegitimacyBadge
-                                    tier={job.legitimacy_tier}
-                                    signals={job.legitimacy_signals}
-                                    variant="strip"
-                                />
-                            </div>
-                        )}
-                        {match.recommendation && (
-                            <div style={{ marginTop: isMobile ? 8 : 14 }}>
-                                <RecommendationBadge rec={match.recommendation} size={isMobile ? 'sm' : 'lg'} />
-                            </div>
-                        )}
-                    </div>
-                    {/* Action cluster — desktop only (right column) */}
-                    {!isMobile && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0, maxWidth: 340 }}>
-                        {/* Action buttons */}
-                        <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-                            <button style={{
-                                padding: '10px 20px', borderRadius: 8,
-                                border: '1.5px solid #e5e7eb', background: 'white',
-                                fontSize: '0.875rem', fontWeight: 600, color: '#374151',
-                                cursor: 'pointer', fontFamily: "'Manrope', sans-serif",
-                            }}>Save</button>
+
+                        {/* Actions row: Apply Now + Save | No longer open RIGHT */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             {job.source_url && (
                                 <Link href={job.source_url} target="_blank" style={{
                                     display: 'inline-flex', alignItems: 'center', gap: 6,
                                     padding: '10px 22px', borderRadius: 8,
                                     background: '#135bec', color: 'white',
                                     fontSize: '0.875rem', fontWeight: 700, textDecoration: 'none',
-                                    boxShadow: '0 2px 8px rgba(19,91,236,0.3)',
-                                    transition: 'all 0.15s ease',
+                                    boxShadow: '0 2px 8px rgba(19,91,236,0.25)',
                                 }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = '#0f4cc7'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = '#135bec'; e.currentTarget.style.transform = 'translateY(0)' }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#0f4cc7' }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = '#135bec' }}
                                 >
-                                    Apply Now
+                                    Apply Now →
                                 </Link>
                             )}
+                            <button style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 8, border: '1.5px solid #e5e7eb', background: 'white', fontSize: '0.875rem', fontWeight: 600, color: '#374151', cursor: 'pointer', fontFamily: "'Manrope', sans-serif" }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                                Save
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (!match.job_id) return
+                                    await reportJobStatus(match.job_id, 'closed')
+                                    onReported?.(match.job_id)
+                                }}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 'auto', padding: 0, border: 'none', background: 'none', color: '#94A3B8', fontSize: '0.75rem', fontWeight: 500, cursor: 'pointer', fontFamily: "'Manrope', sans-serif" }}
+                                onMouseEnter={e => { e.currentTarget.style.color = '#135bec' }}
+                                onMouseLeave={e => { e.currentTarget.style.color = '#94A3B8' }}
+                            >
+                                <span aria-hidden style={{ fontSize: '0.8rem' }}>⚑</span>
+                                <span style={{ textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>No longer open? Tell us</span>
+                            </button>
                         </div>
-                        {/* Crowdsourced status check */}
-                        <button
-                            type="button"
-                            onClick={async () => {
-                                if (!match.job_id) return
-                                await reportJobStatus(match.job_id, 'closed')
-                                onReported?.(match.job_id)
-                            }}
-                            style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 6,
-                                marginTop: 12, padding: 0, border: 'none', background: 'none',
-                                color: '#94A3B8', fontSize: '0.78rem', fontWeight: 500,
-                                cursor: 'pointer', fontFamily: "'Manrope', sans-serif", transition: 'color 0.15s ease',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.color = '#135bec' }}
-                            onMouseLeave={e => { e.currentTarget.style.color = '#94A3B8' }}
-                        >
-                            <span aria-hidden style={{ fontSize: '0.85rem', lineHeight: 1 }}>⚑</span>
-                            <span style={{ textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#cbd5e1' }}>
-                                No longer accepting applications? Tell us
-                            </span>
-                        </button>
-                        <div style={{
-                            display: 'flex', alignItems: 'flex-start', gap: 9,
-                            marginTop: 0, padding: '11px 14px', borderRadius: 10, width: '100%',
-                            background: '#fef2f2', border: '1px solid #fecaca',
-                        }}>
-                            <span aria-hidden style={{ fontSize: '0.95rem', lineHeight: 1.3, flexShrink: 0 }}>⚠️</span>
-                            <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#b91c1c', margin: 0, lineHeight: 1.45, textAlign: 'left' }}>
-                                Click <strong>Apply</strong> to see if the job is open or closed before creating a resume for this company.
-                            </p>
+                    </div>
+                )}
+
+                {/* ── Mobile header ── */}
+                {isMobile && (
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <CompanyIcon company={job.company} size={40} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <h1 style={{
+                                fontSize: '1.05rem', fontWeight: 800, color: '#111827',
+                                letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 6,
+                            }}>{job.title}</h1>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
+                                {job.company && (
+                                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#135bec' }}>{job.company}</span>
+                                )}
+                                {job.location && (
+                                    <span style={{ fontSize: '0.8125rem', color: '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                                        {job.location}
+                                    </span>
+                                )}
+                                {job.experience_level && (
+                                    <span style={{ fontSize: '0.75rem', padding: '2px 9px', borderRadius: 20, background: '#f3f4f6', color: '#6b7280', fontWeight: 600, textTransform: 'capitalize' as const }}>{job.experience_level}</span>
+                                )}
+                            </div>
+                            {job.legitimacy_tier === 'proceed_with_caution' && (
+                                <div style={{ marginTop: 7 }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 99, background: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c', fontSize: 11, fontWeight: 700 }}>⚠ CAUTION</span>
+                                </div>
+                            )}
+                            {match.recommendation && (
+                                <div style={{ marginTop: 8 }}>
+                                    <RecommendationBadge rec={match.recommendation} size="sm" />
+                                </div>
+                            )}
                         </div>
-                        </div>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 {/* Mobile action buttons — below the title row, clear chat bubble */}
                 {isMobile && (
@@ -1249,15 +1328,7 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
             {/* ── BODY ── */}
             <div style={{ padding: isMobile ? '14px 16px' : '28px 36px' }}>
 
-                {/* Score Journey — desktop only; mobile version renders after the skills card */}
-                {!isMobile && match.optimized_score != null && (
-                    <ScoreJourney
-                        currentScore={score}
-                        optimizedScore={match.optimized_score}
-                        projectedScore={projectedScoreNum}
-                        isMobile={false}
-                    />
-                )}
+                {/* Score Journey moved below skills section */}
 
                 {/* Score + Skills row */}
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1.8fr', gap: 16, marginBottom: 20 }}>
@@ -1320,45 +1391,29 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                 }}>
                                     {hasEvidence ? `Evidence Found (${matched.length})` : `Matched Skills (${matched.length})`}
                                 </p>
-                                {hasEvidence ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                                        {matched.slice(0, 6).map((s, i) => (
-                                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                                                <span style={{
-                                                    fontSize: '0.72rem', padding: '3px 9px', borderRadius: 20,
-                                                    background: '#f0fdf4', color: '#15803d',
-                                                    border: '1px solid #bbf7d0', fontWeight: 600, flexShrink: 0,
-                                                }}>{getSkillName(s)}</span>
-                                                <span style={{ color: '#d1d5db', fontSize: '0.75rem', flexShrink: 0 }}>─</span>
-                                                <span style={{
-                                                    fontSize: '0.75rem', color: '#6b7280', lineHeight: 1.3,
-                                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                                }}>{getSkillEvidence(s)}</span>
-                                            </div>
-                                        ))}
-                                        {matched.length > 6 && (
-                                            <span style={{ fontSize: '0.72rem', color: '#9ca3af', fontWeight: 500 }}>
-                                                +{matched.length - 6} more matched
-                                            </span>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                        {matched.slice(0, 6).map((s, i) => (
-                                            <span key={i} style={{
-                                                fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
-                                                background: '#f0fdf4', color: '#15803d',
-                                                border: '1px solid #bbf7d0', fontWeight: 500,
-                                            }}>{getSkillName(s)}</span>
-                                        ))}
-                                        {matched.length > 6 && (
-                                            <span style={{
-                                                fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
-                                                background: '#f3f4f6', color: '#6b7280', fontWeight: 500,
-                                            }}>+{matched.length - 6} more</span>
-                                        )}
-                                    </div>
-                                )}
+                                {/* Evidence pills — show skill chips with evidence as tooltip on hover */}
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    {matched.slice(0, 8).map((s, i) => (
+                                        <span key={i} title={getSkillEvidence(s) ?? undefined} style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                                            fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
+                                            background: '#f0fdf4', color: '#15803d',
+                                            border: '1px solid #bbf7d0', fontWeight: 600,
+                                            cursor: getSkillEvidence(s) ? 'help' : 'default',
+                                        }}>
+                                            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M10 3L4.5 8.5L2 6"/>
+                                            </svg>
+                                            {getSkillName(s)}
+                                        </span>
+                                    ))}
+                                    {matched.length > 8 && (
+                                        <span style={{
+                                            fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
+                                            background: '#f3f4f6', color: '#6b7280', fontWeight: 500,
+                                        }}>+{matched.length - 8} more</span>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -1524,14 +1579,19 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                     />
                 )}
 
+                {/* Score Journey — desktop only, after skills, integrates fastest_path steps */}
+                {!isMobile && match.optimized_score != null && (
+                    <ScoreJourney
+                        currentScore={score}
+                        optimizedScore={match.optimized_score}
+                        projectedRangeStr={projectedScore}
+                        fastestPath={match.fastest_path}
+                    />
+                )}
+
                 {/* Profile Strengths — v3 rows only, desktop only (mobile replaced by score journey) */}
                 {!isMobile && match.profile_strengths && match.profile_strengths.length > 0 && (
                     <ProfileStrengths strengths={match.profile_strengths} isMobile={false} />
-                )}
-
-                {/* Fastest Path — v2 rows only, desktop only */}
-                {!isMobile && match.fastest_path && match.fastest_path.steps.length > 0 && (
-                    <FastestPathSection path={match.fastest_path} isMobile={false} />
                 )}
 
                 {/* Rejection Reason — personalized on mobile, verbatim on desktop */}
@@ -2219,7 +2279,11 @@ export default function MatchesPage() {
     // Only fires when a runId is present in the URL.
     useEffect(() => {
         if (!triggerRunId) return
-        fetch('/api/trigger-token', { method: 'POST' })
+        fetch('/api/trigger-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ runId: triggerRunId }),
+        })
             .then(r => r.json())
             .then(d => { if (d.token) setTriggerPublicToken(d.token) })
             .catch(() => { /* silently ignore — fallback to Supabase polling */ })
@@ -2470,7 +2534,7 @@ export default function MatchesPage() {
     return (
         <>
             <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&display=swap');
                 .matches-root * { font-family: 'Manrope', -apple-system, sans-serif; }
                 @keyframes cardIn {
                     from { opacity: 0; transform: translateY(8px); }
@@ -2499,6 +2563,17 @@ export default function MatchesPage() {
                 .filter-tab.active { background: #135bec; color: white; box-shadow: 0 2px 6px rgba(19,91,236,0.3); }
                 .filter-tab:not(.active) { background: #f3f4f6; color: #6b7280; }
                 .filter-tab:not(.active):hover { background: #e5e7eb; color: #374151; }
+
+                /* ── Mobile Score Journey ── */
+                .mob-score-journey { background: white; border-radius: 14px; border: 1px solid #e8ecf4; padding: 14px 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+                .mob-sj-gauges { display: flex; align-items: center; justify-content: space-between; }
+                .mob-sj-gauge { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+                .mob-sj-gauge-ring { position: relative; width: 64px; height: 64px; }
+                .mob-sj-ring-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+                .mob-sj-gauge-label { font-size: 9px; color: #94a3b8; text-align: center; max-width: 72px; line-height: 1.2; font-weight: 500; }
+                .mob-sj-delta { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; min-width: 0; max-width: 32px; }
+                .mob-sj-delta-badge { font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700; color: #135bec; background: #eff6ff; padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
+                .mob-sj-delta-line { height: 1.5px; width: 100%; border-radius: 1px; display: block; }
             `}</style>
 
             <div className="matches-root" style={{
@@ -2509,23 +2584,30 @@ export default function MatchesPage() {
             }}>
 
                 {/* ════════ LEFT PANEL ════════ */}
-                <div style={{
-                    width: isMobile ? '100%' : 360,
+                <div className="left-scroll" style={{
+                    width: isMobile ? '100%' : 380,
                     flexShrink: 0,
                     background: '#f9fafb',
                     borderRight: isMobile ? 'none' : '1px solid #e5e7eb',
-                    display: 'flex',
-                    flexDirection: 'column',
+                    overflowY: 'auto',
                 }}>
                     {/* Header */}
                     <div style={{
-                        padding: '18px 20px 14px',
+                        padding: '16px 20px 14px',
                         background: 'white',
                         borderBottom: '1px solid #f3f4f6',
-                        flexShrink: 0,
                     }}>
-                        {/* Resume selector — pinned at the top so the user always
-                            knows whose matches they're looking at. */}
+                        {/* Section heading */}
+                        <div style={{ marginBottom: 12 }}>
+                            <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.02em', lineHeight: 1.2, margin: 0 }}>
+                                AI Matches
+                            </h2>
+                            <p style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: 3, fontWeight: 500 }}>
+                                Scored against your active resume
+                            </p>
+                        </div>
+
+                        {/* Resume selector — compact below heading */}
                         <ResumeSelector
                             resumes={resumes}
                             selectedResumeId={selectedResumeId}
@@ -2555,49 +2637,59 @@ export default function MatchesPage() {
                                     borderRadius: '50%', animation: 'spin 0.8s linear infinite',
                                 }} />
                                 <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
-                                    Scoring your matches… results appear here automatically as they're ready.
+                                    Scoring your matches…
                                 </span>
                             </div>
                         )}
 
-                        {/* Count + filters button row */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                            <span style={{
-                                fontSize: '0.6875rem', fontWeight: 800, color: '#6b7280',
-                                letterSpacing: '0.06em', textTransform: 'uppercase',
-                            }}>
-                                {loading ? '—' : filtered.length} Jobs Found
+                        {/* Count + sort row */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280' }}>
+                                {loading ? '—' : filtered.length} matches found
+                                {!loading && filtered.length !== openResumeScoped.length && (
+                                    <span style={{ color: '#9ca3af', fontWeight: 500 }}> · deduplicated</span>
+                                )}
                             </span>
                             <button style={{
                                 display: 'flex', alignItems: 'center', gap: 5,
-                                padding: '5px 12px', borderRadius: 7,
+                                padding: '4px 10px', borderRadius: 6,
                                 border: '1.5px solid #e5e7eb', background: 'white',
-                                fontSize: '0.75rem', fontWeight: 600, color: '#374151',
+                                fontSize: '0.7rem', fontWeight: 600, color: '#374151',
                                 cursor: 'pointer', fontFamily: "'Manrope', sans-serif",
                             }}>
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                     <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
                                 </svg>
-                                Filters
+                                Sort
                             </button>
                         </div>
 
-                        {/* Filter tabs */}
-                        <div style={{ display: 'flex', gap: 6 }}>
-                            {FILTERS.map(f => (
-                                <button
-                                    key={f.key}
-                                    onClick={() => setFilter(f.key)}
-                                    className={`filter-tab ${filter === f.key ? 'active' : ''}`}
-                                >
-                                    {f.label} {f.count}
-                                </button>
-                            ))}
+                        {/* Filter chips */}
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' as const }}>
+                            {FILTERS.map(f => {
+                                const isActive = filter === f.key
+                                return (
+                                    <button
+                                        key={f.key}
+                                        onClick={() => setFilter(f.key)}
+                                        style={{
+                                            padding: '5px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                                            fontSize: '0.72rem', fontWeight: 700,
+                                            fontFamily: "'Manrope', sans-serif",
+                                            background: isActive ? '#135bec' : '#f3f4f6',
+                                            color: isActive ? 'white' : '#6b7280',
+                                            boxShadow: isActive ? '0 2px 6px rgba(19,91,236,0.3)' : 'none',
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        {f.key === 'all' ? 'All' : f.key === 'high' ? '80%+' : f.key === 'medium' ? '60–79%' : '<60%'}
+                                        {' '}{f.count}
+                                    </button>
+                                )
+                            })}
                         </div>
 
-                        {/* Location facet — a compact dropdown so the filter header stays
-                            tight even when a resume's matches span many metros. Only shown
-                            once there's more than one location to choose between. */}
+                        {/* Location facet */}
                         {locationOptions.length >= 2 && (
                             <LocationFilter
                                 options={locationOptions}
@@ -2609,7 +2701,7 @@ export default function MatchesPage() {
                     </div>
 
                     {/* Job list */}
-                    <div className="left-scroll" style={{ flex: 1, overflowY: 'auto', paddingTop: 10 }}>
+                    <div style={{ paddingTop: 10 }}>
                         {loading ? (
                             <div style={{ padding: '60px 20px', textAlign: 'center' }}>
                                 <div style={{
@@ -2719,7 +2811,7 @@ export default function MatchesPage() {
             {isMobile && mobileSheetOpen && selected && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 50 }}>
                     <div onClick={() => setMobileSheetOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }} />
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#f7f8fa', borderRadius: '20px 20px 0 0', maxHeight: '90vh', overflowY: 'auto', paddingBottom: 32 }}>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#ffffff', borderRadius: '22px 22px 0 0', maxHeight: '95vh', overflowY: 'auto', paddingBottom: 32 }}>
                         <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 20px 0' }}>
                             <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e5e7eb' }} />
                         </div>

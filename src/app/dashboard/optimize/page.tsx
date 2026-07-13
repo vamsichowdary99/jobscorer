@@ -2,9 +2,9 @@
 
 import React, { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { fetchResumes, fetchResumeById, getPrimaryResumeId, triggerResumeOptimization, triggerBuildPlan, fetchOptimizedResume, fetchOptimizedResumesByResume, RateLimitError } from '@/lib/api'
+import { fetchResumes, fetchResumeById, getPrimaryResumeId, triggerResumeOptimization, triggerBuildPlan, fetchOptimizedResume, fetchOptimizedResumesByResume, fetchConfirmedProjects, RateLimitError } from '@/lib/api'
 import { getScoreColor } from '@/lib/types'
-import type { Job, UserJobMatch, OptimizedResumeData, ParsedResume, AtsFeedback, BeforeAfterRole, SkillsDelta, CareerActionPlan, BuildPlan, AcceptedRecommendation } from '@/lib/types'
+import type { Job, UserJobMatch, OptimizedResumeData, ParsedResume, AtsFeedback, BeforeAfterRole, SkillsDelta, CareerActionPlan, BuildPlan, AcceptedRecommendation, ProjectEvidence, CompletedProjectForResume } from '@/lib/types'
 import { mapToOpenResumeSchema } from '@/lib/resumeMapper'
 import type { OpenResume } from '@/lib/resumeMapper'
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
@@ -116,6 +116,82 @@ function CompanyIcon({ company, size = 40 }: { company: string | null; size?: nu
             color: 'rgba(255,255,255,0.92)', fontSize: size * 0.42, fontWeight: 700,
             letterSpacing: '-0.02em', boxShadow: `0 1px 4px ${bg}80`,
         }}>{name[0].toUpperCase()}</div>
+    )
+}
+
+/**
+ * "Confirmed Projects" — Project Coach roadmaps the user actually finished, offered
+ * as real, checkable evidence to fold into the resume ("built and deployed", never
+ * "in progress"). Renders nothing if the user hasn't completed any projects yet.
+ *
+ * Deliberately styled as a verification ledger, not a form: the green ring badge
+ * reuses this page's own "Excellent" tier palette (see scoreTier()) so a confirmed
+ * project reads as verified data, same visual family as the score gauge — not a
+ * generic checkbox list like the Build Plan recommendation cards elsewhere in the
+ * app. The include/exclude control is a switch (a decision about THIS resume), kept
+ * visually separate from the permanent green "verified" badge (a fact about the work).
+ */
+function ConfirmedProjectsCard({ projects, included, onToggle }: {
+    projects: ProjectEvidence[]
+    included: Set<string>
+    onToggle: (roadmapId: string) => void
+}) {
+    if (projects.length === 0) return null
+    const includedCount = projects.filter(p => included.has(p.roadmap_id)).length
+    const mono = "'JetBrains Mono', monospace"
+    return (
+        <div style={{ width: '100%', maxWidth: 380, textAlign: 'left', marginBottom: 20, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px 12px', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                    <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth={2.5} strokeLinecap="round"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9.5" /></svg>
+                    <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
+                        Confirmed Projects
+                    </span>
+                </div>
+                <span style={{ fontFamily: mono, fontSize: 10.5, fontWeight: 700, color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 99, padding: '2px 9px', letterSpacing: '0.02em', flexShrink: 0 }}>
+                    {includedCount}/{projects.length} included
+                </span>
+            </div>
+
+            <div style={{ maxHeight: 232, overflowY: 'auto' }}>
+                {projects.map((p, i) => {
+                    const isOn = included.has(p.roadmap_id)
+                    return (
+                        <div key={p.roadmap_id} style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 16px', borderTop: i === 0 ? 'none' : '1px solid #F1F5F9' }}>
+                            <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#ecfdf5', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                                <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4" /></svg>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{p.project_name}</div>
+                                <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, marginTop: 2 }}>{p.resume_bullet}</div>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={isOn}
+                                aria-label={`Include ${p.project_name} in this resume`}
+                                onClick={() => onToggle(p.roadmap_id)}
+                                style={{
+                                    flexShrink: 0, marginTop: 2, width: 34, height: 20, borderRadius: 99, border: 'none', cursor: 'pointer',
+                                    background: isOn ? '#135bec' : '#E2E8F0', position: 'relative', padding: 0, transition: 'background 0.15s ease',
+                                }}
+                            >
+                                <span style={{
+                                    position: 'absolute', top: 2, left: isOn ? 16 : 2, width: 16, height: 16, borderRadius: '50%',
+                                    background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.18)', transition: 'left 0.15s ease',
+                                }} />
+                            </button>
+                        </div>
+                    )
+                })}
+            </div>
+
+            <div style={{ padding: '10px 16px', borderTop: '1px solid #F1F5F9', background: '#FAFBFC' }}>
+                <span style={{ fontFamily: mono, fontSize: 10, color: '#94a3b8', letterSpacing: '0.02em' }}>
+                    Verified by Project Coach — written as finished work, never &quot;in progress&quot;.
+                </span>
+            </div>
+        </div>
     )
 }
 
@@ -2157,6 +2233,9 @@ function OptimizePageInner() {
     const [buildPlan, setBuildPlan] = useState<BuildPlan | null>(null)
     const [buildPlanLoading, setBuildPlanLoading] = useState(false)
     const [buildPlanError, setBuildPlanError] = useState<string | null>(null)
+    // Confirmed Projects — finished Project Coach roadmaps, offered as real "built and deployed" evidence.
+    const [confirmedProjects, setConfirmedProjects] = useState<ProjectEvidence[]>([])
+    const [includedProjectIds, setIncludedProjectIds] = useState<Set<string>>(new Set())
     const autoTriggeredRef = useRef(false)
     const [isMobile, setIsMobile] = useState(false)
     const [showGenSheet, setShowGenSheet] = useState(false)
@@ -2218,6 +2297,30 @@ function OptimizePageInner() {
         }
         load()
     }, [user?.id])
+
+    // Load Confirmed Projects (finished Project Coach roadmaps) — default all included.
+    useEffect(() => {
+        if (!user?.id) return
+        fetchConfirmedProjects(user.id).then(rows => {
+            setConfirmedProjects(rows)
+            setIncludedProjectIds(new Set(rows.map(r => r.roadmap_id)))
+        }).catch(() => {})
+    }, [user?.id])
+
+    const toggleConfirmedProject = useCallback((roadmapId: string) => {
+        setIncludedProjectIds(prev => {
+            const next = new Set(prev)
+            if (next.has(roadmapId)) next.delete(roadmapId)
+            else next.add(roadmapId)
+            return next
+        })
+    }, [])
+
+    const selectedCompletedProjects = useCallback((): CompletedProjectForResume[] =>
+        confirmedProjects
+            .filter(p => includedProjectIds.has(p.roadmap_id))
+            .map(p => ({ name: p.project_name, tech: p.tech_used, resume_bullet: p.resume_bullet || '', github_url: p.github_url })),
+    [confirmedProjects, includedProjectIds])
 
     // Load optimized resumes for the selected resume
     useEffect(() => {
@@ -2325,13 +2428,15 @@ function OptimizePageInner() {
         setError(null)
         setCached(false)
         try {
+            const completedProjects = selectedCompletedProjects()
             const result = await triggerResumeOptimization({
                 user_id: user?.id ?? '',
                 resume_id: resumeId,
                 job_id: selected.job.id,
                 gap_data: pendingGapData as Record<string, any> | null,
                 accepted_recommendations: accepted.length > 0 ? accepted : undefined,
-                force_refresh: accepted.length > 0,
+                completed_projects: completedProjects.length > 0 ? completedProjects : undefined,
+                force_refresh: accepted.length > 0 || completedProjects.length > 0,
             })
             if (result.success && result.optimized_data) {
                 setOptimizedData(result.optimized_data as OptimizedResumeData)
@@ -2349,7 +2454,7 @@ function OptimizePageInner() {
             }
             setPhase('error')
         }
-    }, [selected, resumeId, pendingGapData, user?.id, refreshOptimizedList])
+    }, [selected, resumeId, pendingGapData, user?.id, refreshOptimizedList, selectedCompletedProjects])
 
     // Open the Build Plan modal: run gap detection first (unless already done),
     // then trigger Workflow 1 and show recommendations BEFORE resume creation.
@@ -2418,12 +2523,14 @@ function OptimizePageInner() {
         setError(null)
         setCached(false)
         try {
+            const completedProjects = selectedCompletedProjects()
             const result = await triggerResumeOptimization({
                 user_id: user?.id ?? '',
                 resume_id: resumeId,
                 job_id: selected.job.id,
-                force_refresh: forceRefresh,
+                force_refresh: forceRefresh || completedProjects.length > 0,
                 gap_data: pendingGapData as Record<string, any> | null,
+                completed_projects: completedProjects.length > 0 ? completedProjects : undefined,
             })
             if (result.success && result.optimized_data) {
                 setOptimizedData(result.optimized_data as OptimizedResumeData)
@@ -2441,7 +2548,7 @@ function OptimizePageInner() {
             }
             setPhase('error')
         }
-    }, [selected, resumeId, pendingGapData, user?.id, refreshOptimizedList])
+    }, [selected, resumeId, pendingGapData, user?.id, refreshOptimizedList, selectedCompletedProjects])
 
     /* ─── MOBILE LAYOUT ─── */
     if (isMobile) {
@@ -2586,6 +2693,7 @@ function OptimizePageInner() {
                         <CompanyIcon company={selected.job.company} size={56} />
                         <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginTop: 16, marginBottom: 4, letterSpacing: '-0.02em' }}>{selected.job.title}</div>
                         <div style={{ fontSize: 13, color: '#135bec', fontWeight: 600, marginBottom: 16 }}>{selected.job.company}</div>
+                        <ConfirmedProjectsCard projects={confirmedProjects} included={includedProjectIds} onToggle={toggleConfirmedProject} />
                         <button
                             onClick={() => openBuildPlan()}
                             disabled={!resumeId}
@@ -2828,6 +2936,8 @@ function OptimizePageInner() {
         )
     }
 
+    const currentResumeName = resumes.find(r => r.id === selectedResumeId)?.file_name ?? 'Select Resume'
+
     return (
         <div style={{ fontFamily: "'DM Sans', sans-serif", padding: isMobile ? '16px 14px' : '24px 28px' }}>
             {/* Template Picker Modal */}
@@ -2884,30 +2994,83 @@ function OptimizePageInner() {
                     boxShadow: T.shadow,
                     overflow: 'hidden',
                 }}>
-                    {/* Resume selector */}
-                    {resumes.length > 1 && (
-                        <div style={{ padding: '12px 14px', borderBottom: `1px solid ${T.borderLight}` }}>
-                            <label style={{ fontSize: '0.6875rem', fontWeight: 700, color: T.textMuted, letterSpacing: '0.05em', textTransform: 'uppercase' as const, display: 'block', marginBottom: 6 }}>
-                                Resume
-                            </label>
-                            <select
-                                value={selectedResumeId ?? ''}
-                                onChange={e => handleResumeSwitch(e.target.value)}
-                                style={{
-                                    width: '100%', padding: '8px 10px', borderRadius: T.radiusSm,
-                                    border: `1.5px solid ${T.border}`, background: T.bg,
-                                    fontSize: '0.8125rem', color: T.text, fontFamily: "'DM Sans', sans-serif",
-                                    cursor: 'pointer', outline: 'none',
-                                }}
-                            >
-                                {resumes.map(r => (
-                                    <option key={r.id} value={r.id}>
-                                        {r.file_name ?? `Resume ${r.id.slice(0, 6)}`}
-                                    </option>
-                                ))}
-                            </select>
+                    {/* Resume selector — card dropdown (matches mobile; native select overflowed) */}
+                    <div ref={resumeDropdownRef} style={{ padding: '12px 14px', borderBottom: `1px solid ${T.borderLight}`, position: 'relative' }}>
+                        <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: T.textMuted, letterSpacing: '0.05em', textTransform: 'uppercase' as const, marginBottom: 6 }}>
+                            Source Resume
                         </div>
-                    )}
+                        <button
+                            type="button"
+                            onClick={() => resumes.length > 1 && setResumeDropOpen(o => !o)}
+                            style={{
+                                width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                                padding: '9px 11px', background: '#f8fafc',
+                                border: `1.5px solid ${resumeDropOpen ? '#135bec' : '#e2e8f0'}`,
+                                borderRadius: 10, cursor: resumes.length > 1 ? 'pointer' : 'default',
+                                fontFamily: 'inherit', textAlign: 'left' as const,
+                                boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+                            }}
+                        >
+                            {selectedResumeId ? (
+                                <div style={{ width: 28, height: 28, borderRadius: 8, background: iconColor(currentResumeName), flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
+                                    {currentResumeName.charAt(0).toUpperCase() || '?'}
+                                </div>
+                            ) : (
+                                <div style={{ width: 28, height: 28, borderRadius: 8, background: '#eff6ff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                                </div>
+                            )}
+                            <div style={{ flex: 1, minWidth: 0, textAlign: 'left' as const }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                                    {currentResumeName}
+                                </div>
+                                <div style={{ fontSize: 11, color: '#64748b' }}>
+                                    {optimizedList.length} optimised variant{optimizedList.length !== 1 ? 's' : ''}
+                                </div>
+                            </div>
+                            {resumes.length > 1 && (
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"
+                                    style={{ transform: resumeDropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            )}
+                        </button>
+                        {resumeDropOpen && resumes.length > 1 && (
+                            <div style={{
+                                position: 'absolute', top: 'calc(100% - 2px)', left: 14, right: 14,
+                                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
+                                boxShadow: '0 8px 24px rgba(15,23,42,0.14)', zIndex: 50, overflow: 'hidden',
+                            }}>
+                                {resumes.map(r => {
+                                    const isSel = r.id === selectedResumeId
+                                    const name = r.file_name ?? `Resume ${r.id.slice(0, 6)}`
+                                    return (
+                                        <div
+                                            key={r.id}
+                                            onClick={() => { handleResumeSwitch(r.id); setResumeDropOpen(false) }}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 9,
+                                                padding: '10px 13px', cursor: 'pointer',
+                                                background: isSel ? '#eff6ff' : '#fff',
+                                                borderBottom: '1px solid #f1f5f9',
+                                            }}
+                                        >
+                                            <div style={{ width: 28, height: 28, borderRadius: 8, background: iconColor(name), flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>
+                                                {name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? '#135bec' : '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{name}</div>
+                                                <div style={{ fontSize: 11, color: '#64748b' }}>
+                                                    {optimizedList.filter(o => o.resume_id === r.id).length} optimised variant{optimizedList.filter(o => o.resume_id === r.id).length !== 1 ? 's' : ''}
+                                                </div>
+                                            </div>
+                                            {isSel && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.8" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Panel header */}
                     <div style={{
@@ -3029,6 +3192,7 @@ function OptimizePageInner() {
                             <p style={{ fontSize: '0.8125rem', color: T.textMuted, marginBottom: 32 }}>
                                 {selected.job.location}
                             </p>
+                            <ConfirmedProjectsCard projects={confirmedProjects} included={includedProjectIds} onToggle={toggleConfirmedProject} />
                             <button
                                 onClick={() => openBuildPlan()}
                                 disabled={!resumeId}
