@@ -25,3 +25,15 @@
  * the templates that call `dL(...)` don't need to change.
  */
 export const defeatLigatures = (s: string | null | undefined): string => s ?? ''
+
+/**
+ * True when two education fields hold the same text (trimmed, case-insensitive)
+ * and are non-empty. Templates fall back to whichever of degree/school is
+ * present when the other is blank (e.g. `edu.degree || edu.school`) — this
+ * guards the second line so that fallback value isn't then rendered again.
+ */
+export const sameText = (a: string | null | undefined, b: string | null | undefined): boolean => {
+  const normA = (a ?? '').trim().toLowerCase()
+  const normB = (b ?? '').trim().toLowerCase()
+  return normA !== '' && normA === normB
+}

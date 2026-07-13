@@ -4,7 +4,7 @@ import React from "react";
 import { Document, Page, View, Text } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
 import "./fonts";
-import { defeatLigatures as dL } from "./utils";
+import { defeatLigatures as dL, sameText } from "./utils";
 
 // ── Types (mirrored from resumes/page.tsx) ─────────────────
 
@@ -291,10 +291,13 @@ const OpenResumePdfDocument: React.FC<OpenResumePdfDocumentProps> = ({ state }) 
           {education.length > 0 && (
             <View>
               <SectionHeading title="Education" />
-              {education.map((edu, i) => (
+              {education.map((edu, i) => {
+                const eduTop = edu.school || "University";
+                const showDegree = edu.degree && !sameText(edu.degree, eduTop);
+                return (
                 <View key={i} style={{ marginBottom: "5pt" }}>
-                  <HeaderRow left={edu.school || "University"} right={edu.date} bold />
-                  {edu.degree ? (
+                  <HeaderRow left={eduTop} right={edu.date} bold />
+                  {showDegree ? (
                     <Text style={{ fontSize: "10pt", color: TEXT_COLOR, marginTop: "1pt" }}>
                       {dL(edu.degree)}
                       {edu.gpa ? `  -  GPA: ${edu.gpa}` : ""}
@@ -307,7 +310,8 @@ const OpenResumePdfDocument: React.FC<OpenResumePdfDocumentProps> = ({ state }) 
                     </Text>
                   ) : null}
                 </View>
-              ))}
+                );
+              })}
             </View>
           )}
 

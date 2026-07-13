@@ -9,7 +9,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
 import "./fonts";
-import { defeatLigatures as dL } from "./utils";
+import { defeatLigatures as dL, sameText } from "./utils";
 
 // ── Types (mirrored from resumes/page.tsx) ─────────────────
 
@@ -47,6 +47,7 @@ interface LeadershipEntry {
 interface ResumeEditorState {
   profile: {
     name: string;
+    headline: string;
     email: string;
     phone: string;
     location: string;
@@ -182,14 +183,14 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
     profile.portfolio,
   ].filter(Boolean);
 
-  // Role subtitle: derived from the latest (first) experience title.
-  const roleSubtitle = experience.find((e) => e.title && e.title.trim())?.title?.trim() ?? "";
+  // Role subtitle: editable Profile headline, falling back to the first experience title.
+  const roleSubtitle = profile.headline?.trim() || experience.find((e) => e.title && e.title.trim())?.title?.trim() || "";
 
   const skillRows = [
     { label: "Languages", value: skills.languages },
     { label: "Frameworks", value: skills.frameworks },
     { label: "Tools & Cloud", value: skills.tools },
-    { label: "Core Concepts", value: skills.soft },
+    { label: "Core Competencies", value: skills.soft },
   ].filter((r) => r.value && r.value.trim());
 
   return (
@@ -306,12 +307,15 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
         {education.length > 0 && (
           <View>
             <SectionHeading title="Education" />
-            {education.map((edu, i) => (
+            {education.map((edu, i) => {
+              const eduTop = edu.degree || edu.school || "Degree";
+              const showSchool = edu.school && !sameText(edu.school, eduTop);
+              return (
               <View key={i} style={{ marginBottom: "5pt" }}>
-                <HeaderRow left={edu.degree || edu.school || "Degree"} right={edu.date} />
-                {(edu.school || edu.gpa) && (
+                <HeaderRow left={eduTop} right={edu.date} />
+                {(showSchool || edu.gpa) && (
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-                    <Text style={{ fontSize: "10pt", flex: 1 }}>{dL(edu.school)}</Text>
+                    <Text style={{ fontSize: "10pt", flex: 1 }}>{showSchool ? dL(edu.school) : ""}</Text>
                     {edu.gpa ? (
                       <Text style={{ fontSize: "9.5pt", color: INK, marginLeft: "10pt" }}>{dL(edu.gpa)}</Text>
                     ) : null}
@@ -324,7 +328,8 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
                   </Text>
                 ) : null}
               </View>
-            ))}
+              );
+            })}
           </View>
         )}
 

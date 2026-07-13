@@ -9,7 +9,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
 import "./fonts";
-import { defeatLigatures as dL } from "./utils";
+import { defeatLigatures as dL, sameText } from "./utils";
 
 // ── Types (mirrored from resumes/page.tsx) ─────────────────
 
@@ -47,6 +47,7 @@ interface LeadershipEntry {
 interface ResumeEditorState {
   profile: {
     name: string;
+    headline: string;
     email: string;
     phone: string;
     location: string;
@@ -203,7 +204,7 @@ const JadePdfDocument: React.FC<JadePdfDocumentProps> = ({ state }) => {
   const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state;
 
   // Role subtitle: derived from the latest (first) experience title.
-  const roleSubtitle = experience.find((e) => e.title && e.title.trim())?.title?.trim() ?? "";
+  const roleSubtitle = profile.headline?.trim() || experience.find((e) => e.title && e.title.trim())?.title?.trim() || "";
 
   const contactRows = [
     { label: "Email", value: profile.email },
@@ -219,7 +220,7 @@ const JadePdfDocument: React.FC<JadePdfDocumentProps> = ({ state }) => {
     { label: "Languages", value: skills.languages },
     { label: "Libraries & Frameworks", value: skills.frameworks },
     { label: "Tools", value: skills.tools },
-    { label: "Core Concepts", value: skills.soft },
+    { label: "Core Competencies", value: skills.soft },
   ]
     .map((g) => ({ label: g.label, items: splitItems(g.value || "") }))
     .filter((g) => g.items.length > 0);
@@ -282,12 +283,15 @@ const JadePdfDocument: React.FC<JadePdfDocumentProps> = ({ state }) => {
             {education.length > 0 && (
               <View>
                 <SectionHeading title="Education" />
-                {education.map((edu, i) => (
+                {education.map((edu, i) => {
+                  const eduTop = edu.degree || edu.school || "Degree";
+                  const showSchool = edu.school && !sameText(edu.school, eduTop);
+                  return (
                   <View key={i} style={{ marginBottom: "5pt" }}>
                     <Text style={{ fontWeight: "bold", fontSize: "10pt", lineHeight: 1.2 }}>
-                      {dL(edu.degree || edu.school || "Degree")}
+                      {dL(eduTop)}
                     </Text>
-                    {edu.school ? (
+                    {showSchool ? (
                       <Text style={{ fontSize: "9.5pt", marginTop: "0.5pt" }}>{dL(edu.school)}</Text>
                     ) : null}
                     {(edu.date || edu.gpa) && (
@@ -302,7 +306,8 @@ const JadePdfDocument: React.FC<JadePdfDocumentProps> = ({ state }) => {
                       </Text>
                     ) : null}
                   </View>
-                ))}
+                  );
+                })}
               </View>
             )}
 

@@ -106,6 +106,7 @@ interface LeadershipEntry {
 interface ResumeEditorState {
     profile: {
         name: string
+        headline: string
         email: string
         phone: string
         location: string
@@ -129,7 +130,7 @@ interface ResumeEditorState {
 }
 
 const EMPTY_STATE: ResumeEditorState = {
-    profile: { name: '', email: '', phone: '', location: '', linkedin: '', github: '', portfolio: '' },
+    profile: { name: '', headline: '', email: '', phone: '', location: '', linkedin: '', github: '', portfolio: '' },
     summary: '',
     education: [],
     experience: [],
@@ -140,12 +141,25 @@ const EMPTY_STATE: ResumeEditorState = {
     achievements: [],
 }
 
+// Education previews fall back to whichever of degree/school is present when
+// the other is blank (e.g. `edu.degree || edu.school`) — this guards the
+// second line so that fallback value isn't then rendered again as a duplicate.
+const sameText = (a: string | null | undefined, b: string | null | undefined): boolean => {
+    const normA = (a ?? '').trim().toLowerCase()
+    const normB = (b ?? '').trim().toLowerCase()
+    return normA !== '' && normA === normB
+}
+
 // ── Map OptimizedResumeData + ParsedResume → ResumeEditorState ──
 function mapToEditorState(optimized: OptimizedResumeData, original: ParsedResume | null): ResumeEditorState {
     // Priority: optimized.personal_info (injected by n8n) → original structured_data.personal_info → original root fields
     const rawOrig = original as any
     const profile = {
         name: optimized.personal_info?.full_name || rawOrig?.personal_info?.full_name || original?.name || '',
+        // Defaults to the first work-experience title (old behavior) but is a
+        // standalone field from here on — editing it no longer touches that
+        // experience entry's actual Job Title.
+        headline: (optimized.optimized_experience ?? []).find(exp => exp.title?.trim())?.title?.trim() || '',
         email: optimized.personal_info?.email || rawOrig?.personal_info?.email || original?.email || '',
         phone: optimized.personal_info?.phone || rawOrig?.personal_info?.phone || original?.phone || '',
         location: optimized.personal_info?.location || rawOrig?.personal_info?.location || original?.location || '',
@@ -331,9 +345,9 @@ function generateATSText(state: ResumeEditorState): string {
 
 // ── Section Modal Shell ─────────────────────────────────────
 function SectionModal({
-    title, subtitle, sectionKey, wide, onClose, onSave, children,
+    title, subtitle, sectionKey, wide, footerNote, onClose, onSave, children,
 }: {
-    title: string; subtitle?: string; sectionKey: string; wide?: boolean
+    title: string; subtitle?: string; sectionKey: string; wide?: boolean; footerNote?: string
     onClose: () => void; onSave: () => void
     children: React.ReactNode
 }) {
@@ -371,7 +385,7 @@ function SectionModal({
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     flexShrink: 0,
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
                         <div style={{
                             width: 36, height: 36, borderRadius: 10, background: M.accentTint,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -379,13 +393,13 @@ function SectionModal({
                         }}>
                             <SectionIcon k={sectionKey} filled />
                         </div>
-                        <div>
+                        <div style={{ minWidth: 0 }}>
                             <div style={{
                                 fontSize: '0.9375rem', fontWeight: 700, color: M.text,
                                 fontFamily: M.fontHeading, letterSpacing: '-0.01em',
                             }}>{title}</div>
                             {subtitle && (
-                                <div style={{ fontSize: '0.7rem', color: M.textFaint, fontFamily: M.fontBody }}>
+                                <div style={{ fontSize: '0.7rem', color: M.textFaint, fontFamily: M.fontBody, lineHeight: 1.4, marginTop: 1 }}>
                                     {subtitle}
                                 </div>
                             )}
@@ -395,7 +409,7 @@ function SectionModal({
                         onClick={onClose}
                         style={{
                             background: 'none', border: 'none', cursor: 'pointer',
-                            color: M.textFaint, padding: 6, borderRadius: 8, display: 'flex',
+                            color: M.textFaint, padding: 6, borderRadius: 8, display: 'flex', flexShrink: 0,
                         }}
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -412,27 +426,33 @@ function SectionModal({
                 {/* Footer */}
                 <div style={{
                     padding: '12px 22px 18px', borderTop: `1px solid ${M.borderLight}`,
-                    display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    justifyContent: footerNote ? 'space-between' : 'flex-end', flexShrink: 0,
                 }}>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            padding: '8px 18px', borderRadius: 8,
-                            border: `1px solid ${M.border}`, background: M.white,
-                            color: M.textMid, fontSize: '0.875rem', fontWeight: 600,
-                            cursor: 'pointer', fontFamily: M.fontBody,
-                        }}
-                    >Cancel</button>
-                    <button
-                        onClick={onSave}
-                        style={{
-                            padding: '8px 24px', borderRadius: 8, border: 'none',
-                            background: M.accent, color: '#fff',
-                            fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer',
-                            fontFamily: M.fontBody,
-                            boxShadow: `0 2px 10px ${M.accent}4d`,
-                        }}
-                    >Save changes</button>
+                    {footerNote && (
+                        <span style={{ fontSize: '0.75rem', color: M.textFaint, fontFamily: M.fontBody }}>{footerNote}</span>
+                    )}
+                    <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+                        <button
+                            onClick={onClose}
+                            style={{
+                                padding: '8px 18px', borderRadius: 8,
+                                border: `1px solid ${M.border}`, background: M.white,
+                                color: M.textMid, fontSize: '0.875rem', fontWeight: 600,
+                                cursor: 'pointer', fontFamily: M.fontBody,
+                            }}
+                        >Cancel</button>
+                        <button
+                            onClick={onSave}
+                            style={{
+                                padding: '8px 24px', borderRadius: 8, border: 'none',
+                                background: M.accent, color: '#fff',
+                                fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer',
+                                fontFamily: M.fontBody,
+                                boxShadow: `0 2px 10px ${M.accent}4d`,
+                            }}
+                        >Save changes</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -460,14 +480,29 @@ function ActiveModal({
         experience:     { title: 'Edit Experience',       subtitle: 'Work history & bullet points', wide: true },
         projects:       { title: 'Edit Projects',         subtitle: 'Personal & academic projects', wide: true },
         skills:         { title: 'Edit Technical Skills', subtitle: 'Languages, tools & frameworks' },
-        certifications: { title: 'Edit Certifications',   subtitle: 'Certificates & credentials' },
-        achievements:   { title: 'Edit Achievements',     subtitle: 'Awards & recognitions' },
+        certifications: { title: 'Edit Certifications',   subtitle: 'Cloud, security, frameworks — signals you took initiative beyond the syllabus.' },
+        achievements:   { title: 'Edit Achievements',     subtitle: 'Hackathons, scholarships, rankings — anything that sets you apart from peers.' },
         leadership:     { title: 'Edit Leadership',       subtitle: 'Clubs, orgs & roles',          wide: true },
     }
     const cfg = configs[sectionKey]
     if (!cfg) return null
 
-    const handleSave = () => { update(local); onClose() }
+    const handleSave = () => {
+        // Drop blank entries (e.g. an auto-seeded card the user left empty) so PDF
+        // templates that don't trim-filter certifications/achievements never render one.
+        const cleaned: ResumeEditorState = {
+            ...local,
+            certifications: local.certifications.filter(c => c.trim()),
+            achievements: local.achievements.filter(a => a.trim()),
+        }
+        update(cleaned)
+        onClose()
+    }
+
+    const footerNote =
+        sectionKey === 'certifications' ? `${local.certifications.filter(c => c.trim()).length} of ${local.certifications.length} filled · Esc to close` :
+        sectionKey === 'achievements'   ? `${local.achievements.filter(a => a.trim()).length} of ${local.achievements.length} filled · Esc to close` :
+        undefined
 
     // Reuse existing inline section editors against local state
     const body: React.ReactNode = (() => {
@@ -499,6 +534,7 @@ function ActiveModal({
             subtitle={cfg.subtitle}
             sectionKey={sectionKey}
             wide={cfg.wide}
+            footerNote={footerNote}
             onClose={onClose}
             onSave={handleSave}
         >
@@ -632,6 +668,24 @@ const labelStyle: React.CSSProperties = {
     fontFamily: M.fontBody, letterSpacing: 0,
 }
 
+// Bordered entry-card styling used by list-style sections (certifications, achievements)
+// — matches the /dashboard/upload "Add certifications/achievements" popup fields.
+const entryCardStyle: React.CSSProperties = {
+    marginBottom: 12, padding: 12, background: M.white, borderRadius: 8,
+    border: `1px solid ${M.border}`, position: 'relative',
+}
+const entryRemoveStyle: React.CSSProperties = {
+    position: 'absolute', top: 8, right: 8, background: 'transparent',
+    border: 'none', cursor: 'pointer', color: M.red, padding: 2,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+}
+const addMoreStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
+    borderRadius: 6, background: 'transparent', border: `1px dashed ${T.editorBorder}`,
+    color: T.editorTextMuted, cursor: 'pointer', fontSize: '0.8125rem',
+    width: '100%', justifyContent: 'center', fontFamily: 'inherit',
+}
+
 function Field({ label, value, onChange, placeholder, multiline = false, rows = 3 }: {
     label: string
     value: string
@@ -730,13 +784,16 @@ function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section style={{ marginBottom: '8pt' }}>
                     <ClassicSectionHeader title="Education" />
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const eduTop = edu.school || 'University Name'
+                        const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                        return (
                         <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{edu.school || 'University Name'}</span>
+                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
                                 <span style={{ fontSize: '9.5pt', color: '#333' }}>{edu.date}</span>
                             </div>
-                            {edu.degree && (
+                            {showDegree && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <span style={{ fontStyle: 'italic' }}>{edu.degree}{edu.gpa ? ` — GPA: ${edu.gpa}` : ''}</span>
                                 </div>
@@ -748,7 +805,8 @@ function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
                                 </div>
                             )}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
 
@@ -935,13 +993,13 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
         profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
     ].filter(Boolean)
 
-    const roleSubtitle = experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
 
     const skillRows = [
         { label: 'Languages', value: skills.languages },
         { label: 'Frameworks', value: skills.frameworks },
         { label: 'Tools & Cloud', value: skills.tools },
-        { label: 'Core Concepts', value: skills.soft },
+        { label: 'Core Competencies', value: skills.soft },
     ].filter(r => r.value && r.value.trim())
 
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
@@ -1050,15 +1108,18 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section>
                     <CobaltSectionHeader title="Education" />
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const eduTop = edu.degree || edu.school || 'Degree'
+                        const showSchool = edu.school && !sameText(edu.school, eduTop)
+                        return (
                         <div key={i} style={{ marginBottom: '5pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{edu.degree || edu.school || 'Degree'}</span>
+                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
                                 <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{edu.date}</span>
                             </div>
-                            {(edu.school || edu.gpa) && (
+                            {(showSchool || edu.gpa) && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span>{edu.school}</span>
+                                    <span>{showSchool ? edu.school : ''}</span>
                                     {edu.gpa && <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{edu.gpa}</span>}
                                 </div>
                             )}
@@ -1068,7 +1129,8 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
                                 </div>
                             )}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
 
@@ -1152,13 +1214,13 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
         profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
     ].filter(Boolean)
 
-    const roleSubtitle = experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
 
     const skillRows = [
         { label: 'Languages', value: skills.languages },
         { label: 'Frameworks', value: skills.frameworks },
         { label: 'Tools & Platforms', value: skills.tools },
-        { label: 'Core Concepts', value: skills.soft },
+        { label: 'Core Competencies', value: skills.soft },
     ].filter(r => r.value && r.value.trim())
 
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
@@ -1262,15 +1324,18 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section>
                     <OnyxSectionHeader title="Education" />
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const eduTop = edu.degree || edu.school || 'Degree'
+                        const showSchool = edu.school && !sameText(edu.school, eduTop)
+                        return (
                         <div key={i} style={{ marginBottom: '5pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{edu.degree || edu.school || 'Degree'}</span>
+                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
                                 <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{edu.date}</span>
                             </div>
-                            {(edu.school || edu.gpa) && (
+                            {(showSchool || edu.gpa) && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontStyle: 'italic' }}>{edu.school}</span>
+                                    <span style={{ fontStyle: 'italic' }}>{showSchool ? edu.school : ''}</span>
                                     {edu.gpa && <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{edu.gpa}</span>}
                                 </div>
                             )}
@@ -1280,7 +1345,8 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
                                 </div>
                             )}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
 
@@ -1362,7 +1428,7 @@ function JadeSectionHeader({ title }: { title: string }) {
 function JadeResumePreview({ state }: { state: ResumeEditorState }) {
     const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
 
-    const roleSubtitle = experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
     const splitItems = (csv: string) => (csv || '').split(/[,•\n]/).map(s => s.trim()).filter(Boolean)
 
@@ -1379,7 +1445,7 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
         { label: 'Languages', value: skills.languages },
         { label: 'Libraries & Frameworks', value: skills.frameworks },
         { label: 'Tools', value: skills.tools },
-        { label: 'Core Concepts', value: skills.soft },
+        { label: 'Core Competencies', value: skills.soft },
     ].map(g => ({ label: g.label, items: splitItems(g.value) })).filter(g => g.items.length > 0)
 
     const bullets = (items: string[], size = '9.7pt', mb = '1.5pt', lh = 1.25) => (
@@ -1435,10 +1501,13 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
                     {education.length > 0 && (
                         <section style={{ marginTop: '11pt' }}>
                             <JadeSectionHeader title="Education" />
-                            {education.map((edu, i) => (
+                            {education.map((edu, i) => {
+                                const eduTop = edu.degree || edu.school || 'Degree'
+                                const showSchool = edu.school && !sameText(edu.school, eduTop)
+                                return (
                                 <div key={i} style={{ marginBottom: '5pt' }}>
-                                    <div style={{ fontWeight: 700, fontSize: '10pt', lineHeight: 1.2 }}>{edu.degree || edu.school || 'Degree'}</div>
-                                    {edu.school && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{edu.school}</div>}
+                                    <div style={{ fontWeight: 700, fontSize: '10pt', lineHeight: 1.2 }}>{eduTop}</div>
+                                    {showSchool && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{edu.school}</div>}
                                     {(edu.date || edu.gpa) && (
                                         <div style={{ fontSize: '9pt', marginTop: '0.5pt' }}>{[edu.date, edu.gpa].filter(Boolean).join('  |  ')}</div>
                                     )}
@@ -1448,7 +1517,8 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
                                         </div>
                                     )}
                                 </div>
-                            ))}
+                                )
+                            })}
                         </section>
                     )}
 
@@ -1557,7 +1627,7 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
     const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
 
     const contactParts = [profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const roleSubtitle = experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
     const splitItems = (csv: string) => (csv || '').split(/,(?![^(]*\))|[•\n]/).map(s => s.trim()).filter(Boolean)
     const skillPills = [...splitItems(skills.languages), ...splitItems(skills.frameworks), ...splitItems(skills.tools), ...splitItems(skills.soft)]
@@ -1636,15 +1706,18 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section>
                     <LapisSectionHeader title="Education" />
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const eduTop = edu.degree || edu.school || 'Degree'
+                        const showSchool = edu.school && !sameText(edu.school, eduTop)
+                        return (
                         <div key={i} style={{ marginBottom: '5pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{edu.degree || edu.school || 'Degree'}</span>
+                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
                                 <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{edu.date}</span>
                             </div>
-                            {(edu.school || edu.gpa) && (
+                            {(showSchool || edu.gpa) && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontStyle: 'italic', color: LAPIS_ACCENT }}>{edu.school}</span>
+                                    <span style={{ fontStyle: 'italic', color: LAPIS_ACCENT }}>{showSchool ? edu.school : ''}</span>
                                     {edu.gpa && <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{edu.gpa}</span>}
                                 </div>
                             )}
@@ -1654,7 +1727,8 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
                                 </div>
                             )}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
 
@@ -1706,15 +1780,18 @@ function ReziResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section style={{ marginBottom: '10pt' }}>
                     <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Education</div>
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const showDegree = edu.degree && !sameText(edu.degree, edu.school)
+                        return (
                         <div key={i} style={{ marginBottom: '5pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ fontWeight: 700 }}>{edu.school}</span>
                                 <span style={{ fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>{edu.date}</span>
                             </div>
-                            {edu.degree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555' }}>{edu.degree}</div>}
+                            {showDegree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555' }}>{edu.degree}</div>}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
             {experience.length > 0 && (
@@ -1818,15 +1895,18 @@ function ReziStandardResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section style={{ marginBottom: '10pt' }}>
                     <SectionHeader title="Education" />
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const showDegree = edu.degree && !sameText(edu.degree, edu.school)
+                        return (
                         <div key={i} style={{ marginBottom: '5pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ fontWeight: 600 }}>{edu.school}</span>
                                 <span style={{ fontSize: '9pt', color: '#888' }}>{edu.date}</span>
                             </div>
-                            {edu.degree && <div style={{ fontSize: '9.5pt', color: '#555' }}>{edu.degree}</div>}
+                            {showDegree && <div style={{ fontSize: '9.5pt', color: '#555' }}>{edu.degree}</div>}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
             {experience.length > 0 && (
@@ -1936,15 +2016,18 @@ function LondonResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section>
                     <ExtendingHeader title="Education" />
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const showDegree = edu.degree && !sameText(edu.degree, edu.school)
+                        return (
                         <div key={i} style={{ marginBottom: '5pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ fontWeight: 700 }}>{edu.school}</span>
                                 <span style={{ fontSize: '9pt', color: '#777', fontStyle: 'italic' }}>{edu.date}</span>
                             </div>
-                            {edu.degree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#666' }}>{edu.degree}</div>}
+                            {showDegree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#666' }}>{edu.degree}</div>}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
             {experience.length > 0 && (
@@ -2053,16 +2136,19 @@ function StitchResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section>
                     <SectionHead title="Education" />
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const showDegree = edu.degree && !sameText(edu.degree, edu.school)
+                        return (
                         <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ fontWeight: 700 }}>{edu.school}</span>
                                 <span style={{ fontSize: '8.5pt', color: '#666' }}>{edu.date}</span>
                             </div>
-                            {edu.degree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555' }}>{edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}</div>}
+                            {showDegree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555' }}>{edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}</div>}
                             {edu.coursework && <div style={{ fontSize: '9pt', color: '#444' }}><strong>Relevant Coursework: </strong>{edu.coursework}</div>}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
             {experience.length > 0 && (
@@ -2188,13 +2274,16 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section>
                     <SectionHead title="Education" />
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const eduTop = edu.school || 'University'
+                        const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                        return (
                         <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{edu.school || 'University'}</span>
+                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
                                 <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>{edu.date}</span>
                             </div>
-                            {edu.degree && (
+                            {showDegree && (
                                 <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>
                                     {edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}
                                 </div>
@@ -2205,7 +2294,8 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
                                 </div>
                             )}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
             {experience.length > 0 && (
@@ -2340,16 +2430,20 @@ function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
             {education.length > 0 && (
                 <section>
                     <SectionHead title="Education" />
-                    {education.map((edu, i) => (
+                    {education.map((edu, i) => {
+                        const eduTop = edu.school || 'University'
+                        const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                        return (
                         <div key={i} style={{ marginBottom: '5pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{edu.school || 'University'}</span>
+                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
                                 <span style={{ fontSize: '10pt', color: '#222' }}>{edu.date}</span>
                             </div>
-                            {edu.degree && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}</div>}
+                            {showDegree && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}</div>}
                             {edu.coursework && <div style={{ fontSize: '9.5pt', marginTop: '1pt' }}><span style={{ fontWeight: 700 }}>Coursework: </span>{edu.coursework}</div>}
                         </div>
-                    ))}
+                        )
+                    })}
                 </section>
             )}
             {experience.length > 0 && (
@@ -2525,13 +2619,16 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
                 {education.length > 0 && (
                     <section>
                         <SectionHead title="Education" />
-                        {education.map((edu, i) => (
+                        {education.map((edu, i) => {
+                            const eduTop = edu.school || 'University'
+                            const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                            return (
                             <div key={i} style={{ marginBottom: '5pt' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700 }}>{edu.school || 'University'}</span>
+                                    <span style={{ fontWeight: 700 }}>{eduTop}</span>
                                     <span style={{ fontSize: '10pt', color: '#404040' }}>{edu.date}</span>
                                 </div>
-                                {edu.degree && (
+                                {showDegree && (
                                     <div style={{ fontSize: '10pt', marginTop: '1pt' }}>{edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}</div>
                                 )}
                                 {edu.coursework && (
@@ -2540,7 +2637,8 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
                                     </div>
                                 )}
                             </div>
-                        ))}
+                            )
+                        })}
                     </section>
                 )}
                 {projects.length > 0 && (
@@ -2660,6 +2758,12 @@ function ProfileSection({ state, update }: { state: ResumeEditorState; update: (
         <div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <Field label="Full Name" value={profile.name} onChange={set('name')} placeholder="Jane Smith" />
+                <div style={{ gridColumn: '1 / -1' }}>
+                    <Field label="Professional Headline" value={profile.headline} onChange={set('headline')} placeholder="Aspiring SOC Analyst" />
+                    <span style={{ display: 'block', fontSize: 11.5, color: '#7a8aa5', marginTop: 3 }}>
+                        Shown under your name at the top of the resume — independent of your Experience section's job titles.
+                    </span>
+                </div>
                 <Field label="Email" value={profile.email} onChange={set('email')} placeholder="jane@email.com" />
                 <Field label="Phone" value={profile.phone} onChange={set('phone')} placeholder="+1 (555) 000-0000" />
                 <Field label="Location" value={profile.location} onChange={set('location')} placeholder="New York, NY" />
@@ -2873,108 +2977,68 @@ function LeadershipSection({ state, update, isMobile }: { state: ResumeEditorSta
 }
 
 // ── Section: Certifications ──────────────────────────────────
+// Structured Name / Issuer / Year fields in bordered entry cards —
+// mirrors the "Add certifications" popup on /dashboard/upload.
 function CertificationsSection({ state, update, isMobile }: { state: ResumeEditorState; update: (s: ResumeEditorState) => void; isMobile?: boolean }) {
     const certs = state.certifications
     const setCerts = (c: string[]) => update({ ...state, certifications: c })
 
     const add = () => setCerts([...certs, ''])
     const remove = (i: number) => setCerts(certs.filter((_, idx) => idx !== i))
-    const change = (i: number, v: string) => {
-        const next = [...certs]
-        next[i] = v
-        setCerts(next)
-    }
 
-    if (isMobile) {
-        const parseCert = (s: string) => {
-            const parts = s.split('|').map(p => p.trim())
-            return { name: parts[0] || '', issuer: parts[1] || '', year: parts[2] || '' }
-        }
-        const fmtCert = (name: string, issuer: string, year: string): string => {
-            const n = name.trim(), iss = issuer.trim(), y = year.trim()
-            if (iss || y) return `${n} | ${iss} | ${y}`
-            return n
-        }
-        const updateField = (i: number, field: 'name' | 'issuer' | 'year', val: string) => {
-            const next = [...certs]
-            const parsed = parseCert(next[i] || '')
-            next[i] = fmtCert(
-                field === 'name' ? val : parsed.name,
-                field === 'issuer' ? val : parsed.issuer,
-                field === 'year' ? val : parsed.year,
-            )
-            setCerts(next)
-        }
-        const mInput: React.CSSProperties = { width: '100%', padding: '9px 11px', borderRadius: 9, border: '1px solid #e2e8f0', fontSize: '13.5px', color: '#0f172a', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
-        const mLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 5 }
-        return (
-            <div>
-                {certs.map((cert, i) => {
-                    const { name, issuer, year } = parseCert(cert)
-                    return (
-                        <div key={i} style={{ marginBottom: 20, paddingBottom: i < certs.length - 1 ? 20 : 0, borderBottom: i < certs.length - 1 ? '1px solid #f1f5f9' : 'none', position: 'relative' }}>
-                            {certs.length > 1 && (
-                                <button onClick={() => remove(i)} style={{ position: 'absolute', top: 0, right: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 2 }}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                                </button>
-                            )}
-                            <div style={{ marginBottom: 12 }}>
-                                <label style={mLabel}>Certification</label>
-                                <input type="text" value={name} onChange={e => updateField(i, 'name', e.target.value)} placeholder="e.g. AWS Certified Developer" style={mInput} />
-                            </div>
-                            <div style={{ marginBottom: 12 }}>
-                                <label style={mLabel}>Issuer</label>
-                                <input type="text" value={issuer} onChange={e => updateField(i, 'issuer', e.target.value)} placeholder="e.g. Amazon Web Services" style={mInput} />
-                            </div>
-                            <div>
-                                <label style={mLabel}>Year</label>
-                                <input type="text" value={year} onChange={e => updateField(i, 'year', e.target.value)} placeholder="2024" style={mInput} />
-                            </div>
-                        </div>
-                    )
-                })}
-                <button onClick={add} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 16px', borderRadius: 99, border: '1.5px solid rgba(19,91,236,0.25)', background: '#eff6ff', color: '#2563eb', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: certs.length > 0 ? 4 : 0, fontFamily: 'inherit' }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                    Add Another
-                </button>
-            </div>
+    // Open the modal straight into an editable entry card instead of an empty state.
+    useEffect(() => {
+        if (certs.length === 0) add()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    const parseCert = (s: string) => {
+        const parts = s.split('|').map(p => p.trim())
+        return { name: parts[0] || '', issuer: parts[1] || '', year: parts[2] || '' }
+    }
+    const fmtCert = (name: string, issuer: string, year: string): string => {
+        const n = name.trim(), iss = issuer.trim(), y = year.trim()
+        if (iss || y) return `${n} | ${iss} | ${y}`
+        return n
+    }
+    const updateField = (i: number, field: 'name' | 'issuer' | 'year', val: string) => {
+        const next = [...certs]
+        const parsed = parseCert(next[i] || '')
+        next[i] = fmtCert(
+            field === 'name' ? val : parsed.name,
+            field === 'issuer' ? val : parsed.issuer,
+            field === 'year' ? val : parsed.year,
         )
+        setCerts(next)
     }
 
     return (
         <div>
-            <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
-                padding: '6px 10px', borderRadius: 6,
-                background: 'rgba(19,91,236,0.08)',
-                border: '1px solid rgba(19,91,236,0.15)',
-            }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7aa3f5" strokeWidth="2">
-                    <circle cx="12" cy="8" r="7"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/>
-                </svg>
-                <span style={{ fontSize: '0.6875rem', color: '#7aa3f5', fontFamily: "var(--font-mono, monospace)" }}>
-                    Format: Name | Issuer | Date
-                </span>
-            </div>
-            {certs.map((cert, i) => (
-                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
-                    <div style={{
-                        width: 5, height: 5, borderRadius: '50%',
-                        background: T.primary, flexShrink: 0,
-                    }} />
-                    <input
-                        type="text"
-                        value={cert}
-                        onChange={e => change(i, e.target.value)}
-                        placeholder="AWS Solutions Architect | Amazon | 2024"
-                        style={{ ...inputStyle, flex: 1 }}
-                    />
-                    <button onClick={() => remove(i)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '4px', flexShrink: 0 }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                    </button>
-                </div>
-            ))}
-            <button onClick={add} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 6, background: 'transparent', border: `1px dashed ${T.editorBorder}`, color: T.editorTextMuted, cursor: 'pointer', fontSize: '0.8125rem', width: '100%', justifyContent: 'center', marginTop: 4 }}>
+            {certs.map((cert, i) => {
+                const { name, issuer, year } = parseCert(cert)
+                return (
+                    <div key={i} style={entryCardStyle}>
+                        {certs.length > 1 && (
+                            <button onClick={() => remove(i)} style={entryRemoveStyle} title="Remove">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                            </button>
+                        )}
+                        <label style={{ ...labelStyle, marginTop: 0 }}>Certification Name</label>
+                        <input type="text" value={name} onChange={e => updateField(i, 'name', e.target.value)} placeholder="e.g. AWS Certified Cloud Practitioner" style={inputStyle} />
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 8 }}>
+                            <div>
+                                <label style={labelStyle}>Issuer</label>
+                                <input type="text" value={issuer} onChange={e => updateField(i, 'issuer', e.target.value)} placeholder="Amazon, Google, Microsoft…" style={inputStyle} />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Year</label>
+                                <input type="text" value={year} onChange={e => updateField(i, 'year', e.target.value)} placeholder="2024" style={inputStyle} />
+                            </div>
+                        </div>
+                    </div>
+                )
+            })}
+            <button onClick={add} style={addMoreStyle}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
                 Add Certification
             </button>
@@ -2983,121 +3047,69 @@ function CertificationsSection({ state, update, isMobile }: { state: ResumeEdito
 }
 
 // ── Section: Achievements ────────────────────────────────────
-function AchievementsSection({ state, update, isMobile }: { state: ResumeEditorState; update: (s: ResumeEditorState) => void; isMobile?: boolean }) {
+// Structured Title / Context / Year fields in bordered entry cards —
+// mirrors the "Add achievements & awards" popup on /dashboard/upload.
+function AchievementsSection({ state, update }: { state: ResumeEditorState; update: (s: ResumeEditorState) => void; isMobile?: boolean }) {
     const achievements = state.achievements
     const setAch = (a: string[]) => update({ ...state, achievements: a })
 
     const add = () => setAch([...achievements, ''])
     const remove = (i: number) => setAch(achievements.filter((_, idx) => idx !== i))
-    const change = (i: number, v: string) => {
-        const next = [...achievements]
-        next[i] = v
-        setAch(next)
-    }
 
-    if (isMobile) {
-        const parseAch = (s: string) => {
-            const yearMatch = s.match(/\((\d{4})\)\s*$/)
-            const year = yearMatch ? yearMatch[1] : ''
-            const withoutYear = year ? s.replace(/\s*\(\d{4}\)\s*$/, '') : s
-            const dashIdx = withoutYear.indexOf(' — ')
-            if (dashIdx > -1) return { title: withoutYear.slice(0, dashIdx).trim(), description: withoutYear.slice(dashIdx + 3).trim(), year }
-            return { title: withoutYear.trim(), description: '', year }
-        }
-        const fmtAch = (title: string, description: string, year: string): string => {
-            const t = title.trim(), d = description.trim(), y = year.trim()
-            if (!t) return ''
-            if (d && y) return `${t} — ${d} (${y})`
-            if (d) return `${t} — ${d}`
-            if (y) return `${t} (${y})`
-            return t
-        }
-        const updateAchField = (i: number, field: 'title' | 'description' | 'year', val: string) => {
-            const next = [...achievements]
-            const parsed = parseAch(next[i] || '')
-            next[i] = fmtAch(
-                field === 'title' ? val : parsed.title,
-                field === 'description' ? val : parsed.description,
-                field === 'year' ? val : parsed.year,
-            )
-            setAch(next)
-        }
-        const mInput: React.CSSProperties = { width: '100%', padding: '9px 11px', borderRadius: 9, border: '1px solid #e2e8f0', fontSize: '13.5px', color: '#0f172a', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
-        const mLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 5 }
-        return (
-            <div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '8px 11px', background: '#fefce8', border: '1px solid #fef08a', borderRadius: 9, marginBottom: 16 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
-                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                    </svg>
-                    <span style={{ fontSize: '11.5px', color: '#92400e', lineHeight: 1.5 }}>Quantify impact when possible — e.g. "Increased X by 40%"</span>
-                </div>
-                {achievements.map((ach, i) => {
-                    const { title, description, year } = parseAch(ach)
-                    return (
-                        <div key={i} style={{ marginBottom: 20, paddingBottom: i < achievements.length - 1 ? 20 : 0, borderBottom: i < achievements.length - 1 ? '1px solid #f1f5f9' : 'none', position: 'relative' }}>
-                            {achievements.length > 1 && (
-                                <button onClick={() => remove(i)} style={{ position: 'absolute', top: 0, right: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 2 }}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                                </button>
-                            )}
-                            <div style={{ marginBottom: 12 }}>
-                                <label style={mLabel}>Achievement</label>
-                                <input type="text" value={title} onChange={e => updateAchField(i, 'title', e.target.value)} placeholder="Led team of 5 to deliver 2 weeks early" style={mInput} />
-                            </div>
-                            <div style={{ marginBottom: 12 }}>
-                                <label style={mLabel}>Description (optional)</label>
-                                <textarea value={description} onChange={e => updateAchField(i, 'description', e.target.value)} placeholder="Provide additional context or impact..." style={{ ...mInput, resize: 'vertical', minHeight: 60 }} rows={2} />
-                            </div>
-                            <div>
-                                <label style={mLabel}>Year</label>
-                                <input type="text" value={year} onChange={e => updateAchField(i, 'year', e.target.value)} placeholder="2023" style={mInput} />
-                            </div>
-                        </div>
-                    )
-                })}
-                <button onClick={add} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 16px', borderRadius: 99, border: '1.5px solid rgba(217,119,6,0.25)', background: '#fefce8', color: '#d97706', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: achievements.length > 0 ? 4 : 0, fontFamily: 'inherit' }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                    Add Achievement
-                </button>
-            </div>
+    // Open the modal straight into an editable entry card instead of an empty state.
+    useEffect(() => {
+        if (achievements.length === 0) add()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    const parseAch = (s: string) => {
+        const yearMatch = s.match(/\((\d{4})\)\s*$/)
+        const year = yearMatch ? yearMatch[1] : ''
+        const withoutYear = year ? s.replace(/\s*\(\d{4}\)\s*$/, '') : s
+        const dashIdx = withoutYear.indexOf(' — ')
+        if (dashIdx > -1) return { title: withoutYear.slice(0, dashIdx).trim(), description: withoutYear.slice(dashIdx + 3).trim(), year }
+        return { title: withoutYear.trim(), description: '', year }
+    }
+    const fmtAch = (title: string, description: string, year: string): string => {
+        const t = title.trim(), d = description.trim(), y = year.trim()
+        if (!t) return ''
+        if (d && y) return `${t} — ${d} (${y})`
+        if (d) return `${t} — ${d}`
+        if (y) return `${t} (${y})`
+        return t
+    }
+    const updateField = (i: number, field: 'title' | 'description' | 'year', val: string) => {
+        const next = [...achievements]
+        const parsed = parseAch(next[i] || '')
+        next[i] = fmtAch(
+            field === 'title' ? val : parsed.title,
+            field === 'description' ? val : parsed.description,
+            field === 'year' ? val : parsed.year,
         )
+        setAch(next)
     }
 
     return (
         <div>
-            <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
-                padding: '6px 10px', borderRadius: 6,
-                background: 'rgba(100,16,213,0.08)',
-                border: '1px solid rgba(100,16,213,0.18)',
-            }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-                <span style={{ fontSize: '0.6875rem', color: '#a78bfa', fontFamily: "var(--font-mono, monospace)" }}>
-                    Quantify impact when possible — e.g. "Increased X by 40%"
-                </span>
-            </div>
-            {achievements.map((ach, i) => (
-                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center' }}>
-                    <div style={{
-                        width: 5, height: 5, borderRadius: '50%',
-                        background: '#a78bfa', flexShrink: 0,
-                    }} />
-                    <input
-                        type="text"
-                        value={ach}
-                        onChange={e => change(i, e.target.value)}
-                        placeholder="Led team of 5 to deliver feature 2 weeks ahead of schedule"
-                        style={{ ...inputStyle, flex: 1 }}
-                    />
-                    <button onClick={() => remove(i)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '4px', flexShrink: 0 }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                    </button>
-                </div>
-            ))}
-            <button onClick={add} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 6, background: 'transparent', border: `1px dashed ${T.editorBorder}`, color: T.editorTextMuted, cursor: 'pointer', fontSize: '0.8125rem', width: '100%', justifyContent: 'center', marginTop: 4 }}>
+            {achievements.map((ach, i) => {
+                const { title, description, year } = parseAch(ach)
+                return (
+                    <div key={i} style={entryCardStyle}>
+                        {achievements.length > 1 && (
+                            <button onClick={() => remove(i)} style={entryRemoveStyle} title="Remove">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                            </button>
+                        )}
+                        <label style={{ ...labelStyle, marginTop: 0 }}>Title</label>
+                        <input type="text" value={title} onChange={e => updateField(i, 'title', e.target.value)} placeholder="e.g. Winner — Smart India Hackathon" style={inputStyle} />
+                        <label style={labelStyle}>Context (scope, scale, impact)</label>
+                        <textarea value={description} onChange={e => updateField(i, 'description', e.target.value)} placeholder='Quantify impact when possible — e.g. "Increased X by 40%"' style={{ ...inputStyle, resize: 'vertical', minHeight: 56 }} rows={2} />
+                        <label style={labelStyle}>Year</label>
+                        <input type="text" value={year} onChange={e => updateField(i, 'year', e.target.value)} placeholder="2024" style={inputStyle} />
+                    </div>
+                )
+            })}
+            <button onClick={add} style={addMoreStyle}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
                 Add Achievement
             </button>
@@ -4678,9 +4690,15 @@ function SourceResumeDropdown({
 function mapRawResumeToEditorState(parsed: ParsedResume | null): ResumeEditorState {
     if (!parsed) return EMPTY_STATE
     const raw = parsed as any
+    const rawExperience = raw?.work_history ?? raw?.work_experience ?? []
+    const firstExpWithTitle = rawExperience.find((w: any) => (w.title || w.position)?.trim())
     return {
         profile: {
             name: parsed.name || raw?.personal_info?.full_name || '',
+            // Defaults to the first work-experience title (old behavior) but is a
+            // standalone field from here on — editing it no longer touches that
+            // experience entry's actual Job Title.
+            headline: firstExpWithTitle?.title || firstExpWithTitle?.position || '',
             email: parsed.email || raw?.personal_info?.email || '',
             phone: parsed.phone || raw?.personal_info?.phone || '',
             location: parsed.location || raw?.personal_info?.location || '',
@@ -4696,7 +4714,7 @@ function mapRawResumeToEditorState(parsed: ParsedResume | null): ResumeEditorSta
             gpa: e.gpa || '',
             coursework: e.field_of_study || e.field || e.coursework || '',
         })),
-        experience: (raw?.work_history ?? raw?.work_experience ?? []).map((w: any) => ({
+        experience: rawExperience.map((w: any) => ({
             company: w.company || '',
             title: w.title || w.position || '',
             startDate: w.start_date || '',

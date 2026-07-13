@@ -4,7 +4,7 @@ import React from "react";
 import { Document, Page, View, Text } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
 import "./fonts";
-import { defeatLigatures as dL } from "./utils";
+import { defeatLigatures as dL, sameText } from "./utils";
 
 // ── Types (mirrored from resumes/page.tsx) ─────────────────
 
@@ -271,13 +271,16 @@ const LondonPdfDocument: React.FC<LondonPdfDocumentProps> = ({ state }) => {
         {education.length > 0 && (
           <View>
             <ExtendingSectionHeading title="Education" />
-            {education.map((edu, i) => (
+            {education.map((edu, i) => {
+              const eduTop = edu.school || "University";
+              const showDegree = edu.degree && !sameText(edu.degree, eduTop);
+              return (
               <View key={i} style={{ marginBottom: "6pt" }}>
                 <EntryHeaderRow
-                  left={edu.school || "University"}
+                  left={eduTop}
                   right={edu.date}
                 />
-                {edu.degree ? (
+                {showDegree ? (
                   <Text
                     style={{
                       fontStyle: "italic",
@@ -304,7 +307,8 @@ const LondonPdfDocument: React.FC<LondonPdfDocumentProps> = ({ state }) => {
                   </Text>
                 ) : null}
               </View>
-            ))}
+              );
+            })}
           </View>
         )}
 

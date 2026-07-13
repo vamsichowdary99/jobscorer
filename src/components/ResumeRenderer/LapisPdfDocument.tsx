@@ -9,7 +9,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
 import "./fonts";
-import { defeatLigatures as dL } from "./utils";
+import { defeatLigatures as dL, sameText } from "./utils";
 
 // ── Types (mirrored from resumes/page.tsx) ─────────────────
 
@@ -47,6 +47,7 @@ interface LeadershipEntry {
 interface ResumeEditorState {
   profile: {
     name: string;
+    headline: string;
     email: string;
     phone: string;
     location: string;
@@ -221,7 +222,7 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
     profile.portfolio,
   ].filter(Boolean);
 
-  const roleSubtitle = experience.find((e) => e.title && e.title.trim())?.title?.trim() ?? "";
+  const roleSubtitle = profile.headline?.trim() || experience.find((e) => e.title && e.title.trim())?.title?.trim() || "";
 
   // Skills merge into one flat pill cloud (mockup shows no category labels).
   const skillPills = [
@@ -330,12 +331,15 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
         {education.length > 0 && (
           <View>
             <SectionHeading title="Education" />
-            {education.map((edu, i) => (
+            {education.map((edu, i) => {
+              const eduTop = edu.degree || edu.school || "Degree";
+              const showSchool = edu.school && !sameText(edu.school, eduTop);
+              return (
               <View key={i} style={{ marginBottom: "5pt" }}>
-                <HeaderRow left={edu.degree || edu.school || "Degree"} right={edu.date} />
-                {(edu.school || edu.gpa) && (
+                <HeaderRow left={eduTop} right={edu.date} />
+                {(showSchool || edu.gpa) && (
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-                    <Text style={{ fontStyle: "italic", fontSize: "10pt", color: ACCENT, flex: 1 }}>{dL(edu.school)}</Text>
+                    <Text style={{ fontStyle: "italic", fontSize: "10pt", color: ACCENT, flex: 1 }}>{showSchool ? dL(edu.school) : ""}</Text>
                     {edu.gpa ? (
                       <Text style={{ fontSize: "9.5pt", color: INK, marginLeft: "10pt" }}>{dL(edu.gpa)}</Text>
                     ) : null}
@@ -348,7 +352,8 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
                   </Text>
                 ) : null}
               </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
