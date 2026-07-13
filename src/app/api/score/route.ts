@@ -261,6 +261,7 @@ export async function POST(req: NextRequest) {
                 },
                 {
                     concurrencyKey: `user-${user.id}`,
+                    tags: [`user:${user.id}`],
                 }
             )
             void logEstimatedUsage({ userId: user.id, feature: 'score', units: missingJobIds.length })

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/server'
 
 export async function GET() {
     if (process.env.NODE_ENV === 'production') {
@@ -8,6 +8,7 @@ export async function GET() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const keyPresent = !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
+    const supabase = await createClient()
     const { data, error, count } = await supabase
         .from('jobs')
         .select('id, title, company', { count: 'exact' })

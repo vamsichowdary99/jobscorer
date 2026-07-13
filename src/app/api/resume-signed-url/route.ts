@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 
-// Service-role client bypasses storage RLS so we can mint signed URLs reliably.
-// The browser cookie-based client is used only to *verify* the caller's identity
-// before granting them a URL to a file they actually own.
-const adminSupabase = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getAdminSupabase() {
+    return createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+}
 
 const BUCKET = 'resumes'
 
@@ -54,7 +53,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Sign with the service role client (bypasses storage RLS).
-    const { data, error } = await adminSupabase.storage
+    const { data, error } = await getAdminSupabase().storage
         .from(BUCKET)
         .createSignedUrl(path, 60 * 5)  // 5-minute expiry
 
