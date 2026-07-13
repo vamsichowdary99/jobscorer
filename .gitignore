@@ -60,3 +60,6 @@ ds-bundle/
 .ds-sync/
 .design-sync/.cache/
 node_modules/jobscorer/
+
+# nested git worktrees created by agent sessions — not project source
+.claude/worktrees/
