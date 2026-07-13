@@ -1,12 +1,12 @@
 'use client'
 
-import { Suspense, useEffect, useState, useRef, useCallback } from 'react'
+import { Suspense, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { CompanyResearch, AiAnalysis, QuickIntel, Resume } from '@/lib/types'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { createClient } from '@/lib/supabase/client'
-import { addPending, removePending } from '@/lib/pendingResearch'
+import { addPending, removePending, getPending, subscribe, type PendingResearch } from '@/lib/pendingResearch'
 import {
     fetchResumes,
     fetchResearchHistory,
@@ -29,6 +29,10 @@ interface JobMatch {
         location: string | null
         experience_level: string | null
     } | null
+    /** True for a synthetic row built from the pendingResearch store —
+     *  a research that's still in flight and hasn't landed in
+     *  fetchResearchHistory (which only returns completed rows). */
+    pending?: boolean
 }
 
 // Map a research-history row into the sidebar's JobMatch shape. Shared by the
@@ -483,15 +487,21 @@ function JobsPanel({
                                     }} />
                                 )}
 
-                                {/* Score ring */}
-                                <div style={{ position: 'relative', flexShrink: 0 }}>
-                                    <ScoreRing score={score} size={52} />
-                                    <span style={{
-                                        position: 'absolute', inset: 0,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontFamily: "'JetBrains Mono', monospace",
-                                        fontSize: '0.7rem', fontWeight: 700, color: scoreColor,
-                                    }}>{score}</span>
+                                {/* Score ring (or a spinner for a research still in flight) */}
+                                <div style={{ position: 'relative', flexShrink: 0, width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {match.pending ? (
+                                        <div style={{ width: 22, height: 22, border: '2.5px solid #dbe1ff', borderTopColor: '#135bec', borderRadius: '50%', animation: 'ci-spin 0.8s linear infinite' }} />
+                                    ) : (
+                                        <>
+                                            <ScoreRing score={score} size={52} />
+                                            <span style={{
+                                                position: 'absolute', inset: 0,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                fontFamily: "'JetBrains Mono', monospace",
+                                                fontSize: '0.7rem', fontWeight: 700, color: scoreColor,
+                                            }}>{score}</span>
+                                        </>
+                                    )}
                                 </div>
 
                                 {/* Job info */}
@@ -506,11 +516,11 @@ function JobsPanel({
                                     }}>{match.job?.company || 'Unknown Company'}</p>
                                     <p style={{
                                         fontSize: '0.825rem', fontWeight: 500,
-                                        color: '#64748b',
+                                        color: match.pending ? '#135bec' : '#64748b',
                                         margin: '0 0 4px',
                                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                    }}>{match.job?.title || 'Job'}</p>
-                                    {match.job?.location && (
+                                    }}>{match.pending ? 'Researching…' : (match.job?.title || 'Job')}</p>
+                                    {!match.pending && match.job?.location && (
                                         <p style={{
                                             display: 'flex', alignItems: 'center', gap: 4,
                                             fontSize: '0.725rem', color: '#94a3b8', margin: 0,
@@ -1107,7 +1117,7 @@ function CompanyIntelPage() {
     // The n8n workflow keeps running in the background; this flag tells the
     // page to show a "researching..." banner and auto-refresh until the row
     // lands in company_research / company_research_analysis.
-    const isPending = searchParams.get('pending') === '1'
+    const pendingFromUrl = searchParams.get('pending') === '1'
     // Company name passed through the URL by the matches/optimize page so we
     // can poll immediately without waiting for fetchResearchHistory to return
     // (which won't surface this brand-new job until the analysis row lands).
@@ -1133,6 +1143,42 @@ function CompanyIntelPage() {
     // Tracks job ids we've already refreshed the sidebar for after a research
     // landed, so the refresh fires at most once per job (no refetch loop).
     const refreshedHistoryFor = useRef<Set<string>>(new Set())
+
+    /* ── In-flight researches (cross-page store, survives navigation/reload).
+       fetchResearchHistory only returns COMPLETED rows, so without this the
+       sidebar shows "No researches yet" while a research is actively running
+       — contradicting the center panel's "Research in progress" state. ── */
+    const [pendingEntries, setPendingEntries] = useState<PendingResearch[]>([])
+    useEffect(() => {
+        if (!user?.id) return
+        const sync = () => setPendingEntries(getPending().filter(e => e.userId === user.id))
+        sync()
+        return subscribe(sync)
+    }, [user?.id])
+
+    // Combines the URL-driven flag (set when navigating here right after
+    // kicking off a research) with the store-driven signal (covers reloads,
+    // and selecting an in-flight job directly from the sidebar).
+    const isPending = pendingFromUrl || pendingEntries.some(e => e.jobId === selectedJobId)
+
+    // Merge in-flight researches into the sidebar list as synthetic rows, so
+    // the count and the empty-state agree with the center panel instead of
+    // silently omitting anything not yet in fetchResearchHistory.
+    const matchesWithPending = useMemo<JobMatch[]>(() => {
+        const existingJobIds = new Set(matches.map(m => m.job_id))
+        const pendingRows: JobMatch[] = pendingEntries
+            .filter(e => e.resumeId === selectedResumeId && !existingJobIds.has(e.jobId))
+            .map(e => ({
+                id: `pending-${e.jobId}`,
+                job_id: e.jobId,
+                relevance_score: 0,
+                recommendation: null,
+                resume_id: e.resumeId,
+                job: { title: 'Researching…', company: e.companyName, location: null, experience_level: null },
+                pending: true,
+            }))
+        return [...pendingRows, ...matches]
+    }, [matches, pendingEntries, selectedResumeId])
 
     /* ── Mobile detection ── */
     useEffect(() => {
@@ -1290,9 +1336,10 @@ function CompanyIntelPage() {
         // in-flight research it's empty by definition. Falling back to URL fixes
         // the "spinning forever" bug where the poll never started.
         const matchFromHistory = matches.find(m => m.job_id === selectedJobId)
-        const companyName = matchFromHistory?.job?.company || requestedCompany
+        const pendingEntry = pendingEntries.find(e => e.jobId === selectedJobId)
+        const companyName = matchFromHistory?.job?.company || pendingEntry?.companyName || requestedCompany
         if (!companyName) return
-        const resumeIdForRegister = matchFromHistory?.resume_id ?? selectedResumeId ?? null
+        const resumeIdForRegister = matchFromHistory?.resume_id ?? pendingEntry?.resumeId ?? selectedResumeId ?? null
 
         // Register globally so the cross-page toaster catches completion too.
         if (user?.id) {
@@ -1326,7 +1373,7 @@ function CompanyIntelPage() {
 
         const initial = window.setTimeout(tick, nextDelayMs(0)!)
         return () => { cancelled = true; window.clearTimeout(initial) }
-    }, [isPending, research, selectedJobId, matches, loadResearch, user?.id, requestedCompany, selectedResumeId])
+    }, [isPending, research, selectedJobId, matches, loadResearch, user?.id, requestedCompany, selectedResumeId, pendingEntries])
 
     /* ── Once the research row lands on this page, clear it from the global
        pending list so the cross-page toaster doesn't double-notify a user
@@ -1801,7 +1848,7 @@ function CompanyIntelPage() {
                 {/* ═══ LEFT: Jobs Panel (desktop only) ═══ */}
                 {!isMobile && (
                 <JobsPanel
-                    matches={matches}
+                    matches={matchesWithPending}
                     loading={matchesLoading}
                     selectedJobId={selectedJobId}
                     onSelect={handleSelectJob}
