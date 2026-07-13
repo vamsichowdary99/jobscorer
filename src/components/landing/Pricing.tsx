@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import React, { useState } from 'react';
 import { C, MONO, INTER } from './tokens';
+import { useScrollReveal } from './useScrollReveal';
 
 type Plan = {
   id: 'free' | 'starter' | 'pro' | 'power';
@@ -89,13 +90,20 @@ export default function Pricing() {
   const [isYearly, setIsYearly] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
 
+  const ref = useScrollReveal<HTMLElement>([
+    { selector: '.pricing-fade', from: { y: 24 } },
+    { selector: '.price-card', from: { y: 40 }, stagger: 0.12 },
+    { selector: '.trust-badge', from: { y: 16 }, stagger: 0.1 },
+    { selector: '.faq-item', from: { y: 16 }, stagger: 0.06 },
+  ]);
+
   return (
-    <section id="pricing" style={{ background: WHITE, fontFamily: INTER }}>
+    <section id="pricing" ref={ref} style={{ background: WHITE, fontFamily: INTER }}>
       {/* ① HEADER + CARDS */}
       <div style={{ padding: '96px 0 72px' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto', padding: '0 32px' }}>
           {/* Badge + headline */}
-          <div style={{ textAlign: 'center', marginBottom: 52 }}>
+          <div className="pricing-fade" style={{ textAlign: 'center', marginBottom: 52 }}>
             <span style={{ display: 'inline-block', padding: '5px 16px', borderRadius: 999, background: C.primaryLight, color: C.primary, fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 16 }}>
               Simple Pricing
             </span>
@@ -128,6 +136,7 @@ export default function Pricing() {
             {PLANS.map(plan => (
               <div
                 key={plan.id}
+                className="price-card"
                 data-pricing-hero={plan.hero ? 'true' : 'false'}
                 style={{
                   background: plan.hero ? C.primary : WHITE,
@@ -251,7 +260,7 @@ export default function Pricing() {
       {/* ② COMPARISON TABLE */}
       <div style={{ background: C.bg, padding: '80px 0' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 32px' }}>
-          <h3 style={{ fontFamily: INTER, fontSize: 'clamp(1.5rem,3vw,2rem)', fontWeight: 700, letterSpacing: '-0.03em', color: DARK, textAlign: 'center', marginBottom: 48 }}>
+          <h3 className="pricing-fade" style={{ fontFamily: INTER, fontSize: 'clamp(1.5rem,3vw,2rem)', fontWeight: 700, letterSpacing: '-0.03em', color: DARK, textAlign: 'center', marginBottom: 48 }}>
             See everything that&apos;s included
           </h3>
           <div className="cmp-table-wrap" style={{ overflowX: 'visible', background: WHITE, borderRadius: 18, border: `1px solid ${C.border}`, boxShadow: '0 4px 24px rgba(15,23,42,0.05)', padding: '8px 8px 16px' }}>
@@ -364,13 +373,14 @@ export default function Pricing() {
       {/* ④ FAQ */}
       <div style={{ background: C.bg, padding: '80px 0' }}>
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 32px' }}>
-          <h3 style={{ fontFamily: INTER, fontSize: 'clamp(1.5rem,3vw,2rem)', fontWeight: 700, letterSpacing: '-0.03em', color: DARK, textAlign: 'center', marginBottom: 40 }}>
+          <h3 className="pricing-fade" style={{ fontFamily: INTER, fontSize: 'clamp(1.5rem,3vw,2rem)', fontWeight: 700, letterSpacing: '-0.03em', color: DARK, textAlign: 'center', marginBottom: 40 }}>
             Frequently Asked Questions
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {FAQS.map((faq, fi) => (
               <div
                 key={fi}
+                className="faq-item"
                 style={{ background: WHITE, borderRadius: 12, border: `1px solid ${C.border}`, overflow: 'hidden', transition: `box-shadow .2s ${EASE}` }}
                 onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 12px rgba(15,23,42,0.08)'; }}
                 onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}

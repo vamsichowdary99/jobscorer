@@ -1,6 +1,7 @@
 'use client';
 
 import { C, SANS, MONO } from './tokens';
+import { useScrollReveal } from './useScrollReveal';
 
 const BEFORE = [
   'Built REST APIs using Node.js and Express',
@@ -19,11 +20,17 @@ const AFTER = [
 const RESEARCH = ['Fastify over Express', 'p99 latency obsession', 'High test-coverage culture', 'Cross-pod ownership model', 'Own SDK dogfooding'];
 
 export default function CompanyResearch() {
+  const ref = useScrollReveal<HTMLDivElement>([
+    { selector: '.cr-reveal', from: { y: 24 } },
+    { selector: '.cr-before', from: { x: -32, y: 0 } },
+    { selector: '.cr-after', from: { x: 32, y: 0 } },
+  ]);
+
   return (
     <section style={{ background: 'white', padding: '96px 24px', borderTop: `1px solid ${C.border}` }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div ref={ref} style={{ maxWidth: 1100, margin: '0 auto' }}>
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 56 }}>
+        <div className="cr-reveal" style={{ textAlign: 'center', marginBottom: 56 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 999, background: '#f1f5f9', border: `1px solid ${C.border}`, marginBottom: 12 }}>
             <span style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.textSec }}>Illustrative Example</span>
           </div>
@@ -40,7 +47,7 @@ export default function CompanyResearch() {
         </div>
 
         {/* Company research card */}
-        <div style={{ background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`, padding: '24px', marginBottom: 32 }}>
+        <div className="cr-reveal" style={{ background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`, padding: '24px', marginBottom: 32 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
             <div style={{ width: 36, height: 36, borderRadius: 8, background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 800, fontSize: 14 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3"/><path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01"/></svg>
@@ -64,7 +71,7 @@ export default function CompanyResearch() {
         {/* Before / After */}
         <div className="ba-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           {/* Before */}
-          <div style={{ background: C.bg, borderRadius: 16, border: '1px solid #fca5a5', padding: '24px' }}>
+          <div className="cr-before" style={{ background: C.bg, borderRadius: 16, border: '1px solid #fca5a5', padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
               <div style={{ width: 24, height: 24, borderRadius: 6, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="#ef4444" strokeWidth="2.2" strokeLinecap="round"/></svg>
@@ -80,7 +87,7 @@ export default function CompanyResearch() {
           </div>
 
           {/* After */}
-          <div style={{ background: 'white', borderRadius: 16, border: '1px solid #135bec40', padding: '24px', boxShadow: '0 8px 32px -8px rgba(19,91,236,0.12)' }}>
+          <div className="cr-after" style={{ background: 'white', borderRadius: 16, border: '1px solid #135bec40', padding: '24px', boxShadow: '0 8px 32px -8px rgba(19,91,236,0.12)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
               <div style={{ width: 24, height: 24, borderRadius: 6, background: C.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke={C.primary} strokeWidth="2.2" strokeLinecap="round"/></svg>

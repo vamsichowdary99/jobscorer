@@ -2,11 +2,14 @@
 
 import Link from 'next/link';
 import { C, SANS } from './tokens';
+import { useScrollReveal } from './useScrollReveal';
 
 export default function CTABanner() {
+  const ref = useScrollReveal<HTMLElement>([{ selector: '.cta-reveal', from: { y: 28 } }]);
+
   return (
-    <section style={{ padding: '88px 24px', background: C.primary, textAlign: 'center' }}>
-      <div style={{ maxWidth: 580, margin: '0 auto' }}>
+    <section ref={ref} style={{ padding: '88px 24px', background: C.primary, textAlign: 'center' }}>
+      <div className="cta-reveal" style={{ maxWidth: 580, margin: '0 auto' }}>
         <h2 style={{ fontFamily: SANS, fontSize: 'clamp(1.875rem,4vw,2.75rem)', fontWeight: 800, letterSpacing: '-0.035em', color: 'white', lineHeight: 1.1, marginBottom: 16 }}>
           Ready to find jobs you&apos;ll actually get?
         </h2>

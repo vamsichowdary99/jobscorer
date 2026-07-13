@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { C, SANS } from './tokens';
+import { useScrollReveal } from './useScrollReveal';
 
 const STAR_COLOR = '#f59e0b';
 
@@ -174,6 +175,8 @@ export default function Testimonials() {
     };
   }, []);
 
+  const revealRef = useScrollReveal<HTMLElement>([{ selector: '.testim-header', from: { y: 24 } }]);
+
   const setPause = (v: boolean) => { pausedRef.current = v; setPaused(v); };
   const nudge = (dir: number) => {
     const half = halfRef.current || 1;
@@ -201,9 +204,9 @@ export default function Testimonials() {
   };
 
   return (
-    <section style={{ padding: '80px 0', background: '#f4f4f5', overflow: 'hidden' }}>
+    <section ref={revealRef} style={{ padding: '80px 0', background: '#f4f4f5', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 48, padding: '0 32px' }}>
+      <div className="testim-header" style={{ textAlign: 'center', marginBottom: 48, padding: '0 32px' }}>
         <h2 style={{ fontFamily: SANS, fontSize: 'clamp(2rem,3.5vw,2.75rem)', fontWeight: 800, letterSpacing: '-0.03em', color: C.primary, marginBottom: 8 }}>
           Our Testimonials
         </h2>

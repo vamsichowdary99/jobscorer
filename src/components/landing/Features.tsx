@@ -2,6 +2,7 @@
 
 import { C, SANS, MONO } from './tokens';
 import { getReceipt, type ReceiptKey } from './Receipts';
+import { useScrollReveal } from './useScrollReveal';
 
 type Feat = {
   n: string;
@@ -23,9 +24,15 @@ const FEATS: Feat[] = [
 ];
 
 export default function Features() {
+  const ref = useScrollReveal<HTMLDivElement>([
+    { selector: '.feat-right', from: { x: 40, y: 0 } },
+    { selector: '.feat-left', from: { x: -40, y: 0 } },
+    { selector: '.feat-proof', from: { y: 12 }, stagger: 0.08 },
+  ]);
+
   return (
     <section style={{ padding: '80px 0', background: C.bg }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 32px' }}>
+      <div ref={ref} style={{ maxWidth: 1200, margin: '0 auto', padding: '0 32px' }}>
         <div style={{ marginBottom: 64 }}>
           <div style={{ fontFamily: MONO, fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: C.primary, marginBottom: 12 }}>
             What it does
@@ -38,7 +45,7 @@ export default function Features() {
         {FEATS.map((f, i) => (
           <div
             key={f.n}
-            className="feat-row"
+            className={`feat-row ${f.side === 'right' ? 'feat-right' : 'feat-left'}`}
             style={{
               display: 'flex',
               flexDirection: f.side === 'right' ? 'row' : 'row-reverse',
@@ -63,7 +70,7 @@ export default function Features() {
               <p style={{ fontSize: '0.9375rem', color: C.textSec, lineHeight: 1.75, marginBottom: 20 }}>{f.desc}</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {f.proof.map((p, j) => (
-                  <div key={j} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <div key={j} className="feat-proof" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.success} strokeWidth="2.5" style={{ flexShrink: 0, marginTop: 3 }}><path d="M5 12l5 5L20 7"/></svg>
                     <span style={{ fontSize: '0.875rem', color: C.textSec, lineHeight: 1.6 }}>{p}</span>
                   </div>
