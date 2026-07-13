@@ -3,6 +3,11 @@ import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+// Relative import (not the @/ tsconfig alias): this file is bundled by
+// Trigger.dev's own build, separate from Next.js's, and this worktree has no
+// trigger.config.ts to confirm alias resolution there — a relative path is
+// unambiguous in either bundler.
+import { SYSTEM_PROMPT, buildPrompt, normalizeScore, type ScoreResult } from "../lib/scoring/prompt";
 
 function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -45,57 +50,8 @@ export interface ScoreJobsPayload {
   experienceLevel?: string;
 }
 
-interface MatchedSkillEvidence {
-  skill: string;
-  evidence: string;
-}
-
-interface GapItem {
-  skill: string;
-  severity: "hard_blocker" | "nice_to_have";
-  has_adjacent_evidence: boolean;
-  adjacent_from: string;
-  mitigation_hint: string;
-  score_impact: number;
-}
-
-interface FastestPathStep {
-  action: string;
-  time: string;
-}
-
-interface FastestPath {
-  steps: FastestPathStep[];
-  weeks_total: number;
-  projected_score_range: string;
-}
-
-interface MatchConfidence {
-  level: "high" | "medium" | "low";
-  reason: string;
-}
-
-interface ApplicationOutlook {
-  interview_chance: "high" | "medium" | "low";
-  competition_level: "high" | "medium" | "low";
-}
-
-interface ScoreResult {
-  job_id: string;
-  relevance_score: number;
-  recommendation: "strong_apply" | "apply" | "apply_with_prep" | "optimize_resume" | "low_fit";
-  matched_skills: MatchedSkillEvidence[];
-  missing_skills: string[];
-  ai_reasoning: string;
-  gaps: GapItem[];
-  // v2 fields
-  confidence?: MatchConfidence;
-  fastest_path?: FastestPath;
-  rejection_reason?: string;
-  application_outlook?: ApplicationOutlook;
-  optimized_score?: number;
-  profile_strengths?: string[];
-}
+// MatchedSkillEvidence, GapItem, FastestPathStep, FastestPath, MatchConfidence,
+// ApplicationOutlook, ScoreResult all now live in ../lib/scoring/prompt.ts.
 
 // ── Helpers (ported from n8n Filter Jobs Code node) ───────────────────────────
 
@@ -113,70 +69,6 @@ function buildMatchGroup(experienceLevel: string): string[] {
   );
   return tierIdx >= 0 ? LEVEL_GROUPS.slice(0, tierIdx + 1).flat() : [level];
 }
-
-// ── System prompt — kept in sync with n8n AI Job Scorer node ─────────────────
-// Last updated: 2026-06-22 (v2 — added evidence, score_impact, confidence,
-// fastest_path, rejection_reason, application_outlook, optimized_score)
-
-const SYSTEM_PROMPT = `You are an expert resume-job matching AI performing precise candidate-job fit analysis.
-
-Audience & voice: The candidate is an Indian IT job seeker (fresher, entry, mid-level, or senior — check the resume's "Total Experience" field). Match your tone and verdict framing to their ACTUAL level. NEVER call a mid (2-5 yr) or senior (5+ yr) candidate a fresher. Speak directly to them in second person ("You bring...", "Your gap here is..."). Be specific and grounded in their actual resume and THIS exact JD - avoid safe third-person recruiter-jargon templates. Two reasoning outputs in the same batch must NOT share the same opening sentence pattern.
-
-You will be given MULTIPLE job postings to score against ONE candidate resume. You MUST return valid JSON: an object with a single key "scores" whose value is an ARRAY containing EXACTLY ONE object per job posting provided, in the same order. Score EVERY job independently — never omit, merge, skip, or invent a job. Each object in the "scores" array MUST include a "job_id" field echoing verbatim the job_id shown in that job's header, PLUS exactly these fields:
-- relevance_score: integer 0-100. Scoring bands: 85-100 = exceptional match (nearly all skills align, right experience level), 70-84 = strong match (most core skills present, minor gaps), 55-69 = moderate match (some key skills present, could upskill), 40-54 = weak match (few overlapping skills, significant gaps), 0-39 = poor match (minimal relevance)
-- recommendation: one of "strong_apply" / "apply" / "apply_with_prep" / "optimize_resume" / "low_fit". Use these rules in order; the FIRST one that matches wins:
-    * strong_apply - score >= 85 AND zero hard_blocker gaps. Exceptional match; candidate should apply without changes.
-    * apply - score 70-84 AND at most 1 hard_blocker gap. Solid match; apply directly.
-    * apply_with_prep - score 60-84 AND 1-2 hard_blocker gaps that are realistically mitigatable in under 4 weeks of focused prep for a fresher. The candidate should spend a short focused sprint on those gaps before applying.
-    * optimize_resume - score 55-69 AND at most 1 hard_blocker. The skills are likely present but the resume buries them; recommend a tailored resume pass first.
-    * low_fit - score < 55 OR 3+ hard_blocker gaps OR a level/seniority/certification mismatch the candidate cannot close in under 4 weeks. Do NOT encourage applying.
-- matched_skills: array of objects, one per matched skill. Each object has:
-    * skill: the technical skill name (string). STRICT RULES: (a) only count skills explicitly listed in the resume's TECHNICAL SKILLS, TOOLS, or CERTIFICATIONS sections — or directly demonstrated in work_experience responsibilities. (b) NEVER include soft skills. (c) NEVER infer from project tech-stacks alone. (d) NEVER hedge with parentheticals — it's either in the resume or it isn't.
-    * evidence: SHORT string (<=10 words) citing WHERE in the resume this skill appears. Must reference a specific project name, role, employer, cert, or section. Examples: "AWS Deployment Project", "HCL Security Internship", "Technical Skills section", "Coursera AWS cert". NEVER use vague evidence like "mentioned in resume" or "listed".
-- missing_skills: array of specific SKILL strings required by the job but NOT found in the resume. STRICT RULES: (a) NEVER include experience-year requirements (e.g. '5+ years', '8-14 years of experience') — those belong only in ai_reasoning. (b) CONSOLIDATE related skills into a single entry to avoid inflated gap counts. Examples: list 'AWS / Azure / GCP cloud platforms' as ONE gap (not three), 'Apache Spark or Hadoop' as one, 'Snowflake or BigQuery' as one, 'Java or Scala' as one. (c) Each entry should represent a distinct skill DOMAIN, not every individual tool name. (d) Cap at 6 entries — if you list more, group them harder.
-- ai_reasoning: a STRING (NOT an array) containing a markdown-formatted bulleted list (3-4 bullets), written in SECOND PERSON addressing the candidate directly. Each bullet starts with \`- **Label**: \` followed by ONE concise sentence under 25 words. Use these EXACT labels in this order:
-    1. \`- **Match**: \` - the strongest positive signal grounded in a specific tool, project, or responsibility from THIS job's JD. Name a concrete detail from the JD (e.g. "the multi-tier IaC focus", "L2 SOC tier workflows"), not a generic skill list.
-    2. \`- **Gap**: \` - the single most important missing skill or requirement, plus a one-phrase mitigation cue (e.g. "Missing Kubernetes - Killercoda free labs cover basics in 1 week", "Missing CISSP cert - not earnable as a fresher").
-    3. \`- **Verdict**: \` - one line of actionable advice (e.g. "Apply directly", "Tailor your resume around X first", "Skip - 5+ year requirement can't be closed in 4 weeks", "Stretch role - focus on Y for 2 weeks then apply").
-    4. (Optional) \`- **Why this matters**: \` - one line on whether this role is a useful stepping stone given the candidate's current stage. Only include when the role offers something unusual (structured fresher mentorship, niche domain entry, prestigious company stamp).
-
-    DISQUALIFIER RULE: when relevance_score < 55 OR recommendation is low_fit, the FIRST bullet MUST be \`- **Disqualifier**: \` (replacing **Match**) and call out the single biggest blocker (level/seniority mismatch, missing must-have skill cluster, certification not earnable in <4 weeks). Do NOT lead with positive framing for jobs the candidate shouldn't apply to - that is dishonest signaling.
-
-    NEVER use these templated openers anywhere in any bullet: "The candidate is a strong match for", "The candidate has relevant", "This role is a good fit", "Overall, this is a...". Each bullet must be specific to THIS job-resume pair.
-
-    Output as a single plain text STRING with bullets joined by literal newline characters (\\n), e.g.:
-    "- **Match**: Your AWS + Terraform skills mirror the JD's multi-tier IaC focus.\\n- **Gap**: Missing Kubernetes - Killercoda free labs cover basics in 1 week.\\n- **Verdict**: Strong fit. Apply directly."
-- gaps: array of structured gap objects, one per entry in missing_skills. Each object has:
-    * skill: the missing skill name (string, matches one of missing_skills)
-    * severity: "hard_blocker" if the JD lists this as required AND the candidate has zero adjacent experience; "nice_to_have" otherwise
-    * has_adjacent_evidence: true if the candidate's CV shows a related/equivalent skill (e.g., JavaScript -> TypeScript, Splunk -> SIEM, Java -> Kotlin, AWS -> cloud platform, MySQL -> SQL Server)
-    * adjacent_from: short string naming the adjacent skill if has_adjacent_evidence is true, otherwise the string "none"
-    * mitigation_hint: ONE short sentence describing a SPECIFIC hands-on action. Preference order: (1) Build a concrete GitHub project using the missing skill (e.g. "Build a Jenkins + Docker pipeline deploying to AWS EC2 on GitHub, 1 week"), (2) AWS/Azure/GCP free-tier labs (e.g. "AWS CloudWatch free-tier monitoring lab on aws.amazon.com/training, 3 days"), (3) NPTEL free course (e.g. "NPTEL 'Linux Shell Scripting' 4-week free course"), (4) Coursera India, (5) YouTube (Apna College, CodeWithHarry, TechWorld with Nana). ALWAYS prefer a build/project over a passive course when the skill can be demonstrated in a GitHub repo. Never use vague phrases like 'online tutorials', 'online resources', 'personal projects', or 'study the documentation'.
-    * score_impact: integer 0-15. Score points this gap is costing the candidate. Rules: hard_blocker with NO adjacent evidence = 10-15; hard_blocker WITH adjacent evidence = 5-9; nice_to_have = 2-5. The SUM of all score_impact values MUST NOT exceed (100 - relevance_score). Distribute proportionally if needed.
-  IMPORTANT: gaps[] must only cover SKILL gaps (tools, technologies, frameworks, methodologies). NEVER add an entry for years-of-experience requirements. The gaps[] array length must equal missing_skills.length. Order: hard_blocker entries first, then nice_to_have.
-- confidence: object with:
-    * level: "high" if the JD has an explicit required_skills list AND description is >= 300 chars; "medium" if description is 100-299 chars or has no explicit skill list; "low" if description is vague/missing or <= 100 chars.
-    * reason: ONE short phrase (e.g. "Detailed JD with explicit skill list", "Partial JD — extracted from description", "Sparse JD — score is best-effort")
-- fastest_path: object with:
-    * steps: array of {action: string, time: string}. Top 2-3 hard_blocker actions only. Each action MUST be a concrete build or hands-on task that creates portfolio evidence — NOT a course name. Examples: "Build a Jenkins + Docker pipeline deploying to AWS EC2 on GitHub", "Add Prometheus + Grafana monitoring dashboard to your existing AWS project", "Build a Kubernetes deployment for your app using Killercoda free labs". Empty array [] if recommendation is "strong_apply" or "apply".
-    * weeks_total: integer. Sum of estimated weeks across steps (round up). 0 if steps is empty.
-    * projected_score_range: string. Estimated score range after completing the steps. Format "low–high" where low = relevance_score + sum(score_impact of covered gaps) - 3 and high = relevance_score + sum(score_impact of covered gaps) + 3, both capped at 95. Example: "85–91". Use just the relevance_score as a string (e.g. "78") when steps is empty.
-- rejection_reason: string. ONE sentence that FIRST names a specific strength from THIS candidate's resume, THEN identifies the exact missing evidence. Format: "Your [specific strength from resume, referencing a real project or role] is there — the missing signal is [specific gap, e.g. hands-on Jenkins pipeline or Prometheus dashboard]." Make it personal to THIS resume — never write a generic industry observation. Example: "Your AWS and Terraform are demonstrated in two projects — the missing evidence is a hands-on Jenkins CI/CD pipeline and Prometheus monitoring dashboard."
-- application_outlook: object with:
-    * interview_chance: "high" if relevance_score >= 75; "medium" if 55-74; "low" if < 55
-    * competition_level: "high" if MNC/Big-4/FAANG-adjacent/prominent Indian tech co OR hot-demand skills (ML/AI, cloud security, full-stack); "medium" for mid-market standard roles; "low" for niche/tier-2 city/unusual stack
-- optimized_score: integer. Estimated relevance_score with better resume PRESENTATION only (keyword placement, quantified bullets, surfaced certs, JD-mirrored summary — NO new skills assumed). Rule: optimized_score = relevance_score + min(15, count_of_matched_skills_not_prominent x 4). Cap at 95. MUST be >= relevance_score. For "strong_apply": optimized_score = relevance_score.
-- profile_strengths: array of 3-5 SHORT strings (<=8 words each). The candidate's strongest matching signals for THIS specific job — skills that are BOTH present in the resume with concrete evidence AND directly relevant to this JD. Format each as "Skill (evidence source)" e.g. "AWS Infrastructure (Deployment project)", "Terraform IaC (2 projects)", "Python scripting (Security Intern role)". Rules: (a) ONLY include skills with project/role evidence — never skills listed in a skills section alone. (b) NEVER include soft skills. (c) Return empty array [] if fewer than 3 evidenced signals match this JD.
-
-Critical rules:
-- Never invent or assume skills not explicitly stated in the resume data
-- Never add experience-year requirements (e.g. '5+ years') to missing_skills or gaps[] — mention them once in ai_reasoning only
-- India-fresher rule: treat senior-only certifications (CISSP, CISM, CISA, PMP, AWS Solutions Architect Professional, GCP Professional Cloud Architect, CCIE, CCSP) as LEVEL mismatches captured once in ai_reasoning. Do NOT list them in missing_skills or gaps[] - a fresher cannot earn them in under 4 weeks.
-- Differentiation rule: when scoring multiple similar jobs in a batch, your ai_reasoning must reference at least one concrete detail (specific tool name from the JD, specific responsibility, specific company context) that is unique to THIS job. Do not reuse the same generic skill list across multiple jobs' reasoning.
-- If required_skills is empty, extract requirements from the job description text
-- Consider equivalent technologies (e.g., Splunk ~ SIEM, AWS ~ Cloud Security, Bash ~ Scripting) as partial matches
-- Weight recent and primary skills higher than older or secondary ones
-- Consider the candidate's projects and certifications as evidence of skills`;
 
 // ── Build resume text (ported from n8n Build AI Prompt Code node) ─────────────
 
@@ -232,108 +124,6 @@ function buildResumeText(sd: Record<string, unknown>): string {
   }
 
   return lines.join("\n");
-}
-
-function buildPrompt(resumeText: string, job: Record<string, unknown>): string {
-  const required_skills = Array.isArray(job.required_skills)
-    ? (job.required_skills as string[]).join(", ")
-    : "Not specified";
-
-  const jobBlock = [
-    `### JOB 1 (job_id: ${job.id})`,
-    `Title: ${job.title || "Unknown"}`,
-    `Company: ${job.company || "Unknown"}`,
-    `Location: ${job.location || "Unknown"}`,
-    `Experience Level: ${job.experience_level || "Not specified"}`,
-    `Job Type: ${job.schedule_type || "Not specified"}`,
-    `Salary: ${job.salary || "Not disclosed"}`,
-    `Required Skills: ${required_skills}`,
-    "Full Description:",
-    job.description || "No description available",
-  ].join("\n");
-
-  return [
-    "Score the job below against the candidate resume.",
-    "",
-    "--- CANDIDATE RESUME ---",
-    resumeText,
-    "",
-    "--- JOB TO SCORE (1) ---",
-    jobBlock,
-    "",
-    "--- SCORING INSTRUCTIONS ---",
-    "Extract resume skills + JD requirements, compare precisely (count equivalent tech, e.g. Splunk ~ SIEM, AWS ~ Cloud Security), and weight skill overlap (40%), experience-level fit (25%), domain relevance (20%), location compatibility (15%). ONLY list skills explicitly present in the resume.",
-    `Return a JSON object with a scores array containing EXACTLY 1 object with job_id "${job.id}". Score even if it is a weak match (use a low score and low_fit). IMPORTANT: ai_reasoning MUST be a plain string, NOT an array.`,
-  ].join("\n");
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function normalizeFastestPath(raw: Record<string, unknown>): FastestPath {
-  const steps = Array.isArray(raw.steps) ? raw.steps as { action: string; time: string }[] : [];
-  const weeks_total = typeof raw.weeks_total === "number" ? raw.weeks_total : 0;
-  // Handle both old projected_score (number) and new projected_score_range (string)
-  let projected_score_range: string;
-  if (typeof raw.projected_score_range === "string") {
-    projected_score_range = raw.projected_score_range;
-  } else if (typeof raw.projected_score === "number") {
-    // Backward compat: convert old integer → range string
-    const mid = Math.min(95, raw.projected_score as number);
-    projected_score_range = steps.length > 0 ? `${Math.max(0, mid - 3)}–${mid}` : String(mid);
-  } else {
-    projected_score_range = "";
-  }
-  return { steps, weeks_total, projected_score_range };
-}
-
-// ── Normalize score result — handle LLM format variations ────────────────────
-
-function normalizeScore(raw: Record<string, unknown>): ScoreResult {
-  // ai_reasoning: LLM sometimes returns array of strings instead of one string
-  let ai_reasoning = raw.ai_reasoning;
-  if (Array.isArray(ai_reasoning)) {
-    ai_reasoning = (ai_reasoning as string[]).join("\n");
-  } else if (typeof ai_reasoning !== "string") {
-    ai_reasoning = String(ai_reasoning ?? "");
-  }
-
-  // matched_skills: normalize to {skill, evidence}[] regardless of LLM format
-  const rawMatched = Array.isArray(raw.matched_skills) ? raw.matched_skills : [];
-  const matched_skills: MatchedSkillEvidence[] = rawMatched.map((s: unknown) => {
-    if (typeof s === "string") return { skill: s, evidence: "Technical Skills section" };
-    const obj = s as Record<string, string>;
-    return { skill: obj.skill || String(s), evidence: obj.evidence || "Technical Skills section" };
-  });
-
-  // gaps: normalize adjacent_from "" → "none"
-  const rawGaps = Array.isArray(raw.gaps) ? raw.gaps : [];
-  const gaps: GapItem[] = rawGaps.map((g: unknown) => {
-    const gap = g as Record<string, unknown>;
-    return {
-      skill: String(gap.skill ?? ""),
-      severity: (gap.severity as "hard_blocker" | "nice_to_have") ?? "nice_to_have",
-      has_adjacent_evidence: Boolean(gap.has_adjacent_evidence),
-      adjacent_from: gap.adjacent_from === "" || gap.adjacent_from == null ? "none" : String(gap.adjacent_from),
-      mitigation_hint: String(gap.mitigation_hint ?? ""),
-      score_impact: typeof gap.score_impact === "number" ? gap.score_impact : 0,
-    };
-  });
-
-  return {
-    job_id: String(raw.job_id ?? ""),
-    relevance_score: Number(raw.relevance_score ?? 0),
-    recommendation: (raw.recommendation as ScoreResult["recommendation"]) ?? "low_fit",
-    matched_skills,
-    missing_skills: Array.isArray(raw.missing_skills) ? (raw.missing_skills as string[]) : [],
-    ai_reasoning: ai_reasoning as string,
-    gaps,
-    confidence: raw.confidence as MatchConfidence | undefined,
-    fastest_path: raw.fastest_path ? normalizeFastestPath(raw.fastest_path as Record<string, unknown>) : undefined,
-    rejection_reason: raw.rejection_reason as string | undefined,
-    application_outlook: raw.application_outlook as ApplicationOutlook | undefined,
-    optimized_score: typeof raw.optimized_score === "number" ? raw.optimized_score : undefined,
-    profile_strengths: Array.isArray(raw.profile_strengths) ? (raw.profile_strengths as string[]) : undefined,
-  };
 }
 
 // ── The Task ──────────────────────────────────────────────────────────────────

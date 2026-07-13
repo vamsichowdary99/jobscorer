@@ -14,6 +14,7 @@ import LapisPdfDocument from "@/components/ResumeRenderer/LapisPdfDocument";
 const varshaJade = {
   profile: {
     name: "Bandaru Varsha",
+    headline: "",
     email: "bandarvarsha0907@gmail.com",
     phone: "9701877844",
     location: "Bangalore",
@@ -73,6 +74,7 @@ const varshaJade = {
 const bapanapalliOnyx = {
   profile: {
     name: "Bapanapalli Venkata Hari Narayan",
+    headline: "",
     email: "haribapanapalli5@gmail.com",
     phone: "+916301487421",
     location: "",
@@ -162,6 +164,7 @@ const bapanapalliOnyx = {
 const ananyaLapis = {
   profile: {
     name: "Ananya Reddy",
+    headline: "",
     email: "ananya.reddy@example.com",
     phone: "+91 98765 43210",
     location: "Bengaluru, India",

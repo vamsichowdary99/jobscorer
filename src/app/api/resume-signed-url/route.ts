@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Look up the resume row + ownership check (using admin client so RLS
     //    can't accidentally hide it from us — we'll enforce ownership manually).
-    const { data: resume, error: rowError } = await adminSupabase
+    const { data: resume, error: rowError } = await getAdminSupabase()
         .from('resumes')
         .select('id, user_id, file_url')
         .eq('id', resumeId)

@@ -2,10 +2,20 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume } from '@/lib/types'
+import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume, ResumeEditorState, ExperienceEntry, EducationEntry, ProjectEntry, LeadershipEntry } from '@/lib/types'
 import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes } from '@/lib/api'
 import TemplatePickerModal, { type TemplateId } from '@/components/TemplatePickerModal'
 import { useAuth } from '@/components/providers/AuthProvider'
+import { usePreviewDecorations, decorationKey, PreviewDecorationsProvider } from '@/components/resume-editor/PreviewDecorations'
+import { A } from '@/components/resume-editor/tokens'
+import { AssistantPanel } from '@/components/resume-editor/AssistantPanel'
+import { MobileAssistantSheet } from '@/components/resume-editor/MobileAssistantSheet'
+import { useAssistant } from '@/components/resume-editor/useAssistant'
+import { CoverLetterView, useCoverLetter } from '@/components/resume-editor/CoverLetterView'
+import { persistEditorState } from '@/lib/resume-edit/persist'
+import { generateATSText } from '@/lib/resume-edit/atsText'
+import { computeKeywordCoverage } from '@/lib/resume-edit/coverage'
+import { M } from '@/lib/meridianTokens'
 
 interface SavedResumeEntry {
     id: string
@@ -17,33 +27,8 @@ interface SavedResumeEntry {
     job: { id: string; title: string; company: string; location: string } | null
 }
 
-// ── Meridian Design Tokens ──────────────────────────────────
-const M = {
-    accent: '#1d6af5',
-    accentMid: '#4b8df8',
-    accentLight: 'rgba(29,106,245,0.10)',
-    accentBorder: 'rgba(29,106,245,0.28)',
-    accentTint: 'rgba(29,106,245,0.05)',
-    white: '#ffffff',
-    surface: '#f5f9ff',
-    surfaceAlt: '#edf4ff',
-    border: '#cfe2ff',
-    borderLight: '#e8f1ff',
-    text: '#0f1e40',
-    textMid: '#1e3a6e',
-    textMuted: '#4a6fa5',
-    textFaint: '#8dafd8',
-    green: '#16a34a',
-    greenLight: '#dcfce7',
-    greenBorder: '#a7f3d0',
-    amber: '#d97706',
-    amberLight: '#fef3c7',
-    amberBorder: '#fde68a',
-    red: '#dc2626',
-    fontHeading: "'Lora', Georgia, serif",
-    fontBody: "'DM Sans', 'Inter', sans-serif",
-    fontMono: "'JetBrains Mono', monospace",
-}
+// ── Meridian Design Tokens ── moved to '@/lib/meridianTokens' (imported above)
+// to avoid a circular import with components/resume-editor/tokens.ts. ──────
 
 // Legacy alias kept so unchanged sub-components still compile
 const T = {
@@ -68,65 +53,6 @@ const T = {
     editorTextMuted: M.textMuted,
     radius: '10px',
     radiusSm: '7px',
-}
-
-// ── Types ────────────────────────────────────────────────────
-
-interface ExperienceEntry {
-    company: string
-    title: string
-    startDate: string
-    endDate: string
-    location: string
-    bullets: string[]
-}
-
-interface EducationEntry {
-    school: string
-    degree: string
-    date: string
-    gpa: string
-    coursework: string
-}
-
-interface ProjectEntry {
-    name: string
-    tech: string
-    date: string
-    bullets: string[]
-}
-
-interface LeadershipEntry {
-    org: string
-    role: string
-    date: string
-    bullets: string[]
-}
-
-interface ResumeEditorState {
-    profile: {
-        name: string
-        headline: string
-        email: string
-        phone: string
-        location: string
-        linkedin: string
-        github: string
-        portfolio: string
-    }
-    summary: string
-    education: EducationEntry[]
-    experience: ExperienceEntry[]
-    projects: ProjectEntry[]
-    skills: {
-        languages: string
-        tools: string
-        frameworks: string
-        soft: string
-    }
-    leadership: LeadershipEntry[]
-    certifications: string[]
-    achievements: string[]
 }
 
 const EMPTY_STATE: ResumeEditorState = {
@@ -302,47 +228,6 @@ function sectionSummaryText(sectionKey: string, state: ResumeEditorState): strin
     return ''
 }
 
-function generateATSText(state: ResumeEditorState): string {
-    const lines: string[] = []
-    if (state.profile.name) lines.push(state.profile.name.toUpperCase())
-    const contact = [state.profile.email, state.profile.phone, state.profile.location, state.profile.linkedin, state.profile.github].filter(Boolean)
-    if (contact.length) lines.push(contact.join(' | '))
-    lines.push('')
-    if (state.summary) { lines.push('SUMMARY'); lines.push(state.summary); lines.push('') }
-    if (state.experience.length) {
-        lines.push('EXPERIENCE')
-        for (const exp of state.experience) {
-            lines.push(`${exp.title} | ${exp.company}`)
-            if (exp.startDate || exp.endDate) lines.push(`${exp.startDate || ''} – ${exp.endDate || 'Present'}`)
-            for (const b of exp.bullets) lines.push(`- ${b}`)
-            lines.push('')
-        }
-    }
-    if (state.education.length) {
-        lines.push('EDUCATION')
-        for (const edu of state.education) {
-            lines.push(`${edu.degree} | ${edu.school}`)
-            if (edu.date) lines.push(edu.date)
-            if (edu.gpa) lines.push(`GPA: ${edu.gpa}`)
-        }
-        lines.push('')
-    }
-    const allSkills = [state.skills.languages, state.skills.tools, state.skills.frameworks, state.skills.soft].filter(Boolean).join(', ')
-    if (allSkills) { lines.push('SKILLS'); lines.push(allSkills); lines.push('') }
-    if (state.projects.length) {
-        lines.push('PROJECTS')
-        for (const proj of state.projects) {
-            lines.push(proj.name)
-            if (proj.tech) lines.push(`Tech: ${proj.tech}`)
-            for (const b of proj.bullets) lines.push(`- ${b}`)
-            lines.push('')
-        }
-    }
-    if (state.certifications.length) { lines.push('CERTIFICATIONS'); lines.push(...state.certifications); lines.push('') }
-    if (state.achievements.length) { lines.push('ACHIEVEMENTS'); lines.push(...state.achievements); lines.push('') }
-    return lines.join('\n')
-}
-
 // ── Section Modal Shell ─────────────────────────────────────
 function SectionModal({
     title, subtitle, sectionKey, wide, footerNote, onClose, onSave, children,
@@ -462,16 +347,21 @@ function SectionModal({
 // ── Active Modal Dispatcher ────────────────────────────────
 // Clones state on open; commits on Save.
 function ActiveModal({
-    sectionKey, state, update, onClose, isMobile,
+    sectionKey, state, update, onClose, isMobile, onSaved,
 }: {
     sectionKey: string
     state: ResumeEditorState
     update: (s: ResumeEditorState) => void
     onClose: () => void
     isMobile?: boolean
+    // Plan 21 Phase 1 persistence — fires after `update()` with the section's
+    // before/after snapshot plus the full next state, so the caller can PATCH
+    // without racing React's async setState.
+    onSaved?: (section: string, before: unknown, after: unknown, nextState: ResumeEditorState) => void
 }) {
     // Deep snapshot so Cancel discards changes
     const [local, setLocal] = useState<ResumeEditorState>(() => JSON.parse(JSON.stringify(state)))
+    const beforeRef = useRef((state as unknown as Record<string, unknown>)[sectionKey])
 
     const configs: Record<string, { title: string; subtitle: string; wide?: boolean }> = {
         profile:        { title: 'Edit Profile',         subtitle: 'Personal & contact details' },
@@ -496,6 +386,7 @@ function ActiveModal({
             achievements: local.achievements.filter(a => a.trim()),
         }
         update(cleaned)
+        onSaved?.(sectionKey, beforeRef.current, (cleaned as unknown as Record<string, unknown>)[sectionKey], cleaned)
         onClose()
     }
 
@@ -724,6 +615,11 @@ function Field({ label, value, onChange, placeholder, multiline = false, rows = 
 
 // ── Classic Resume Preview (HTML) ────────────────────────────
 function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+
     const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
 
     const contactParts = [
@@ -747,6 +643,7 @@ function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
             minHeight: '100%',
             background: '#fff',
         }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             {/* Header */}
             <div style={{ textAlign: 'center', marginBottom: '6pt' }}>
                 <div style={{
@@ -774,11 +671,23 @@ function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
             <hr style={{ border: 'none', borderTop: '1.5px solid #000', margin: '6pt 0' }} />
 
             {/* Summary */}
-            {summary && (
-                <div style={{ marginBottom: '8pt', fontSize: '10pt', lineHeight: 1.45, color: '#111' }}>
-                    {summary}
-                </div>
-            )}
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') {
+                    return (
+                        <div style={{ marginBottom: '8pt', position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
+                            <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
+                            <span style={{ fontSize: '10pt', lineHeight: 1.45, color: '#0f6b3a' }}>{deco.text}</span>
+                        </div>
+                    )
+                }
+                if (!summary) return null
+                return (
+                    <div style={{ marginBottom: '8pt', fontSize: '10pt', lineHeight: 1.45, color: '#111', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        {summary}
+                    </div>
+                )
+            })()}
 
             {/* Education */}
             {education.length > 0 && (
@@ -826,15 +735,27 @@ function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
                                 <span style={{ fontStyle: 'italic' }}>{exp.title}</span>
                                 {exp.location && <span style={{ fontSize: '9.5pt', color: '#555' }}>{exp.location}</span>}
                             </div>
-                            {exp.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt' }}>
+                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return (
+                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}>
+                                                <div style={{ position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
+                                                    <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
+                                                    <span style={{ color: '#0f6b3a' }}>{deco.text}</span>
+                                                </div>
+                                            </li>
+                                        )
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
                                             <BoldRender text={b} />
                                         </li>
-                                    ))}
-                                </ul>
-                            )}
+                                    )
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </section>
@@ -852,15 +773,27 @@ function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
                                 </span>
                                 <span style={{ fontSize: '9.5pt', color: '#333' }}>{proj.date}</span>
                             </div>
-                            {proj.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt' }}>
+                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {proj.bullets.map((b, j) => {
+                                    const deco = decoFor('projects', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return (
+                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}>
+                                                <div style={{ position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
+                                                    <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
+                                                    <span style={{ color: '#0f6b3a' }}>{deco.text}</span>
+                                                </div>
+                                            </li>
+                                        )
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
                                             <BoldRender text={b} />
                                         </li>
-                                    ))}
-                                </ul>
-                            )}
+                                    )
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </section>
@@ -871,26 +804,28 @@ function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
                 <section style={{ marginBottom: '8pt' }}>
                     <ClassicSectionHeader title="Technical Skills" />
                     <div style={{ fontSize: '10pt' }}>
-                        {skills.languages && (
-                            <div style={{ marginBottom: '2pt' }}>
-                                <span style={{ fontWeight: 700 }}>Languages: </span>{skills.languages}
-                            </div>
-                        )}
-                        {skills.tools && (
-                            <div style={{ marginBottom: '2pt' }}>
-                                <span style={{ fontWeight: 700 }}>Developer Tools: </span>{skills.tools}
-                            </div>
-                        )}
-                        {skills.frameworks && (
-                            <div style={{ marginBottom: '2pt' }}>
-                                <span style={{ fontWeight: 700 }}>Technologies/Frameworks: </span>{skills.frameworks}
-                            </div>
-                        )}
-                        {skills.soft && (
-                            <div style={{ marginBottom: '2pt' }}>
-                                <span style={{ fontWeight: 700 }}>Core Competencies: </span>{skills.soft}
-                            </div>
-                        )}
+                        {([
+                            ['languages', 'Languages'],
+                            ['tools', 'Developer Tools'],
+                            ['frameworks', 'Technologies/Frameworks'],
+                            ['soft', 'Core Competencies'],
+                        ] as const).map(([field, label]) => {
+                            const deco = decoFor('skills', undefined, undefined, field)
+                            if (deco?.kind === 'ghost') {
+                                return (
+                                    <div key={field} style={{ marginBottom: '2pt', position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
+                                        <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
+                                        <span style={{ fontWeight: 700 }}>{label}: </span><span style={{ color: '#0f6b3a' }}>{deco.text}</span>
+                                    </div>
+                                )
+                            }
+                            if (!skills[field]) return null
+                            return (
+                                <div key={field} style={{ marginBottom: '2pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                    <span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}
+                                </div>
+                            )
+                        })}
                     </div>
                 </section>
             )}
@@ -968,6 +903,19 @@ function ClassicSectionHeader({ title }: { title: string }) {
 const COBALT_ACCENT = '#06296b'
 const COBALT_INK = '#111111'
 
+// Shared "AI suggestion pending" box for the live-preview ghost decoration —
+// module-level (not defined inside a template component) so React doesn't
+// treat it as a new component type on every render, which would reset its
+// state. Reusable by any template preview that wires up decoFor/decoStyle.
+function GhostBox({ text, inline }: { text: string; inline?: React.ReactNode }) {
+    return (
+        <div style={{ position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
+            <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
+            {inline}<span style={{ color: '#0f6b3a' }}>{text}</span>
+        </div>
+    )
+}
+
 function CobaltSectionHeader({ title }: { title: string }) {
     return (
         <div style={{
@@ -988,6 +936,10 @@ function CobaltSectionHeader({ title }: { title: string }) {
 
 function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
     const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
 
     const contactParts = [
         profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
@@ -996,11 +948,11 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
     const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
 
     const skillRows = [
-        { label: 'Languages', value: skills.languages },
-        { label: 'Frameworks', value: skills.frameworks },
-        { label: 'Tools & Cloud', value: skills.tools },
-        { label: 'Core Competencies', value: skills.soft },
-    ].filter(r => r.value && r.value.trim())
+        { field: 'languages' as const, label: 'Languages', value: skills.languages },
+        { field: 'frameworks' as const, label: 'Frameworks', value: skills.frameworks },
+        { field: 'tools' as const, label: 'Tools & Cloud', value: skills.tools },
+        { field: 'soft' as const, label: 'Core Competencies', value: skills.soft },
+    ].filter(r => (r.value && r.value.trim()) || decoFor('skills', undefined, undefined, r.field)?.kind === 'ghost')
 
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
 
@@ -1014,6 +966,7 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
             minHeight: '100%',
             background: '#fff',
         }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             {/* Header (left-aligned) */}
             <div style={{ marginBottom: '4pt' }}>
                 <div style={{ fontSize: '20pt', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', lineHeight: 1.05, color: COBALT_INK }}>
@@ -1032,25 +985,38 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
             </div>
 
             {/* Summary */}
-            {summary && (
-                <section>
-                    <CobaltSectionHeader title="Professional Summary" />
-                    <div style={{ fontSize: '10pt', lineHeight: 1.35, color: COBALT_INK }}>
-                        <BoldRender text={summary} />
-                    </div>
-                </section>
-            )}
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') {
+                    return <section><CobaltSectionHeader title="Professional Summary" /><GhostBox text={deco.text} /></section>
+                }
+                if (!summary) return null
+                return (
+                    <section>
+                        <CobaltSectionHeader title="Professional Summary" />
+                        <div style={{ fontSize: '10pt', lineHeight: 1.35, color: COBALT_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                            <BoldRender text={summary} />
+                        </div>
+                    </section>
+                )
+            })()}
 
             {/* Skills */}
             {skillRows.length > 0 && (
                 <section>
                     <CobaltSectionHeader title="Skills" />
-                    {skillRows.map((row, i) => (
-                        <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt' }}>
-                            <span style={{ fontWeight: 700, width: '92pt', flexShrink: 0 }}>{row.label}:</span>
-                            <span style={{ flex: 1 }}>{row.value}</span>
-                        </div>
-                    ))}
+                    {skillRows.map((row, i) => {
+                        const deco = decoFor('skills', undefined, undefined, row.field)
+                        if (deco?.kind === 'ghost') {
+                            return <div key={i} style={{ marginBottom: '2.5pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}: </span>} /></div>
+                        }
+                        return (
+                            <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                <span style={{ fontWeight: 700, width: '92pt', flexShrink: 0 }}>{row.label}:</span>
+                                <span style={{ flex: 1 }}>{row.value}</span>
+                            </div>
+                        )
+                    })}
                 </section>
             )}
 
@@ -1067,13 +1033,20 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
                                     <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
                                 </div>
                                 {companyLine && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{companyLine}</div>}
-                                {exp.bullets.filter(b => b.trim()).length > 0 && (
-                                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                        {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}><BoldRender text={b} /></li>
-                                        ))}
-                                    </ul>
-                                )}
+                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                    {exp.bullets.map((b, j) => {
+                                        const deco = decoFor('experience', i, j)
+                                        if (!b.trim() && deco?.kind !== 'ghost') return null
+                                        if (deco?.kind === 'ghost') {
+                                            return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                        }
+                                        return (
+                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                                <BoldRender text={b} />
+                                            </li>
+                                        )
+                                    })}
+                                </ul>
                             </div>
                         )
                     })}
@@ -1092,13 +1065,20 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
                                 </span>
                                 <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{proj.date}</span>
                             </div>
-                            {proj.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}><BoldRender text={b} /></li>
-                                    ))}
-                                </ul>
-                            )}
+                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {proj.bullets.map((b, j) => {
+                                    const deco = decoFor('projects', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                            <BoldRender text={b} />
+                                        </li>
+                                    )
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </section>
@@ -1209,6 +1189,10 @@ function OnyxSectionHeader({ title }: { title: string }) {
 
 function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
     const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
 
     const contactParts = [
         profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
@@ -1217,11 +1201,11 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
     const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
 
     const skillRows = [
-        { label: 'Languages', value: skills.languages },
-        { label: 'Frameworks', value: skills.frameworks },
-        { label: 'Tools & Platforms', value: skills.tools },
-        { label: 'Core Competencies', value: skills.soft },
-    ].filter(r => r.value && r.value.trim())
+        { field: 'languages' as const, label: 'Languages', value: skills.languages },
+        { field: 'frameworks' as const, label: 'Frameworks', value: skills.frameworks },
+        { field: 'tools' as const, label: 'Tools & Platforms', value: skills.tools },
+        { field: 'soft' as const, label: 'Core Competencies', value: skills.soft },
+    ].filter(r => (r.value && r.value.trim()) || decoFor('skills', undefined, undefined, r.field)?.kind === 'ghost')
 
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
 
@@ -1235,6 +1219,7 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
             minHeight: '100%',
             background: '#fff',
         }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             {/* Header */}
             <div>
                 <div style={{ fontSize: '23pt', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', lineHeight: 1.04, color: ONYX_INK }}>
@@ -1250,23 +1235,36 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
             </div>
 
             {/* Summary */}
-            {summary && (
-                <section>
-                    <OnyxSectionHeader title="Summary" />
-                    <div style={{ fontSize: '10pt', lineHeight: 1.4, color: ONYX_INK }}><BoldRender text={summary} /></div>
-                </section>
-            )}
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') {
+                    return <section><OnyxSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+                }
+                if (!summary) return null
+                return (
+                    <section>
+                        <OnyxSectionHeader title="Summary" />
+                        <div style={{ fontSize: '10pt', lineHeight: 1.4, color: ONYX_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div>
+                    </section>
+                )
+            })()}
 
             {/* Skills */}
             {skillRows.length > 0 && (
                 <section>
                     <OnyxSectionHeader title="Technical Skills" />
-                    {skillRows.map((row, i) => (
-                        <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt' }}>
-                            <span style={{ fontWeight: 700, width: '104pt', flexShrink: 0 }}>{row.label}:</span>
-                            <span style={{ flex: 1 }}>{row.value}</span>
-                        </div>
-                    ))}
+                    {skillRows.map((row, i) => {
+                        const deco = decoFor('skills', undefined, undefined, row.field)
+                        if (deco?.kind === 'ghost') {
+                            return <div key={i} style={{ marginBottom: '2.5pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}: </span>} /></div>
+                        }
+                        return (
+                            <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                <span style={{ fontWeight: 700, width: '104pt', flexShrink: 0 }}>{row.label}:</span>
+                                <span style={{ flex: 1 }}>{row.value}</span>
+                            </div>
+                        )
+                    })}
                 </section>
             )}
 
@@ -1283,13 +1281,20 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
                                     <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
                                 </div>
                                 {companyLine && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{companyLine}</div>}
-                                {exp.bullets.filter(b => b.trim()).length > 0 && (
-                                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                        {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}><BoldRender text={b} /></li>
-                                        ))}
-                                    </ul>
-                                )}
+                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                    {exp.bullets.map((b, j) => {
+                                        const deco = decoFor('experience', i, j)
+                                        if (!b.trim() && deco?.kind !== 'ghost') return null
+                                        if (deco?.kind === 'ghost') {
+                                            return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                        }
+                                        return (
+                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                                <BoldRender text={b} />
+                                            </li>
+                                        )
+                                    })}
+                                </ul>
                             </div>
                         )
                     })}
@@ -1308,13 +1313,20 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
                                     <span style={{ fontSize: '9.5pt', color: ONYX_INK, fontStyle: proj.tech ? 'italic' : 'normal' }}>{proj.tech || proj.date}</span>
                                 )}
                             </div>
-                            {proj.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}><BoldRender text={b} /></li>
-                                    ))}
-                                </ul>
-                            )}
+                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {proj.bullets.map((b, j) => {
+                                    const deco = decoFor('projects', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                            <BoldRender text={b} />
+                                        </li>
+                                    )
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </section>
@@ -1427,6 +1439,10 @@ function JadeSectionHeader({ title }: { title: string }) {
 
 function JadeResumePreview({ state }: { state: ResumeEditorState }) {
     const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
 
     const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
@@ -1441,12 +1457,18 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
         { label: 'Portfolio', value: profile.portfolio },
     ].filter(c => c.value && c.value.trim())
 
+    // Skills fields render as a bulleted "cloud" here (each comma-separated
+    // item on its own line), but a proposed edit's ghost text is always the
+    // whole field as one string — so a pending skills suggestion replaces the
+    // group's normal bulleted rendering with the raw suggested string instead
+    // of re-splitting it, same treatment every other template gives it.
     const skillGroups = [
-        { label: 'Languages', value: skills.languages },
-        { label: 'Libraries & Frameworks', value: skills.frameworks },
-        { label: 'Tools', value: skills.tools },
-        { label: 'Core Competencies', value: skills.soft },
-    ].map(g => ({ label: g.label, items: splitItems(g.value) })).filter(g => g.items.length > 0)
+        { field: 'languages' as const, label: 'Languages', value: skills.languages },
+        { field: 'frameworks' as const, label: 'Libraries & Frameworks', value: skills.frameworks },
+        { field: 'tools' as const, label: 'Tools', value: skills.tools },
+        { field: 'soft' as const, label: 'Core Competencies', value: skills.soft },
+    ].map(g => ({ ...g, items: splitItems(g.value) }))
+        .filter(g => g.items.length > 0 || decoFor('skills', undefined, undefined, g.field)?.kind === 'ghost')
 
     const bullets = (items: string[], size = '9.7pt', mb = '1.5pt', lh = 1.25) => (
         <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
@@ -1466,6 +1488,7 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
             minHeight: '100%',
             background: '#fff',
         }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '24pt' }}>
                 {/* LEFT COLUMN */}
                 <div style={{ width: '178pt', flexShrink: 0 }}>
@@ -1489,12 +1512,15 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
                     {skillGroups.length > 0 && (
                         <section style={{ marginTop: '9pt' }}>
                             <JadeSectionHeader title="Skills" />
-                            {skillGroups.map((g, i) => (
-                                <div key={i} style={{ marginBottom: '2pt' }}>
-                                    <div style={{ fontWeight: 700, fontSize: '9.5pt', marginTop: i === 0 ? 0 : '1.5pt', marginBottom: '1pt' }}>{g.label}</div>
-                                    {bullets(g.items, '9.3pt', '1pt', 1.22)}
-                                </div>
-                            ))}
+                            {skillGroups.map((g, i) => {
+                                const deco = decoFor('skills', undefined, undefined, g.field)
+                                return (
+                                    <div key={i} style={{ marginBottom: '2pt' }}>
+                                        <div style={{ fontWeight: 700, fontSize: '9.5pt', marginTop: i === 0 ? 0 : '1.5pt', marginBottom: '1pt' }}>{g.label}</div>
+                                        {deco?.kind === 'ghost' ? <GhostBox text={deco.text} /> : bullets(g.items, '9.3pt', '1pt', 1.22)}
+                                    </div>
+                                )
+                            })}
                         </section>
                     )}
 
@@ -1539,12 +1565,19 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
 
                 {/* RIGHT COLUMN */}
                 <div style={{ flex: 1 }}>
-                    {summary && (
-                        <section>
-                            <JadeSectionHeader title="Summary" />
-                            <div style={{ fontSize: '10pt', lineHeight: 1.4, color: JADE_INK }}><BoldRender text={summary} /></div>
-                        </section>
-                    )}
+                    {(() => {
+                        const deco = decoFor('summary')
+                        if (deco?.kind === 'ghost') {
+                            return <section><JadeSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+                        }
+                        if (!summary) return null
+                        return (
+                            <section>
+                                <JadeSectionHeader title="Summary" />
+                                <div style={{ fontSize: '10pt', lineHeight: 1.4, color: JADE_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div>
+                            </section>
+                        )
+                    })()}
 
                     {experience.length > 0 && (
                         <section style={{ marginTop: summary ? '11pt' : 0 }}>
@@ -1558,7 +1591,20 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
                                             <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt' }}>{dateRange(exp.startDate, exp.endDate)}</span>
                                         </div>
                                         {companyLine && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{companyLine}</div>}
-                                        {exp.bullets.filter(b => b.trim()).length > 0 && bullets(exp.bullets)}
+                                        <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
+                                            {exp.bullets.map((b, j) => {
+                                                const deco = decoFor('experience', i, j)
+                                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                                if (deco?.kind === 'ghost') {
+                                                    return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
+                                                }
+                                                return (
+                                                    <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.25, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                                        <BoldRender text={b} />
+                                                    </li>
+                                                )
+                                            })}
+                                        </ul>
                                     </div>
                                 )
                             })}
@@ -1576,7 +1622,20 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
                                             <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt', fontStyle: proj.tech ? 'italic' : 'normal' }}>{proj.tech || proj.date}</span>
                                         )}
                                     </div>
-                                    {proj.bullets.filter(b => b.trim()).length > 0 && bullets(proj.bullets)}
+                                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
+                                        {proj.bullets.map((b, j) => {
+                                            const deco = decoFor('projects', i, j)
+                                            if (!b.trim() && deco?.kind !== 'ghost') return null
+                                            if (deco?.kind === 'ghost') {
+                                                return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
+                                            }
+                                            return (
+                                                <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.25, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                                    <BoldRender text={b} />
+                                                </li>
+                                            )
+                                        })}
+                                    </ul>
                                 </div>
                             ))}
                         </section>
@@ -1625,12 +1684,26 @@ function LapisSectionHeader({ title }: { title: string }) {
 
 function LapisResumePreview({ state }: { state: ResumeEditorState }) {
     const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
 
     const contactParts = [profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
     const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
     const splitItems = (csv: string) => (csv || '').split(/,(?![^(]*\))|[•\n]/).map(s => s.trim()).filter(Boolean)
-    const skillPills = [...splitItems(skills.languages), ...splitItems(skills.frameworks), ...splitItems(skills.tools), ...splitItems(skills.soft)]
+    // Rendered as one merged pill cloud (no per-field grouping in this
+    // template), so a pending skills edit can't slot into a specific spot in
+    // the cloud — instead the whole edited field renders as one GhostBox
+    // alongside the other fields' normal pills.
+    const skillFields = [
+        { field: 'languages' as const, csv: skills.languages },
+        { field: 'frameworks' as const, csv: skills.frameworks },
+        { field: 'tools' as const, csv: skills.tools },
+        { field: 'soft' as const, csv: skills.soft },
+    ]
+    const hasAnySkills = skillFields.some(f => splitItems(f.csv).length > 0 || decoFor('skills', undefined, undefined, f.field)?.kind === 'ghost')
 
     const bullets = (items: string[]) => (
         <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
@@ -1643,6 +1716,7 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
 
     return (
         <div style={{ fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif", fontSize: '10pt', lineHeight: 1.4, color: LAPIS_INK, padding: '36pt 42pt', minHeight: '100%', background: '#fff' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             {/* Header */}
             <div>
                 <div style={{ fontSize: '22pt', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: LAPIS_ACCENT, lineHeight: 1.05 }}>{profile.name || 'Your Name'}</div>
@@ -1650,20 +1724,33 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
                 {contactParts.length > 0 && <div style={{ fontSize: '9pt', color: LAPIS_INK, marginTop: '5pt' }}>{contactParts.join('   |   ')}</div>}
             </div>
 
-            {summary && (
-                <section>
-                    <LapisSectionHeader title="Summary" />
-                    <div style={{ fontSize: '10pt', lineHeight: 1.4, color: LAPIS_INK }}><BoldRender text={summary} /></div>
-                </section>
-            )}
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') {
+                    return <section><LapisSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+                }
+                if (!summary) return null
+                return (
+                    <section>
+                        <LapisSectionHeader title="Summary" />
+                        <div style={{ fontSize: '10pt', lineHeight: 1.4, color: LAPIS_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div>
+                    </section>
+                )
+            })()}
 
-            {skillPills.length > 0 && (
+            {hasAnySkills && (
                 <section>
                     <LapisSectionHeader title="Skills" />
                     <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '3pt' }}>
-                        {skillPills.map((s, i) => (
-                            <span key={i} style={{ border: '0.8px solid #cdcdde', borderRadius: 4, padding: '2pt 6pt', marginRight: '5pt', marginBottom: '5pt', fontSize: '9pt', color: LAPIS_INK, whiteSpace: 'nowrap' }}>{s}</span>
-                        ))}
+                        {skillFields.map(f => {
+                            const deco = decoFor('skills', undefined, undefined, f.field)
+                            if (deco?.kind === 'ghost') {
+                                return <div key={f.field} style={{ marginRight: '5pt', marginBottom: '5pt' }}><GhostBox text={deco.text} /></div>
+                            }
+                            return splitItems(f.csv).map((s, i) => (
+                                <span key={`${f.field}-${i}`} style={{ border: '0.8px solid #cdcdde', borderRadius: 4, padding: '2pt 6pt', marginRight: '5pt', marginBottom: '5pt', fontSize: '9pt', color: LAPIS_INK, whiteSpace: 'nowrap' }}>{s}</span>
+                            ))
+                        })}
                     </div>
                 </section>
             )}
@@ -1680,7 +1767,20 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
                                     <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
                                 </div>
                                 {cl && companyLine(cl)}
-                                {exp.bullets.filter(b => b.trim()).length > 0 && bullets(exp.bullets)}
+                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
+                                    {exp.bullets.map((b, j) => {
+                                        const deco = decoFor('experience', i, j)
+                                        if (!b.trim() && deco?.kind !== 'ghost') return null
+                                        if (deco?.kind === 'ghost') {
+                                            return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
+                                        }
+                                        return (
+                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.3, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                                <BoldRender text={b} />
+                                            </li>
+                                        )
+                                    })}
+                                </ul>
                             </div>
                         )
                     })}
@@ -1697,7 +1797,20 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
                                 {proj.date && <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{proj.date}</span>}
                             </div>
                             {proj.tech && companyLine(proj.tech)}
-                            {proj.bullets.filter(b => b.trim()).length > 0 && bullets(proj.bullets)}
+                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
+                                {proj.bullets.map((b, j) => {
+                                    const deco = decoFor('projects', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.3, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                            <BoldRender text={b} />
+                                        </li>
+                                    )
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </section>
@@ -1760,11 +1873,19 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
 // ── Rezi Resume Preview (HTML) ────────────────────────────
 function ReziResumePreview({ state }: { state: ResumeEditorState }) {
     const { profile, summary, education, experience, projects, skills, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
     const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
     const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
+    const reziSkillFields = [
+        ['languages', 'Languages'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Core Competencies'],
+    ] as const
 
     return (
         <div style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: '10.5pt', lineHeight: 1.5, color: '#1a1a1a', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             <div style={{ textAlign: 'center', fontSize: '18pt', fontWeight: 700, letterSpacing: '0.02em', marginBottom: '3pt' }}>
                 {profile.name || 'Your Name'}
             </div>
@@ -1774,9 +1895,12 @@ function ReziResumePreview({ state }: { state: ResumeEditorState }) {
                 </div>
             )}
             <hr style={{ border: 'none', borderTop: '0.75px solid #ccc', margin: '4pt 0 12pt' }} />
-            {summary && (
-                <div style={{ marginBottom: '10pt', fontSize: '10pt', lineHeight: 1.55, color: '#222' }}>{summary}</div>
-            )}
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') return <div style={{ marginBottom: '10pt' }}><GhostBox text={deco.text} /></div>
+                if (!summary) return null
+                return <div style={{ marginBottom: '10pt', fontSize: '10pt', lineHeight: 1.55, color: '#222', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+            })()}
             {education.length > 0 && (
                 <section style={{ marginBottom: '10pt' }}>
                     <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Education</div>
@@ -1804,12 +1928,17 @@ function ReziResumePreview({ state }: { state: ResumeEditorState }) {
                                 <span style={{ fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
                             </div>
                             <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
-                            {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                                    <span style={{ color: '#888', flexShrink: 0 }}>—</span>
-                                    <BoldRender text={b} />
-                                </div>
-                            ))}
+                            {exp.bullets.map((b, j) => {
+                                const deco = decoFor('experience', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                                return (
+                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <span style={{ color: '#888', flexShrink: 0 }}>—</span>
+                                        <BoldRender text={b} />
+                                    </div>
+                                )
+                            })}
                         </div>
                     ))}
                 </section>
@@ -1823,24 +1952,33 @@ function ReziResumePreview({ state }: { state: ResumeEditorState }) {
                                 <span style={{ fontWeight: 700 }}>{proj.name}</span>
                                 <span style={{ fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>{proj.date}</span>
                             </div>
-                            {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                                    <span style={{ color: '#888', flexShrink: 0 }}>—</span>
-                                    <BoldRender text={b} />
-                                </div>
-                            ))}
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                                return (
+                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <span style={{ color: '#888', flexShrink: 0 }}>—</span>
+                                        <BoldRender text={b} />
+                                    </div>
+                                )
+                            })}
                         </div>
                     ))}
                 </section>
             )}
-            {hasSkills && (
+            {(hasSkills || reziSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
                 <section style={{ marginBottom: '10pt' }}>
                     <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Technical Skills</div>
                     <div style={{ fontSize: '10pt', lineHeight: 1.8 }}>
-                        {skills.languages && <div><span style={{ fontWeight: 700 }}>Languages: </span>{skills.languages}</div>}
-                        {skills.tools && <div><span style={{ fontWeight: 700 }}>Tools: </span>{skills.tools}</div>}
-                        {skills.frameworks && <div><span style={{ fontWeight: 700 }}>Frameworks: </span>{skills.frameworks}</div>}
-                        {skills.soft && <div><span style={{ fontWeight: 700 }}>Core Competencies: </span>{skills.soft}</div>}
+                        {reziSkillFields.map(([field, label]) => {
+                            const deco = decoFor('skills', undefined, undefined, field)
+                            if (deco?.kind === 'ghost') {
+                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
+                            }
+                            if (!skills[field]) return null
+                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
+                        })}
                     </div>
                 </section>
             )}
@@ -1869,17 +2007,27 @@ function ReziResumePreview({ state }: { state: ResumeEditorState }) {
 }
 
 // ── Rezi Standard Resume Preview (HTML) ──────────────────
-function ReziStandardResumePreview({ state }: { state: ResumeEditorState }) {
-    const { profile, summary, education, experience, projects, skills, certifications, achievements } = state
-    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
-
-    const SectionHeader = ({ title }: { title: string }) => (
+function ReziStandardSectionHeader({ title }: { title: string }) {
+    return (
         <div style={{ fontSize: '9pt', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', borderBottom: '0.5px solid #e2e8f0', paddingBottom: '2pt', marginBottom: '6pt', color: '#374151' }}>{title}</div>
     )
+}
+
+function ReziStandardResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
+    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
+    const reziStdSkillFields = [
+        ['languages', 'Technical'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Core Competencies'],
+    ] as const
 
     return (
         <div style={{ fontFamily: "'Helvetica Neue', Arial, sans-serif", fontSize: '10.5pt', lineHeight: 1.4, color: '#111', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             <div style={{ textAlign: 'center', fontWeight: 300, fontSize: '17pt', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '3pt' }}>
                 {profile.name || 'Your Name'}
             </div>
@@ -1889,12 +2037,15 @@ function ReziStandardResumePreview({ state }: { state: ResumeEditorState }) {
                 </div>
             )}
             <hr style={{ border: 'none', borderTop: '0.5px solid #bbb', margin: '4pt 0 10pt' }} />
-            {summary && (
-                <div style={{ marginBottom: '10pt', fontSize: '10pt', lineHeight: 1.5, color: '#333' }}>{summary}</div>
-            )}
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') return <div style={{ marginBottom: '10pt' }}><GhostBox text={deco.text} /></div>
+                if (!summary) return null
+                return <div style={{ marginBottom: '10pt', fontSize: '10pt', lineHeight: 1.5, color: '#333', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+            })()}
             {education.length > 0 && (
                 <section style={{ marginBottom: '10pt' }}>
-                    <SectionHeader title="Education" />
+                    <ReziStandardSectionHeader title="Education" />
                     {education.map((edu, i) => {
                         const showDegree = edu.degree && !sameText(edu.degree, edu.school)
                         return (
@@ -1911,7 +2062,7 @@ function ReziStandardResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {experience.length > 0 && (
                 <section style={{ marginBottom: '10pt' }}>
-                    <SectionHeader title="Experience" />
+                    <ReziStandardSectionHeader title="Experience" />
                     {experience.map((exp, i) => (
                         <div key={i} style={{ marginBottom: '8pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1919,49 +2070,63 @@ function ReziStandardResumePreview({ state }: { state: ResumeEditorState }) {
                                 <span style={{ fontSize: '9pt', color: '#888' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
                             </div>
                             <div style={{ fontSize: '9.5pt', color: '#666', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
-                            {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                                    <span style={{ color: '#bbb', flexShrink: 0 }}>–</span>
-                                    <BoldRender text={b} />
-                                </div>
-                            ))}
+                            {exp.bullets.map((b, j) => {
+                                const deco = decoFor('experience', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                                return (
+                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <span style={{ color: '#bbb', flexShrink: 0 }}>–</span>
+                                        <BoldRender text={b} />
+                                    </div>
+                                )
+                            })}
                         </div>
                     ))}
                 </section>
             )}
             {projects.length > 0 && (
                 <section style={{ marginBottom: '10pt' }}>
-                    <SectionHeader title="Projects" />
+                    <ReziStandardSectionHeader title="Projects" />
                     {projects.map((proj, i) => (
                         <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ fontWeight: 600 }}>{proj.name}</span>
                                 <span style={{ fontSize: '9pt', color: '#888' }}>{proj.date}</span>
                             </div>
-                            {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                                    <span style={{ color: '#bbb', flexShrink: 0 }}>–</span>
-                                    <BoldRender text={b} />
-                                </div>
-                            ))}
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                                return (
+                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <span style={{ color: '#bbb', flexShrink: 0 }}>–</span>
+                                        <BoldRender text={b} />
+                                    </div>
+                                )
+                            })}
                         </div>
                     ))}
                 </section>
             )}
-            {hasSkills && (
+            {(hasSkills || reziStdSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
                 <section style={{ marginBottom: '10pt' }}>
-                    <SectionHeader title="Technical Skills" />
+                    <ReziStandardSectionHeader title="Technical Skills" />
                     <div style={{ fontSize: '10pt', lineHeight: 1.7, color: '#333' }}>
-                        {skills.languages && <div><span style={{ fontWeight: 600 }}>Technical: </span>{skills.languages}</div>}
-                        {skills.tools && <div><span style={{ fontWeight: 600 }}>Tools: </span>{skills.tools}</div>}
-                        {skills.frameworks && <div><span style={{ fontWeight: 600 }}>Frameworks: </span>{skills.frameworks}</div>}
-                        {skills.soft && <div><span style={{ fontWeight: 600 }}>Core Competencies: </span>{skills.soft}</div>}
+                        {reziStdSkillFields.map(([field, label]) => {
+                            const deco = decoFor('skills', undefined, undefined, field)
+                            if (deco?.kind === 'ghost') {
+                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 600 }}>{label}: </span>} />
+                            }
+                            if (!skills[field]) return null
+                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 600 }}>{label}: </span>{skills[field]}</div>
+                        })}
                     </div>
                 </section>
             )}
             {certifications.length > 0 && (
                 <section style={{ marginBottom: '10pt' }}>
-                    <SectionHeader title="Certifications" />
+                    <ReziStandardSectionHeader title="Certifications" />
                     {certifications.map((cert, i) => (
                         <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
                             <span style={{ color: '#bbb', flexShrink: 0 }}>–</span><span>{cert}</span>
@@ -1971,7 +2136,7 @@ function ReziStandardResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {achievements.length > 0 && (
                 <section style={{ marginBottom: '10pt' }}>
-                    <SectionHeader title="Achievements" />
+                    <ReziStandardSectionHeader title="Achievements" />
                     {achievements.map((ach, i) => (
                         <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
                             <span style={{ color: '#bbb', flexShrink: 0 }}>–</span><span>{ach}</span>
@@ -1984,21 +2149,31 @@ function ReziStandardResumePreview({ state }: { state: ResumeEditorState }) {
 }
 
 // ── London Resume Preview (HTML) ──────────────────────────
-function LondonResumePreview({ state }: { state: ResumeEditorState }) {
-    const { profile, summary, education, experience, projects, skills, certifications, achievements } = state
-    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
-
-    const ExtendingHeader = ({ title }: { title: string }) => (
+function LondonExtendingHeader({ title }: { title: string }) {
+    return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10pt 0 6pt' }}>
             <div style={{ flex: 1, borderTop: '0.75px solid #aaa' }} />
             <span style={{ fontSize: '10pt', fontStyle: 'italic', fontWeight: 600, color: '#444', whiteSpace: 'nowrap' }}>{title}</span>
             <div style={{ flex: 1, borderTop: '0.75px solid #aaa' }} />
         </div>
     )
+}
+
+function LondonResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
+    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
+    const londonSkillFields = [
+        ['languages', 'Technical'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Core Competencies'],
+    ] as const
 
     return (
         <div style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: '10.5pt', lineHeight: 1.45, color: '#1a1a1a', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             <div style={{ textAlign: 'center', fontSize: '19pt', fontWeight: 700, fontStyle: 'italic', letterSpacing: '0.01em', marginBottom: '2pt' }}>
                 {profile.name || 'Your Name'}
             </div>
@@ -2007,15 +2182,22 @@ function LondonResumePreview({ state }: { state: ResumeEditorState }) {
                     {contactParts.join(' · ')}
                 </div>
             )}
-            {summary && (
-                <>
-                    <ExtendingHeader title="Profile" />
-                    <div style={{ fontSize: '10pt', lineHeight: 1.55, color: '#333' }}>{summary}</div>
-                </>
-            )}
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') {
+                    return <><LondonExtendingHeader title="Profile" /><GhostBox text={deco.text} /></>
+                }
+                if (!summary) return null
+                return (
+                    <>
+                        <LondonExtendingHeader title="Profile" />
+                        <div style={{ fontSize: '10pt', lineHeight: 1.55, color: '#333', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+                    </>
+                )
+            })()}
             {education.length > 0 && (
                 <section>
-                    <ExtendingHeader title="Education" />
+                    <LondonExtendingHeader title="Education" />
                     {education.map((edu, i) => {
                         const showDegree = edu.degree && !sameText(edu.degree, edu.school)
                         return (
@@ -2032,7 +2214,7 @@ function LondonResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {experience.length > 0 && (
                 <section>
-                    <ExtendingHeader title="Experience" />
+                    <LondonExtendingHeader title="Experience" />
                     {experience.map((exp, i) => (
                         <div key={i} style={{ marginBottom: '8pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2040,49 +2222,63 @@ function LondonResumePreview({ state }: { state: ResumeEditorState }) {
                                 <span style={{ fontSize: '9pt', color: '#777', fontStyle: 'italic' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
                             </div>
                             <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#666', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
-                            {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                                    <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span>
-                                    <BoldRender text={b} />
-                                </div>
-                            ))}
+                            {exp.bullets.map((b, j) => {
+                                const deco = decoFor('experience', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                                return (
+                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span>
+                                        <BoldRender text={b} />
+                                    </div>
+                                )
+                            })}
                         </div>
                     ))}
                 </section>
             )}
             {projects.length > 0 && (
                 <section>
-                    <ExtendingHeader title="Projects" />
+                    <LondonExtendingHeader title="Projects" />
                     {projects.map((proj, i) => (
                         <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ fontWeight: 700 }}>{proj.name}</span>
                                 <span style={{ fontSize: '9pt', color: '#777', fontStyle: 'italic' }}>{proj.date}</span>
                             </div>
-                            {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                                    <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span>
-                                    <BoldRender text={b} />
-                                </div>
-                            ))}
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                                return (
+                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span>
+                                        <BoldRender text={b} />
+                                    </div>
+                                )
+                            })}
                         </div>
                     ))}
                 </section>
             )}
-            {hasSkills && (
+            {(hasSkills || londonSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
                 <section>
-                    <ExtendingHeader title="Skills" />
+                    <LondonExtendingHeader title="Skills" />
                     <div style={{ fontSize: '10pt', lineHeight: 1.7, color: '#444' }}>
-                        {skills.languages && <div><span style={{ fontWeight: 700 }}>Technical: </span>{skills.languages}</div>}
-                        {skills.tools && <div><span style={{ fontWeight: 700 }}>Tools: </span>{skills.tools}</div>}
-                        {skills.frameworks && <div><span style={{ fontWeight: 700 }}>Frameworks: </span>{skills.frameworks}</div>}
-                        {skills.soft && <div><span style={{ fontWeight: 700 }}>Core Competencies: </span>{skills.soft}</div>}
+                        {londonSkillFields.map(([field, label]) => {
+                            const deco = decoFor('skills', undefined, undefined, field)
+                            if (deco?.kind === 'ghost') {
+                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
+                            }
+                            if (!skills[field]) return null
+                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
+                        })}
                     </div>
                 </section>
             )}
             {certifications.length > 0 && (
                 <section>
-                    <ExtendingHeader title="Certifications" />
+                    <LondonExtendingHeader title="Certifications" />
                     {certifications.map((cert, i) => (
                         <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
                             <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span><span>{cert}</span>
@@ -2092,7 +2288,7 @@ function LondonResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {achievements.length > 0 && (
                 <section>
-                    <ExtendingHeader title="Achievements" />
+                    <LondonExtendingHeader title="Achievements" />
                     {achievements.map((ach, i) => (
                         <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
                             <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span><span>{ach}</span>
@@ -2105,23 +2301,34 @@ function LondonResumePreview({ state }: { state: ResumeEditorState }) {
 }
 
 // ── Stitch Resume Preview (HTML) ──────────────────────────
-function StitchResumePreview({ state }: { state: ResumeEditorState }) {
-    const { profile, summary, education, experience, projects, skills, certifications, achievements, leadership } = state
-    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
-    const NAVY = '#1e3a5f'
+const STITCH_NAVY = '#1e3a5f'
 
-    const SectionHead = ({ title }: { title: string }) => (
+function StitchSectionHead({ title }: { title: string }) {
+    return (
         <div style={{ marginTop: '12pt', marginBottom: '5pt' }}>
-            <div style={{ fontSize: '8.5pt', fontWeight: 700, letterSpacing: '1.5pt', textTransform: 'uppercase' as const, color: NAVY, paddingBottom: '2pt', borderBottom: `0.75px solid ${NAVY}` }}>
+            <div style={{ fontSize: '8.5pt', fontWeight: 700, letterSpacing: '1.5pt', textTransform: 'uppercase' as const, color: STITCH_NAVY, paddingBottom: '2pt', borderBottom: `0.75px solid ${STITCH_NAVY}` }}>
                 {title}
             </div>
         </div>
     )
+}
+
+function StitchResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, certifications, achievements, leadership } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
+    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
+    const stitchSkillFields = [
+        ['languages', 'Technical'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Core Competencies'],
+    ] as const
 
     return (
         <div style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: '10pt', lineHeight: 1.5, color: '#222', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
-            <div style={{ textAlign: 'center', fontSize: '20pt', fontWeight: 400, color: NAVY, letterSpacing: '0.5pt', marginBottom: '4pt' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
+            <div style={{ textAlign: 'center', fontSize: '20pt', fontWeight: 400, color: STITCH_NAVY, letterSpacing: '0.5pt', marginBottom: '4pt' }}>
                 {profile.name || 'Your Name'}
             </div>
             {contactParts.length > 0 && (
@@ -2129,13 +2336,16 @@ function StitchResumePreview({ state }: { state: ResumeEditorState }) {
                     {contactParts.join('  |  ')}
                 </div>
             )}
-            <div style={{ borderTop: `1px solid ${NAVY}`, marginBottom: '2pt' }} />
-            {summary && (
-                <div style={{ fontSize: '9.5pt', lineHeight: 1.55, color: '#333', fontStyle: 'italic', marginTop: '8pt' }}>{summary}</div>
-            )}
+            <div style={{ borderTop: `1px solid ${STITCH_NAVY}`, marginBottom: '2pt' }} />
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') return <div style={{ marginTop: '8pt' }}><GhostBox text={deco.text} /></div>
+                if (!summary) return null
+                return <div style={{ fontSize: '9.5pt', lineHeight: 1.55, color: '#333', fontStyle: 'italic', marginTop: '8pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+            })()}
             {education.length > 0 && (
                 <section>
-                    <SectionHead title="Education" />
+                    <StitchSectionHead title="Education" />
                     {education.map((edu, i) => {
                         const showDegree = edu.degree && !sameText(edu.degree, edu.school)
                         return (
@@ -2153,7 +2363,7 @@ function StitchResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {experience.length > 0 && (
                 <section>
-                    <SectionHead title="Experience" />
+                    <StitchSectionHead title="Experience" />
                     {experience.map((exp, i) => (
                         <div key={i} style={{ marginBottom: '8pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2161,69 +2371,83 @@ function StitchResumePreview({ state }: { state: ResumeEditorState }) {
                                 <span style={{ fontSize: '8.5pt', color: '#666' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
                             </div>
                             <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
-                            {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                <div key={j} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt' }}>
-                                    <span style={{ color: NAVY, flexShrink: 0, fontWeight: 700 }}>—</span>
-                                    <BoldRender text={b} />
-                                </div>
-                            ))}
+                            {exp.bullets.map((b, j) => {
+                                const deco = decoFor('experience', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                                return (
+                                    <div key={j} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span>
+                                        <BoldRender text={b} />
+                                    </div>
+                                )
+                            })}
                         </div>
                     ))}
                 </section>
             )}
             {projects.length > 0 && (
                 <section>
-                    <SectionHead title="Projects" />
+                    <StitchSectionHead title="Projects" />
                     {projects.map((proj, i) => (
                         <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ fontWeight: 700 }}>{proj.name}{proj.tech ? <span style={{ fontWeight: 400, fontStyle: 'italic', color: '#666' }}>{'  |  '}{proj.tech}</span> : ''}</span>
                                 <span style={{ fontSize: '8.5pt', color: '#666' }}>{proj.date}</span>
                             </div>
-                            {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                <div key={j} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt' }}>
-                                    <span style={{ color: NAVY, flexShrink: 0, fontWeight: 700 }}>—</span>
-                                    <BoldRender text={b} />
-                                </div>
-                            ))}
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                                return (
+                                    <div key={j} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span>
+                                        <BoldRender text={b} />
+                                    </div>
+                                )
+                            })}
                         </div>
                     ))}
                 </section>
             )}
-            {hasSkills && (
+            {(hasSkills || stitchSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
                 <section>
-                    <SectionHead title="Skills" />
+                    <StitchSectionHead title="Skills" />
                     <div style={{ fontSize: '9.5pt', lineHeight: 1.6, color: '#333' }}>
-                        {skills.languages && <div><span style={{ fontWeight: 700, color: NAVY }}>Technical: </span>{skills.languages}</div>}
-                        {skills.tools && <div><span style={{ fontWeight: 700, color: NAVY }}>Tools: </span>{skills.tools}</div>}
-                        {skills.frameworks && <div><span style={{ fontWeight: 700, color: NAVY }}>Frameworks: </span>{skills.frameworks}</div>}
-                        {skills.soft && <div><span style={{ fontWeight: 700, color: NAVY }}>Core Competencies: </span>{skills.soft}</div>}
+                        {stitchSkillFields.map(([field, label]) => {
+                            const deco = decoFor('skills', undefined, undefined, field)
+                            if (deco?.kind === 'ghost') {
+                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700, color: STITCH_NAVY }}>{label}: </span>} />
+                            }
+                            if (!skills[field]) return null
+                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700, color: STITCH_NAVY }}>{label}: </span>{skills[field]}</div>
+                        })}
                     </div>
                 </section>
             )}
             {certifications.length > 0 && (
                 <section>
-                    <SectionHead title="Certifications" />
+                    <StitchSectionHead title="Certifications" />
                     {certifications.map((cert, i) => (
                         <div key={i} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt' }}>
-                            <span style={{ color: NAVY, flexShrink: 0, fontWeight: 700 }}>—</span><span>{cert}</span>
+                            <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span><span>{cert}</span>
                         </div>
                     ))}
                 </section>
             )}
             {achievements.length > 0 && (
                 <section>
-                    <SectionHead title="Achievements" />
+                    <StitchSectionHead title="Achievements" />
                     {achievements.map((ach, i) => (
                         <div key={i} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt' }}>
-                            <span style={{ color: NAVY, flexShrink: 0, fontWeight: 700 }}>—</span><span>{ach}</span>
+                            <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span><span>{ach}</span>
                         </div>
                     ))}
                 </section>
             )}
             {leadership.length > 0 && (
                 <section>
-                    <SectionHead title="Leadership" />
+                    <StitchSectionHead title="Leadership" />
                     {leadership.map((lead, i) => (
                         <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2233,7 +2457,7 @@ function StitchResumePreview({ state }: { state: ResumeEditorState }) {
                             {lead.role && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555' }}>{lead.role}</div>}
                             {lead.bullets.filter(b => b.trim()).map((b, j) => (
                                 <div key={j} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt' }}>
-                                    <span style={{ color: NAVY, flexShrink: 0, fontWeight: 700 }}>—</span>
+                                    <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span>
                                     <BoldRender text={b} />
                                 </div>
                             ))}
@@ -2246,19 +2470,29 @@ function StitchResumePreview({ state }: { state: ResumeEditorState }) {
 }
 
 // ── Harvard Resume Preview (HTML) ─────────────────────────
-function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
-    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
-    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
-
-    const SectionHead = ({ title }: { title: string }) => (
+function HarvardSectionHead({ title }: { title: string }) {
+    return (
         <div style={{ marginTop: '12pt', marginBottom: '5pt' }}>
             <span style={{ fontSize: '10.5pt', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, textDecoration: 'underline' }}>{title}</span>
         </div>
     )
+}
+
+function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
+    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
+    const harvardSkillFields = [
+        ['languages', 'Technical'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Interests'],
+    ] as const
 
     return (
         <div style={{ fontFamily: "'Georgia', 'Merriweather', 'Times New Roman', serif", fontSize: '10.5pt', lineHeight: 1.4, color: '#000', padding: '42pt 54pt', minHeight: '100%', background: '#fff' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             <div style={{ textAlign: 'center', fontSize: '18pt', fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '3pt' }}>
                 {profile.name || 'Your Name'}
             </div>
@@ -2268,12 +2502,15 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
                 </div>
             )}
             <hr style={{ border: 'none', borderTop: '0.75px solid #000', margin: '6pt 0 2pt' }} />
-            {summary && (
-                <div style={{ marginTop: '8pt', fontSize: '10pt', lineHeight: 1.5 }}>{summary}</div>
-            )}
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') return <div style={{ marginTop: '8pt' }}><GhostBox text={deco.text} /></div>
+                if (!summary) return null
+                return <div style={{ marginTop: '8pt', fontSize: '10pt', lineHeight: 1.5, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+            })()}
             {education.length > 0 && (
                 <section>
-                    <SectionHead title="Education" />
+                    <HarvardSectionHead title="Education" />
                     {education.map((edu, i) => {
                         const eduTop = edu.school || 'University'
                         const showDegree = edu.degree && !sameText(edu.degree, eduTop)
@@ -2300,7 +2537,7 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {experience.length > 0 && (
                 <section>
-                    <SectionHead title="Experience" />
+                    <HarvardSectionHead title="Experience" />
                     {experience.map((exp, i) => (
                         <div key={i} style={{ marginBottom: '8pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -2313,22 +2550,27 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
                                     {[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}
                                 </span>
                             </div>
-                            {exp.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4 }}>
+                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
                                             <BoldRender text={b} />
                                         </li>
-                                    ))}
-                                </ul>
-                            )}
+                                    )
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </section>
             )}
             {projects.length > 0 && (
                 <section>
-                    <SectionHead title="Projects" />
+                    <HarvardSectionHead title="Projects" />
                     {projects.map((proj, i) => (
                         <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -2337,22 +2579,27 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
                                 </span>
                                 <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>{proj.date}</span>
                             </div>
-                            {proj.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4 }}>
+                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {proj.bullets.map((b, j) => {
+                                    const deco = decoFor('projects', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
                                             <BoldRender text={b} />
                                         </li>
-                                    ))}
-                                </ul>
-                            )}
+                                    )
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </section>
             )}
             {leadership.length > 0 && (
                 <section>
-                    <SectionHead title="Leadership & Activities" />
+                    <HarvardSectionHead title="Leadership & Activities" />
                     {leadership.map((lead, i) => (
                         <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2371,20 +2618,24 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
                     ))}
                 </section>
             )}
-            {hasSkills && (
+            {(hasSkills || harvardSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
                 <section>
-                    <SectionHead title="Skills & Interests" />
+                    <HarvardSectionHead title="Skills & Interests" />
                     <div style={{ fontSize: '10pt', lineHeight: 1.5 }}>
-                        {skills.languages && <div><span style={{ fontWeight: 700 }}>Technical: </span>{skills.languages}</div>}
-                        {skills.tools && <div><span style={{ fontWeight: 700 }}>Tools: </span>{skills.tools}</div>}
-                        {skills.frameworks && <div><span style={{ fontWeight: 700 }}>Frameworks: </span>{skills.frameworks}</div>}
-                        {skills.soft && <div><span style={{ fontWeight: 700 }}>Interests: </span>{skills.soft}</div>}
+                        {harvardSkillFields.map(([field, label]) => {
+                            const deco = decoFor('skills', undefined, undefined, field)
+                            if (deco?.kind === 'ghost') {
+                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
+                            }
+                            if (!skills[field]) return null
+                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
+                        })}
                     </div>
                 </section>
             )}
             {certifications.length > 0 && (
                 <section>
-                    <SectionHead title="Certifications" />
+                    <HarvardSectionHead title="Certifications" />
                     <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
                         {certifications.map((c, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{c}</li>))}
                     </ul>
@@ -2392,7 +2643,7 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {achievements.length > 0 && (
                 <section>
-                    <SectionHead title="Honors & Awards" />
+                    <HarvardSectionHead title="Honors & Awards" />
                     <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
                         {achievements.map((a, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{a}</li>))}
                     </ul>
@@ -2403,19 +2654,29 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
 }
 
 // ── sb2nov Resume Preview (HTML) ──────────────────────────
-function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
-    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
-    const contactParts = [profile.phone, profile.email, profile.linkedin, profile.github, profile.location, profile.portfolio].filter(Boolean)
-    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
-
-    const SectionHead = ({ title }: { title: string }) => (
+function Sb2novSectionHead({ title }: { title: string }) {
+    return (
         <div style={{ marginTop: '10pt', marginBottom: '3pt' }}>
             <div style={{ fontSize: '11pt', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, borderBottom: '0.6px solid #000', paddingBottom: '1pt' }}>{title}</div>
         </div>
     )
+}
+
+function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+    const contactParts = [profile.phone, profile.email, profile.linkedin, profile.github, profile.location, profile.portfolio].filter(Boolean)
+    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
+    const sb2novSkillFields = [
+        ['languages', 'Languages'], ['frameworks', 'Frameworks'], ['tools', 'Tools'], ['soft', 'Other'],
+    ] as const
 
     return (
         <div style={{ fontFamily: "'Lora', 'Georgia', serif", fontSize: '10.5pt', lineHeight: 1.4, color: '#000', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
             <div style={{ textAlign: 'center', fontSize: '22pt', fontWeight: 700, letterSpacing: '0.04em', lineHeight: 1.15 }}>
                 {profile.name || 'Your Name'}
             </div>
@@ -2424,12 +2685,15 @@ function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
                     {contactParts.join('  |  ')}
                 </div>
             )}
-            {summary && (
-                <div style={{ marginTop: '6pt', fontSize: '10pt', lineHeight: 1.45 }}>{summary}</div>
-            )}
+            {(() => {
+                const deco = decoFor('summary')
+                if (deco?.kind === 'ghost') return <div style={{ marginTop: '6pt' }}><GhostBox text={deco.text} /></div>
+                if (!summary) return null
+                return <div style={{ marginTop: '6pt', fontSize: '10pt', lineHeight: 1.45, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+            })()}
             {education.length > 0 && (
                 <section>
-                    <SectionHead title="Education" />
+                    <Sb2novSectionHead title="Education" />
                     {education.map((edu, i) => {
                         const eduTop = edu.school || 'University'
                         const showDegree = edu.degree && !sameText(edu.degree, eduTop)
@@ -2448,7 +2712,7 @@ function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {experience.length > 0 && (
                 <section>
-                    <SectionHead title="Experience" />
+                    <Sb2novSectionHead title="Experience" />
                     {experience.map((exp, i) => (
                         <div key={i} style={{ marginBottom: '7pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2459,23 +2723,28 @@ function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
                                 <span style={{ fontStyle: 'italic', fontSize: '10pt' }}>{exp.title}</span>
                                 {exp.location && <span style={{ fontStyle: 'italic', fontSize: '10pt', color: '#333' }}>{exp.location}</span>}
                             </div>
-                            {exp.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
-                                    {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.4, position: 'relative' as const }}>
+                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', marginLeft: '-18pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.4, position: 'relative' as const, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
                                             <span style={{ position: 'absolute' as const, left: '-12pt' }}>◦</span>
                                             <BoldRender text={b} />
                                         </li>
-                                    ))}
-                                </ul>
-                            )}
+                                    )
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </section>
             )}
             {projects.length > 0 && (
                 <section>
-                    <SectionHead title="Projects" />
+                    <Sb2novSectionHead title="Projects" />
                     {projects.map((proj, i) => (
                         <div key={i} style={{ marginBottom: '5pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2484,34 +2753,43 @@ function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
                                 </span>
                                 <span style={{ fontSize: '10pt', color: '#222' }}>{proj.date}</span>
                             </div>
-                            {proj.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
-                                    {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.4, position: 'relative' as const }}>
+                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
+                                {proj.bullets.map((b, j) => {
+                                    const deco = decoFor('projects', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', marginLeft: '-18pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.4, position: 'relative' as const, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
                                             <span style={{ position: 'absolute' as const, left: '-12pt' }}>◦</span>
                                             <BoldRender text={b} />
                                         </li>
-                                    ))}
-                                </ul>
-                            )}
+                                    )
+                                })}
+                            </ul>
                         </div>
                     ))}
                 </section>
             )}
-            {hasSkills && (
+            {(hasSkills || sb2novSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
                 <section>
-                    <SectionHead title="Technical Skills" />
+                    <Sb2novSectionHead title="Technical Skills" />
                     <div style={{ fontSize: '10pt', lineHeight: 1.5 }}>
-                        {skills.languages && <div><span style={{ fontWeight: 700 }}>Languages: </span>{skills.languages}</div>}
-                        {skills.frameworks && <div><span style={{ fontWeight: 700 }}>Frameworks: </span>{skills.frameworks}</div>}
-                        {skills.tools && <div><span style={{ fontWeight: 700 }}>Tools: </span>{skills.tools}</div>}
-                        {skills.soft && <div><span style={{ fontWeight: 700 }}>Other: </span>{skills.soft}</div>}
+                        {sb2novSkillFields.map(([field, label]) => {
+                            const deco = decoFor('skills', undefined, undefined, field)
+                            if (deco?.kind === 'ghost') {
+                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
+                            }
+                            if (!skills[field]) return null
+                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
+                        })}
                     </div>
                 </section>
             )}
             {leadership.length > 0 && (
                 <section>
-                    <SectionHead title="Leadership" />
+                    <Sb2novSectionHead title="Leadership" />
                     {leadership.map((lead, i) => (
                         <div key={i} style={{ marginBottom: '5pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2534,7 +2812,7 @@ function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {certifications.length > 0 && (
                 <section>
-                    <SectionHead title="Certifications" />
+                    <Sb2novSectionHead title="Certifications" />
                     <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
                         {certifications.map((c, i) => (
                             <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt', position: 'relative' as const }}>
@@ -2546,7 +2824,7 @@ function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
             )}
             {achievements.length > 0 && (
                 <section>
-                    <SectionHead title="Honors & Awards" />
+                    <Sb2novSectionHead title="Honors & Awards" />
                     <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
                         {achievements.map((a, i) => (
                             <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt', position: 'relative' as const }}>
@@ -2561,30 +2839,44 @@ function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
 }
 
 // ── Open Resume Preview (HTML) ────────────────────────────
-function OpenResumePreview({ state }: { state: ResumeEditorState }) {
-    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
-    const contactParts = [profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
-    const ACCENT = '#38bdf8'
-    const TEXT = '#171717'
+const OPENRESUME_ACCENT = '#38bdf8'
+const OPENRESUME_TEXT = '#171717'
 
-    const SectionHead = ({ title }: { title: string }) => (
+function OpenResumeSectionHead({ title }: { title: string }) {
+    return (
         <div style={{ display: 'flex', alignItems: 'center', marginTop: '14pt', marginBottom: '6pt' }}>
-            <div style={{ width: '26pt', height: '3.5pt', background: ACCENT, marginRight: '8pt' }} />
-            <span style={{ fontSize: '11pt', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' as const, color: TEXT }}>{title}</span>
+            <div style={{ width: '26pt', height: '3.5pt', background: OPENRESUME_ACCENT, marginRight: '8pt' }} />
+            <span style={{ fontSize: '11pt', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' as const, color: OPENRESUME_TEXT }}>{title}</span>
         </div>
     )
+}
+
+function OpenResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+    const contactParts = [profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
+    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
+    const openResumeSkillFields = [
+        ['languages', 'Languages'], ['frameworks', 'Frameworks'], ['tools', 'Tools'], ['soft', 'Other'],
+    ] as const
 
     return (
-        <div style={{ fontFamily: "'Roboto', 'Helvetica Neue', Arial, sans-serif", fontSize: '10.5pt', lineHeight: 1.4, color: TEXT, background: '#fff', minHeight: '100%' }}>
-            <div style={{ width: '100%', height: '12pt', background: ACCENT }} />
+        <div style={{ fontFamily: "'Roboto', 'Helvetica Neue', Arial, sans-serif", fontSize: '10.5pt', lineHeight: 1.4, color: OPENRESUME_TEXT, background: '#fff', minHeight: '100%' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
+            <div style={{ width: '100%', height: '12pt', background: OPENRESUME_ACCENT }} />
             <div style={{ padding: '32pt 40pt' }}>
-                <div style={{ fontSize: '22pt', fontWeight: 700, color: ACCENT, lineHeight: 1.15 }}>
+                <div style={{ fontSize: '22pt', fontWeight: 700, color: OPENRESUME_ACCENT, lineHeight: 1.15 }}>
                     {profile.name || 'Your Name'}
                 </div>
-                {summary && (
-                    <div style={{ marginTop: '4pt', fontSize: '10pt', lineHeight: 1.45 }}>{summary}</div>
-                )}
+                {(() => {
+                    const deco = decoFor('summary')
+                    if (deco?.kind === 'ghost') return <div style={{ marginTop: '4pt' }}><GhostBox text={deco.text} /></div>
+                    if (!summary) return null
+                    return <div style={{ marginTop: '4pt', fontSize: '10pt', lineHeight: 1.45, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+                })()}
                 {contactParts.length > 0 && (
                     <div style={{ fontSize: '9.5pt', color: '#404040', marginTop: '4pt' }}>
                         {contactParts.join('   ·   ')}
@@ -2592,7 +2884,7 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
                 )}
                 {experience.length > 0 && (
                     <section>
-                        <SectionHead title="Work Experience" />
+                        <OpenResumeSectionHead title="Work Experience" />
                         {experience.map((exp, i) => (
                             <div key={i} style={{ marginBottom: '6pt' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -2603,22 +2895,27 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
                                     <span style={{ fontSize: '10pt' }}>{exp.title}</span>
                                     {exp.location && <span style={{ fontSize: '9.5pt', color: '#525252' }}>{exp.location}</span>}
                                 </div>
-                                {exp.bullets.filter(b => b.trim()).length > 0 && (
-                                    <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                        {exp.bullets.filter(b => b.trim()).map((b, j) => (
-                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4 }}>
+                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                    {exp.bullets.map((b, j) => {
+                                        const deco = decoFor('experience', i, j)
+                                        if (!b.trim() && deco?.kind !== 'ghost') return null
+                                        if (deco?.kind === 'ghost') {
+                                            return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                        }
+                                        return (
+                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
                                                 <BoldRender text={b} />
                                             </li>
-                                        ))}
-                                    </ul>
-                                )}
+                                        )
+                                    })}
+                                </ul>
                             </div>
                         ))}
                     </section>
                 )}
                 {education.length > 0 && (
                     <section>
-                        <SectionHead title="Education" />
+                        <OpenResumeSectionHead title="Education" />
                         {education.map((edu, i) => {
                             const eduTop = edu.school || 'University'
                             const showDegree = edu.degree && !sameText(edu.degree, eduTop)
@@ -2643,7 +2940,7 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
                 )}
                 {projects.length > 0 && (
                     <section>
-                        <SectionHead title="Projects" />
+                        <OpenResumeSectionHead title="Projects" />
                         {projects.map((proj, i) => (
                             <div key={i} style={{ marginBottom: '5pt' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -2652,33 +2949,42 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
                                     </span>
                                     <span style={{ fontSize: '10pt', color: '#404040' }}>{proj.date}</span>
                                 </div>
-                                {proj.bullets.filter(b => b.trim()).length > 0 && (
-                                    <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                        {proj.bullets.filter(b => b.trim()).map((b, j) => (
-                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4 }}>
+                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                    {proj.bullets.map((b, j) => {
+                                        const deco = decoFor('projects', i, j)
+                                        if (!b.trim() && deco?.kind !== 'ghost') return null
+                                        if (deco?.kind === 'ghost') {
+                                            return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                        }
+                                        return (
+                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
                                                 <BoldRender text={b} />
                                             </li>
-                                        ))}
-                                    </ul>
-                                )}
+                                        )
+                                    })}
+                                </ul>
                             </div>
                         ))}
                     </section>
                 )}
-                {hasSkills && (
+                {(hasSkills || openResumeSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
                     <section>
-                        <SectionHead title="Skills" />
+                        <OpenResumeSectionHead title="Skills" />
                         <div style={{ fontSize: '10pt', lineHeight: 1.5 }}>
-                            {skills.languages && <div><span style={{ fontWeight: 700 }}>Languages: </span>{skills.languages}</div>}
-                            {skills.frameworks && <div><span style={{ fontWeight: 700 }}>Frameworks: </span>{skills.frameworks}</div>}
-                            {skills.tools && <div><span style={{ fontWeight: 700 }}>Tools: </span>{skills.tools}</div>}
-                            {skills.soft && <div><span style={{ fontWeight: 700 }}>Other: </span>{skills.soft}</div>}
+                            {openResumeSkillFields.map(([field, label]) => {
+                                const deco = decoFor('skills', undefined, undefined, field)
+                                if (deco?.kind === 'ghost') {
+                                    return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
+                                }
+                                if (!skills[field]) return null
+                                return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
+                            })}
                         </div>
                     </section>
                 )}
                 {leadership.length > 0 && (
                     <section>
-                        <SectionHead title="Leadership" />
+                        <OpenResumeSectionHead title="Leadership" />
                         {leadership.map((lead, i) => (
                             <div key={i} style={{ marginBottom: '5pt' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2699,7 +3005,7 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
                 )}
                 {certifications.length > 0 && (
                     <section>
-                        <SectionHead title="Certifications" />
+                        <OpenResumeSectionHead title="Certifications" />
                         <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
                             {certifications.map((c, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{c}</li>))}
                         </ul>
@@ -2707,7 +3013,7 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
                 )}
                 {achievements.length > 0 && (
                     <section>
-                        <SectionHead title="Achievements" />
+                        <OpenResumeSectionHead title="Achievements" />
                         <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
                             {achievements.map((a, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{a}</li>))}
                         </ul>
@@ -3989,9 +4295,41 @@ function MeridianResumeCard({
     )
 }
 
+// Sidebar toggle — a floating circular button that sits right ON the seam
+// between the sidebar and the editor column, near the top of the content
+// area (like a split-pane collapse handle). Given a persistent border +
+// shadow so it reads as a clickable control at rest, not just on hover.
+function SidebarToggleButton({ collapsed, onClick }: { collapsed: boolean; onClick: () => void }) {
+    const [hov, setHov] = useState(false)
+    return (
+        <button
+            onClick={onClick}
+            onMouseEnter={() => setHov(true)}
+            onMouseLeave={() => setHov(false)}
+            title={collapsed ? 'Show resumes panel' : 'Hide resumes panel'}
+            aria-label={collapsed ? 'Show resumes panel' : 'Hide resumes panel'}
+            style={{
+                position: 'absolute', top: 80, right: -18, zIndex: 20,
+                width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                background: hov ? M.accentLight : M.white,
+                border: `2px solid ${hov ? M.accentBorder : M.border}`,
+                boxShadow: '0 2px 8px rgba(15,30,64,0.2)',
+                color: hov ? M.accent : M.textMuted,
+                cursor: 'pointer', transition: 'all 0.13s',
+            }}
+        >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                {collapsed ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}
+            </svg>
+        </button>
+    )
+}
+
 function MeridianSidebar({
     resumes, selectedId, onSelect, onOptimizeNew, sourceResume,
     uploadedResumes, sourceResumeId, onSourceChange, optimizedCounts,
+    collapsed, onToggleCollapse,
 }: {
     resumes: SavedResumeEntry[]
     selectedId: string | null
@@ -4002,6 +4340,8 @@ function MeridianSidebar({
     sourceResumeId: string | null
     onSourceChange: (id: string | null) => void
     optimizedCounts: Record<string, number>
+    collapsed: boolean
+    onToggleCollapse: () => void
 }) {
     const [filter, setFilter] = useState('')
     const filtered = filter
@@ -4011,12 +4351,68 @@ function MeridianSidebar({
           })
         : resumes
 
+    if (collapsed) {
+        return (
+            <div style={{
+                width: 60, flexShrink: 0, background: M.white,
+                borderRight: `1px solid ${M.border}`,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%',
+                padding: '14px 0', gap: 10, transition: 'width 0.18s ease',
+                position: 'relative',
+            }}>
+                <SidebarToggleButton collapsed={collapsed} onClick={onToggleCollapse} />
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', width: '100%' }}>
+                    {resumes.map(r => {
+                        const sel = r.id === selectedId
+                        const company = r.job?.company ?? 'Untitled'
+                        const title = r.job?.title ?? 'Resume'
+                        const initial = (company || '?')[0].toUpperCase()
+                        return (
+                            <button
+                                key={r.id}
+                                onClick={() => onSelect(r.id)}
+                                title={`${title} · ${company}`}
+                                style={{
+                                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                                    background: sel ? M.accent : M.accentMid,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: '0.9375rem', fontWeight: 800, color: '#fff',
+                                    fontFamily: M.fontHeading, border: 'none', cursor: 'pointer',
+                                    boxShadow: sel ? `0 0 0 2px ${M.white}, 0 0 0 4px ${M.accent}` : 'none',
+                                    transition: 'all 0.15s',
+                                }}
+                            >{initial}</button>
+                        )
+                    })}
+                </div>
+                <button
+                    onClick={onOptimizeNew}
+                    title="Optimize New Job"
+                    aria-label="Optimize New Job"
+                    style={{
+                        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: M.accentLight, border: `1.5px dashed ${M.accentBorder}`,
+                        color: M.accent, cursor: 'pointer',
+                    }}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </button>
+            </div>
+        )
+    }
+
     return (
         <div style={{
             width: 340, flexShrink: 0, background: M.white,
             borderRight: `1px solid ${M.border}`,
             display: 'flex', flexDirection: 'column', height: '100%',
+            transition: 'width 0.18s ease',
+            position: 'relative',
         }}>
+            <SidebarToggleButton collapsed={collapsed} onClick={onToggleCollapse} />
             {/* ── Source resume picker (prominent, top-left) ── */}
             <div style={{
                 padding: '16px 16px 14px', flexShrink: 0,
@@ -4275,14 +4671,19 @@ function TemplateSwitcher({
 
 function MeridianPreviewPanel({
     state, templateId, onTemplateChange, onMoreTemplates, downloadButton,
+    coverLetterController, entry, job, profileState,
 }: {
     state: ResumeEditorState
     templateId: string
     onTemplateChange: (t: string) => void
     onMoreTemplates: () => void
     downloadButton: React.ReactNode
+    coverLetterController: ReturnType<typeof useCoverLetter>
+    entry: { resume_id: string; job_id: string } | null
+    job: { title?: string | null; company?: string | null; location?: string | null } | null
+    profileState: ResumeEditorState['profile']
 }) {
-    const [desktopPreviewTab, setDesktopPreviewTab] = useState<'recruiters' | 'ats'>('recruiters')
+    const [desktopPreviewTab, setDesktopPreviewTab] = useState<'recruiters' | 'cover-letter'>('recruiters')
 
     const renderPreview = () => {
         switch (templateId) {
@@ -4352,7 +4753,7 @@ function MeridianPreviewPanel({
             {/* Recruiter / ATS tab bar */}
             <div style={{ flexShrink: 0, background: M.white, borderBottom: `1px solid ${M.border}`, padding: '8px 20px', display: 'flex', gap: 6 }}>
                 <button onClick={() => setDesktopPreviewTab('recruiters')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: desktopPreviewTab === 'recruiters' ? '#0f172a' : 'transparent', color: desktopPreviewTab === 'recruiters' ? '#fff' : M.textMuted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What Recruiters See</button>
-                <button onClick={() => setDesktopPreviewTab('ats')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: desktopPreviewTab === 'ats' ? '#0f172a' : 'transparent', color: desktopPreviewTab === 'ats' ? '#fff' : M.textMuted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What ATS Sees</button>
+                <button onClick={() => setDesktopPreviewTab('cover-letter')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: desktopPreviewTab === 'cover-letter' ? '#0f172a' : 'transparent', color: desktopPreviewTab === 'cover-letter' ? '#fff' : M.textMuted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>Cover Letter</button>
             </div>
 
             {/* Paper */}
@@ -4370,12 +4771,7 @@ function MeridianPreviewPanel({
                     </div>
                 </div>
             ) : (
-                <div style={{ flex: 1, overflowY: 'auto', padding: '28px', background: M.surface }}>
-                    <div style={{ maxWidth: 700, margin: '0 auto', background: '#fff', borderRadius: 8, padding: 24, boxShadow: '0 2px 12px rgba(15,30,64,0.08)', fontFamily: M.fontBody }}>
-                        <div style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#94a3b8', marginBottom: 10 }}>ATS Plain Text Extract</div>
-                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, color: '#374151', lineHeight: 1.7, margin: 0 }}>{generateATSText(state)}</pre>
-                    </div>
-                </div>
+                <CoverLetterView controller={coverLetterController} entry={entry} job={job} profileState={profileState} />
             )}
         </div>
     )
@@ -4765,12 +5161,42 @@ export default function ResumesPage() {
     const [sourceResumeId, setSourceResumeId] = useState<string | null>(null)
     // ── Modal-based editor state ──
     const [openModalSection, setOpenModalSection] = useState<string | null>(null)
+    // ── Studio tab (desktop) ──
+    const [studioTab, setStudioTab] = useState<'sections' | 'assistant'>('sections')
+    // ── Sidebar collapse (desktop) — frees width for the editor/assistant + preview ──
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+    // useAssistant is a hook — must be called unconditionally, before the `!loaded`
+    // early return below, so it stays alongside the other top-level state hooks.
+    const assistant = useAssistant(
+        editorState, setEditorState, selectedEntry?.job?.title ?? null,
+        selectedEntry?.id ?? null, selectedEntry?.updated_at ?? null,
+    )
+    // Shared between the desktop panel and the mobile overlay so cache state
+    // and the in-flight guard survive a tab switch — see CoverLetterView.tsx.
+    const coverLetterController = useCoverLetter(selectedEntry?.resume_id ?? null, selectedEntry?.job_id ?? null)
+    // Manual section-modal saves (ActiveModal onSaved) — Plan 21 Phase 1 persistence.
+    // No-ops in raw-resume / localStorage-draft mode (selectedEntry is null there).
+    // Coverage is computed here (not read from assistant.coverage) because that
+    // state hasn't re-rendered yet at this point — update(local) just scheduled
+    // it — so reading it now would stamp the PRE-edit value onto edit_history.
+    const saveManualEdit = useCallback((section: string, before: unknown, after: unknown, nextState: ResumeEditorState) => {
+        if (!selectedEntry?.id) return
+        const id = selectedEntry.id
+        const coverage = computeKeywordCoverage(assistant.atsKeywords, generateATSText(nextState))
+        void persistEditorState(id, nextState, {
+            section, operation: 'replace', before, after, source: 'manual', coverage,
+        }, selectedEntry.updated_at).then(result => {
+            if (result.ok || result.stale) {
+                setSelectedEntry(prev => (prev && prev.id === id ? { ...prev, updated_at: result.updated_at } : prev))
+            }
+        })
+    }, [selectedEntry, assistant.atsKeywords])
     // ── Mobile state ──
     const [isMobile, setIsMobile] = useState(false)
-    const [mobileTab, setMobileTab] = useState<'sections' | 'templates'>('sections')
+    const [mobileTab, setMobileTab] = useState<'sections' | 'templates' | 'assistant'>('sections')
     const [showAllResumesSheet, setShowAllResumesSheet] = useState(false)
     const [showMobilePreview, setShowMobilePreview] = useState(false)
-    const [previewTab, setPreviewTab] = useState<'recruiters' | 'ats'>('recruiters')
+    const [previewTab, setPreviewTab] = useState<'recruiters' | 'cover-letter'>('recruiters')
     const [mobileSrcDropOpen, setMobileSrcDropOpen] = useState(false)
     const mobileSrcDropRef = useRef<HTMLDivElement>(null)
     const [previewingTemplate, setPreviewingTemplate] = useState<{ id: string; name: string; imageUrl: string } | null>(null)
@@ -4835,6 +5261,18 @@ export default function ResumesPage() {
         const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
         mq.addEventListener('change', handler)
         return () => mq.removeEventListener('change', handler)
+    }, [])
+
+    useEffect(() => {
+        setSidebarCollapsed(localStorage.getItem('jobscorer-resumes-sidebar-collapsed') === '1')
+    }, [])
+
+    const toggleSidebarCollapsed = useCallback(() => {
+        setSidebarCollapsed(prev => {
+            const next = !prev
+            localStorage.setItem('jobscorer-resumes-sidebar-collapsed', next ? '1' : '0')
+            return next
+        })
     }, [])
 
     useEffect(() => {
@@ -5001,6 +5439,32 @@ export default function ResumesPage() {
             <>
             <style>{`@keyframes m-spin{to{transform:rotate(360deg)}}`}</style>
 
+            {mobileTab === 'assistant' ? (
+                /* ── Full-screen Assistant mode: no persistent Studio bar/source
+                   dropdown/resume strip/tab bar — just a slim nav + full-bleed
+                   resume behind the sheet, matching the mobile handoff spec. */
+                <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', background: '#fff', fontFamily: M.fontBody, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 14px 12px', borderBottom: `1px solid ${M.border}`, flexShrink: 0, background: '#fff' }}>
+                        <button onClick={() => setMobileTab('sections')} aria-label="Back to Resume Studio" style={{ width: 34, height: 34, borderRadius: 9, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: M.text, flexShrink: 0, marginLeft: -6 }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+                        </button>
+                        <span style={{ flex: 1, fontSize: 21, fontWeight: 800, color: M.text, letterSpacing: '-0.02em' }}>Resume Studio</span>
+                        <button onClick={() => { setShowMobilePreview(true); setPreviewTab('recruiters') }} aria-label="More options" style={{ width: 34, height: 34, borderRadius: 9, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: M.text, flexShrink: 0 }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+                        </button>
+                    </div>
+                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: '#fff' }}>
+                            <PreviewDecorationsProvider decorations={assistant.decorations}>
+                                <div style={{ width: 700, zoom: 0.5, pointerEvents: 'none' }}>
+                                    {renderPreviewForTemplate(templateId)}
+                                </div>
+                            </PreviewDecorationsProvider>
+                        </div>
+                        <MobileAssistantSheet assistant={assistant} />
+                    </div>
+                </div>
+            ) : (
             <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', background: M.surface, fontFamily: M.fontBody, overflow: 'hidden' }}>
 
                 {/* ── Studio bar ── */}
@@ -5121,8 +5585,9 @@ export default function ResumesPage() {
                 <div style={{ background: M.white, borderBottom: `1.5px solid ${M.border}`, padding: '0 13px', display: 'flex', gap: 0, flexShrink: 0 }}>
                     {([
                         { id: 'sections', label: 'Sections', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg> },
+                        { id: 'assistant', label: 'Assistant', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/></svg> },
                         { id: 'templates', label: 'Templates', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
-                    ] as { id: 'sections' | 'templates'; label: string; icon: React.ReactNode }[]).map(tab => (
+                    ] as { id: 'sections' | 'assistant' | 'templates'; label: string; icon: React.ReactNode }[]).map(tab => (
                         <div key={tab.id} onClick={() => setMobileTab(tab.id)} style={{ padding: '10px 11px 8px', fontSize: '12.5px', fontWeight: mobileTab === tab.id ? 700 : 600, color: mobileTab === tab.id ? M.accent : M.textMuted, cursor: 'pointer', borderBottom: `2.5px solid ${mobileTab === tab.id ? M.accent : 'transparent'}`, marginBottom: '-1.5px', display: 'flex', alignItems: 'center', gap: 5, userSelect: 'none' as const }}>
                             {tab.icon}{tab.label}
                         </div>
@@ -5197,6 +5662,7 @@ export default function ResumesPage() {
                                     const accent = TMPL_ACCENT[id] ?? '#0f1e40'
                                     return (
                                         <div key={id} onClick={() => {
+                                            setPreviewTab('recruiters')
                                             setPreviewingTemplate({ id, name, imageUrl: TEMPLATE_IMAGES[id] ?? '' })
                                         }} style={{ border: `2px solid ${isActive ? M.accent : M.border}`, borderRadius: 11, overflow: 'hidden', cursor: 'pointer', background: M.white, transition: 'border-color .13s', boxShadow: isActive ? `0 0 0 3px rgba(29,106,245,0.1)` : 'none' }}>
                                             {/* Template thumbnail */}
@@ -5251,6 +5717,7 @@ export default function ResumesPage() {
                     )}
                 </div>
             </div>
+            )}
 
             {/* ── Template preview bottom sheet (mobile) ── */}
             {previewingTemplate && isMobile && (
@@ -5267,11 +5734,21 @@ export default function ResumesPage() {
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                             </button>
                         </div>
-                        <div className="mob-tmpl-preview-scroll">
-                            <div style={{ width: 700, zoom: 0.5, pointerEvents: 'none', background: '#fff' }}>
-                                {renderPreviewForTemplate(previewingTemplate.id)}
-                            </div>
+                        <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '8px 16px', display: 'flex', gap: 6, flexShrink: 0 }}>
+                            <button onClick={() => setPreviewTab('recruiters')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'recruiters' ? '#0f172a' : 'transparent', color: previewTab === 'recruiters' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What Recruiters See</button>
+                            <button onClick={() => setPreviewTab('cover-letter')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'cover-letter' ? '#0f172a' : 'transparent', color: previewTab === 'cover-letter' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>Cover Letter</button>
                         </div>
+                        {previewTab === 'recruiters' ? (
+                            <div className="mob-tmpl-preview-scroll">
+                                <div style={{ width: 700, zoom: 0.5, pointerEvents: 'none', background: '#fff' }}>
+                                    {renderPreviewForTemplate(previewingTemplate.id)}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mob-tmpl-preview-scroll">
+                                <CoverLetterView controller={coverLetterController} entry={selectedEntry} job={meridianJob} profileState={editorState.profile} compact />
+                            </div>
+                        )}
                         <div className="mob-tmpl-preview-footer">
                             <button onClick={() => setPreviewingTemplate(null)} style={{ flex: 1, padding: 11, border: '1.5px solid #e2e8f0', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 600, color: '#64748b', cursor: 'pointer', fontFamily: M.fontBody }}>
                                 Cancel
@@ -5289,7 +5766,7 @@ export default function ResumesPage() {
 
             {/* ── Section editor modal ── */}
             {openModalSection && (
-                <ActiveModal key={openModalSection} sectionKey={openModalSection} state={editorState} update={setEditorState} onClose={() => setOpenModalSection(null)} isMobile={isMobile} />
+                <ActiveModal key={openModalSection} sectionKey={openModalSection} state={editorState} update={setEditorState} onClose={() => setOpenModalSection(null)} isMobile={isMobile} onSaved={saveManualEdit} />
             )}
 
             {/* ── Template picker modal ── */}
@@ -5314,7 +5791,7 @@ export default function ResumesPage() {
                             {/* Recruiter / ATS tabs */}
                             <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '8px 14px', display: 'flex', gap: 6, flexShrink: 0 }}>
                                 <button onClick={() => setPreviewTab('recruiters')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'recruiters' ? '#0f172a' : 'transparent', color: previewTab === 'recruiters' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What Recruiters See</button>
-                                <button onClick={() => setPreviewTab('ats')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'ats' ? '#0f172a' : 'transparent', color: previewTab === 'ats' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>What ATS Sees</button>
+                                <button onClick={() => setPreviewTab('cover-letter')} style={{ flex: 1, padding: 7, borderRadius: 99, border: 'none', background: previewTab === 'cover-letter' ? '#0f172a' : 'transparent', color: previewTab === 'cover-letter' ? '#fff' : '#64748b', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}>Cover Letter</button>
                             </div>
                             {previewTab === 'recruiters' ? (
                                 <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#f1f5f9', padding: '8px 6px 16px' }}>
@@ -5325,12 +5802,7 @@ export default function ResumesPage() {
                                     </div>
                                 </div>
                             ) : (
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', background: '#f8fafc' }}>
-                                    <div style={{ background: '#fff', borderRadius: 8, padding: 14, boxShadow: '0 2px 12px rgba(15,23,42,0.08)' }}>
-                                        <div style={{ fontFamily: M.fontMono, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#94a3b8', marginBottom: 10 }}>ATS Plain Text Extract</div>
-                                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 11.5, color: '#374151', lineHeight: 1.7, margin: 0 }}>{generateATSText(editorState)}</pre>
-                                    </div>
-                                </div>
+                                <CoverLetterView controller={coverLetterController} entry={selectedEntry} job={meridianJob} profileState={editorState.profile} compact />
                             )}
                             <div style={{ padding: '10px 14px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, flexShrink: 0 }}>
                                 <button onClick={() => { setShowMobilePreview(false); setShowTemplatePicker(true) }} style={{ flex: 1, padding: 10, border: `1.5px solid ${M.border}`, borderRadius: 9, background: '#fff', fontSize: '12.5px', fontWeight: 600, color: M.textMuted, cursor: 'pointer', fontFamily: M.fontBody }}>Change Template</button>
@@ -5479,6 +5951,8 @@ export default function ResumesPage() {
                         sourceResumeId={sourceResumeId}
                         onSourceChange={handleSourceChange}
                         optimizedCounts={optimizedCountsBySource}
+                        collapsed={sidebarCollapsed}
+                        onToggleCollapse={toggleSidebarCollapsed}
                     />
                 )}
 
@@ -5488,72 +5962,101 @@ export default function ResumesPage() {
                     background: M.surface, borderRight: `1px solid ${M.border}`,
                     height: '100%', overflow: 'hidden',
                 }}>
-                    {/* Editor header — progress indicator */}
-                    <div style={{
-                        flexShrink: 0, padding: '16px 22px 14px',
-                        background: M.white, borderBottom: `1px solid ${M.borderLight}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    }}>
-                        <span style={{
-                            fontSize: '1.0625rem', fontWeight: 700, color: M.text, fontFamily: M.fontHeading,
-                            letterSpacing: '-0.01em',
-                        }}>
-                            Resume Sections
-                        </span>
-                        <span style={{
-                            fontSize: '0.8125rem', fontWeight: 700, color: M.accent,
-                            background: M.accentLight, padding: '5px 13px', borderRadius: 20,
-                            border: `1px solid ${M.accentBorder}`, fontFamily: M.fontMono,
-                        }}>
-                            {completionSections.filter(s => isFilled(s)).length}/{completionSections.length} complete
-                        </span>
+                    {/* Tab switcher */}
+                    <div style={{ display: 'flex', borderBottom: `1px solid ${M.border}`, background: M.white, flexShrink: 0 }}>
+                        {([{ id: 'sections' as const, label: 'Resume Sections' }, { id: 'assistant' as const, label: '✦ Assistant' }]).map(t => (
+                            <button key={t.id} onClick={() => setStudioTab(t.id)} style={{
+                                flex: 1, padding: '13px 8px', border: 'none', background: 'transparent', cursor: 'pointer',
+                                fontSize: '0.875rem', fontWeight: studioTab === t.id ? 700 : 500,
+                                color: studioTab === t.id ? M.accent : M.textMuted, fontFamily: M.fontBody,
+                                borderBottom: studioTab === t.id ? `2.5px solid ${M.accent}` : '2.5px solid transparent',
+                                marginBottom: -1, transition: 'all 0.15s',
+                            }}>
+                                {t.label}
+                            </button>
+                        ))}
                     </div>
 
-                    {/* Scrollable editor body — Steps layout */}
-                    <div id="m-editor-scroll" style={{ flex: 1, overflowY: 'auto' }}>
-                        <StepsLayout
-                            state={editorState}
-                            isFilled={isFilled}
-                            onOpen={setOpenModalSection}
-                        />
-                    </div>
-
-                    {/* Sticky footer */}
-                    <div style={{
-                        flexShrink: 0, background: M.white,
-                        borderTop: `1px solid ${M.borderLight}`,
-                        padding: '8px 16px',
-                        display: 'flex', alignItems: 'center', gap: 12,
-                    }}>
-                        <div style={{
-                            flex: 1, height: 3, borderRadius: 2,
-                            background: M.borderLight, overflow: 'hidden',
-                        }}>
+                    {studioTab === 'sections' && (
+                        <>
+                            {/* Editor header — progress indicator */}
                             <div style={{
-                                height: '100%', width: `${completionPct}%`,
-                                background: M.accent, borderRadius: 2, transition: 'width 0.4s',
-                            }} />
-                        </div>
-                        <span style={{
-                            fontSize: '0.6875rem', color: M.textFaint,
-                            flexShrink: 0, fontFamily: M.fontMono,
-                        }}>
-                            {completionPct === 100 ? 'All sections complete' : `${completionPct}% complete`}
-                        </span>
-                    </div>
+                                flexShrink: 0, padding: '16px 22px 14px',
+                                background: M.white, borderBottom: `1px solid ${M.borderLight}`,
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            }}>
+                                <span style={{
+                                    fontSize: '1.0625rem', fontWeight: 700, color: M.text, fontFamily: M.fontHeading,
+                                    letterSpacing: '-0.01em',
+                                }}>
+                                    Resume Sections
+                                </span>
+                                <span style={{
+                                    fontSize: '0.8125rem', fontWeight: 700, color: M.accent,
+                                    background: M.accentLight, padding: '5px 13px', borderRadius: 20,
+                                    border: `1px solid ${M.accentBorder}`, fontFamily: M.fontMono,
+                                }}>
+                                    {completionSections.filter(s => isFilled(s)).length}/{completionSections.length} complete
+                                </span>
+                            </div>
+
+                            {/* Scrollable editor body — Steps layout */}
+                            <div id="m-editor-scroll" style={{ flex: 1, overflowY: 'auto' }}>
+                                <StepsLayout
+                                    state={editorState}
+                                    isFilled={isFilled}
+                                    onOpen={setOpenModalSection}
+                                />
+                            </div>
+
+                            {/* Sticky footer */}
+                            <div style={{
+                                flexShrink: 0, background: M.white,
+                                borderTop: `1px solid ${M.borderLight}`,
+                                padding: '8px 16px',
+                                display: 'flex', alignItems: 'center', gap: 12,
+                            }}>
+                                <div style={{
+                                    flex: 1, height: 3, borderRadius: 2,
+                                    background: M.borderLight, overflow: 'hidden',
+                                }}>
+                                    <div style={{
+                                        height: '100%', width: `${completionPct}%`,
+                                        background: M.accent, borderRadius: 2, transition: 'width 0.4s',
+                                    }} />
+                                </div>
+                                <span style={{
+                                    fontSize: '0.6875rem', color: M.textFaint,
+                                    flexShrink: 0, fontFamily: M.fontMono,
+                                }}>
+                                    {completionPct === 100 ? 'All sections complete' : `${completionPct}% complete`}
+                                </span>
+                            </div>
+                        </>
+                    )}
+
+                    {studioTab === 'assistant' && (
+                        <AssistantPanel controller={assistant} />
+                    )}
                 </div>
 
                 {/* Preview column */}
-                <MeridianPreviewPanel
-                    state={editorState}
-                    templateId={templateId}
-                    onTemplateChange={(t) => {
-                        setTemplateId(t)
-                        localStorage.setItem('jobscorer-template', t)
-                    }}
-                    onMoreTemplates={() => setShowTemplatePicker(true)}
-                    downloadButton={null}
-                />
+                <PreviewDecorationsProvider decorations={assistant.decorations}>
+                    <MeridianPreviewPanel
+                        state={editorState}
+                        templateId={templateId}
+                        onTemplateChange={(t) => {
+                            setTemplateId(t)
+                            localStorage.setItem('jobscorer-template', t)
+                        }}
+                        onMoreTemplates={() => setShowTemplatePicker(true)}
+                        downloadButton={null}
+                        coverLetterController={coverLetterController}
+                        entry={selectedEntry}
+                        job={meridianJob}
+                        profileState={editorState.profile}
+                    />
+                </PreviewDecorationsProvider>
             </div>
         </div>
 
@@ -5565,6 +6068,7 @@ export default function ResumesPage() {
                 state={editorState}
                 update={setEditorState}
                 onClose={() => setOpenModalSection(null)}
+                onSaved={saveManualEdit}
             />
         )}
 

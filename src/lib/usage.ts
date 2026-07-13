@@ -54,6 +54,12 @@ export interface UsageLogInput {
   model: string;
   promptTokens: number;
   completionTokens: number;
+  // Cost-optimization telemetry (post-Phase-3): how many of promptTokens hit
+  // OpenAI's automatic prompt cache (75% cheaper), and total call latency.
+  // Optional/undefined for n8n-mediated ESTIMATE rows, which don't have a real
+  // OpenAI `usage` object to read these from.
+  cachedTokens?: number;
+  latencyMs?: number;
 }
 
 // Representative token estimates for actions whose AI runs INSIDE n8n, where
@@ -66,6 +72,7 @@ const ACTION_ESTIMATE: Record<string, { model: string; prompt: number; completio
   build_plan:       { model: 'gpt-4.1',      prompt: 4000, completion: 2000 },
   learning_path:    { model: 'gpt-4.1',      prompt: 3000, completion: 2500 },
   project_roadmap:  { model: 'gpt-4.1',      prompt: 3500, completion: 3000 },
+  cover_letter:     { model: 'gpt-4.1-mini', prompt: 4000, completion: 600 },
 };
 
 /**
@@ -95,7 +102,7 @@ export async function logEstimatedUsage(opts: {
  * request it is measuring. Call with `void logUsage(...)` to fire-and-forget.
  */
 export async function logUsage(input: UsageLogInput): Promise<void> {
-  const { userId, feature, model, promptTokens, completionTokens } = input;
+  const { userId, feature, model, promptTokens, completionTokens, cachedTokens, latencyMs } = input;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (serviceClient() as any)
@@ -106,6 +113,8 @@ export async function logUsage(input: UsageLogInput): Promise<void> {
         model,
         prompt_tokens: promptTokens,
         completion_tokens: completionTokens,
+        cached_tokens: cachedTokens ?? null,
+        latency_ms: latencyMs ?? null,
         cost_inr: Number(
           estimateCostInr(model, promptTokens, completionTokens).toFixed(4),
         ),

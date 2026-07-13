@@ -22,7 +22,9 @@ export type Feature =
   | 'chat'
   | 'learning_path'
   | 'project_roadmap'
-  | 'project_coach';
+  | 'project_coach'
+  | 'resume_edit'
+  | 'cover_letter';
 
 const UNLIMITED = -1;
 
@@ -30,9 +32,9 @@ const UNLIMITED = -1;
 // review-work) combined — one monthly pool, not per-action. Cache hits on teach-me
 // never reach checkQuota() so they stay free regardless of this limit.
 export const PLAN_QUOTAS: Record<Plan, Record<Feature, number>> = {
-  free: { job_search: 5,   score: 3,  optimize: 1,  company_research: 2,  build_plan: 1,  chat: 10,  learning_path: 1,  project_roadmap: 1,  project_coach: 10 },
-  pro:  { job_search: 60,  score: 30, optimize: 20, company_research: 20, build_plan: 10, chat: 200, learning_path: 15, project_roadmap: 10, project_coach: 75 },
-  max:  { job_search: 200, score: 80, optimize: 40, company_research: 40, build_plan: 30, chat: 600, learning_path: 30, project_roadmap: 30, project_coach: 250 },
+  free: { job_search: 5,   score: 3,  optimize: 1,  company_research: 2,  build_plan: 1,  chat: 10,  learning_path: 1,  project_roadmap: 1,  project_coach: 10,  resume_edit: 10,  cover_letter: 1 },
+  pro:  { job_search: 60,  score: 30, optimize: 20, company_research: 20, build_plan: 10, chat: 200, learning_path: 15, project_roadmap: 10, project_coach: 75,  resume_edit: 150, cover_letter: 15 },
+  max:  { job_search: 200, score: 80, optimize: 40, company_research: 40, build_plan: 30, chat: 600, learning_path: 30, project_roadmap: 30, project_coach: 250, resume_edit: 500, cover_letter: 30 },
 };
 
 // Stored-resource caps (row counts, not monthly). -1 = unlimited. Mirrors plans/15 §1.
@@ -53,6 +55,8 @@ const FEATURE_LABELS: Record<Feature, { one: string; many: string }> = {
   learning_path:    { one: 'learning path',           many: 'learning paths' },
   project_roadmap:  { one: 'project roadmap',         many: 'project roadmaps' },
   project_coach:    { one: 'project coach action',    many: 'project coach actions' },
+  resume_edit:      { one: 'resume edit message',     many: 'resume edit messages' },
+  cover_letter:     { one: 'cover letter',             many: 'cover letters' },
 };
 
 let _svc: ReturnType<typeof createClient> | null = null;

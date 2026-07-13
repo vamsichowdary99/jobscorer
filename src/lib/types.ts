@@ -583,6 +583,20 @@ export interface OptimizedResumeData {
     career_action_plan?: CareerActionPlan
 }
 
+// One entry per persisted edit (manual save, AI apply, or undo) — Resume Editor
+// Agent Phase 1 persistence. See migrations/11-resume-editor-agent.sql.
+export interface ResumeEditHistoryEntry {
+    section: string
+    operation: string
+    index?: number
+    before: unknown
+    after: unknown
+    rationale?: string
+    source: 'ai' | 'manual' | 'undo'
+    coverage?: number
+    at: string
+}
+
 export interface OptimizedResume {
     id: string
     created_at: string
@@ -593,6 +607,21 @@ export interface OptimizedResume {
     optimized_data: OptimizedResumeData
     keyword_alignment_score: number | null
     optimization_notes: string[] | null
+    edit_history: ResumeEditHistoryEntry[]
+    ats_keywords: unknown | null   // Phase 3: {keywords:[{term,weight,variants[]}], extracted_at}
+    live_score: unknown | null     // Phase 3: {score, matched_skills, missing_skills, reasoning, scored_at}
+    suggestions: unknown | null    // Phase 3: cached AI audit {items[], generated_at, edits_since}
+    cover_letter: CoverLetter | null // Plan 22: AI cover letter, generated on-demand. See migrations/12-cover-letter.sql.
+}
+
+// AI cover letter, generated on-demand by the "Cover Letter Generator" n8n workflow.
+export interface CoverLetter {
+    greeting: string
+    body_paragraphs: string[]
+    closing: string
+    signature: string
+    generated_at: string
+    model: string
 }
 
 // ── Build Plan (recommendation popup before resume creation) ──────────────
@@ -819,4 +848,62 @@ export interface UserAchievement {
     label: string
     earned_at: string
     roadmap_id: string | null
+}
+
+// ── Resume Studio editor state (moved from dashboard/resumes/page.tsx) ──
+export interface ExperienceEntry {
+    company: string
+    title: string
+    startDate: string
+    endDate: string
+    location: string
+    bullets: string[]
+}
+
+export interface EducationEntry {
+    school: string
+    degree: string
+    date: string
+    gpa: string
+    coursework: string
+}
+
+export interface ProjectEntry {
+    name: string
+    tech: string
+    date: string
+    bullets: string[]
+}
+
+export interface LeadershipEntry {
+    org: string
+    role: string
+    date: string
+    bullets: string[]
+}
+
+export interface ResumeEditorState {
+    profile: {
+        name: string
+        headline: string
+        email: string
+        phone: string
+        location: string
+        linkedin: string
+        github: string
+        portfolio: string
+    }
+    summary: string
+    education: EducationEntry[]
+    experience: ExperienceEntry[]
+    projects: ProjectEntry[]
+    skills: {
+        languages: string
+        tools: string
+        frameworks: string
+        soft: string
+    }
+    leadership: LeadershipEntry[]
+    certifications: string[]
+    achievements: string[]
 }

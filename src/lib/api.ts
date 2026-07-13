@@ -510,7 +510,8 @@ export async function triggerScoring(payload: {
     success: boolean
     gate_triggered?: boolean
     max_similarity?: number
-    mode?: 'rag' | 'all'
+    mode?: 'rag' | 'all' | 'trigger_dev'
+    runId?: string
     jobs_scored?: number
     cache_hits?: number
     from_cache?: boolean

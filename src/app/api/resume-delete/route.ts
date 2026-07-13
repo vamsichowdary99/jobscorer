@@ -24,7 +24,7 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: owned, error: ownErr } = await adminSupabase
+    const { data: owned, error: ownErr } = await getAdminSupabase()
         .from('resumes')
         .select('user_id')
         .eq('id', id)
