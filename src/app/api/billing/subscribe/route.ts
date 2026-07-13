@@ -42,6 +42,33 @@ export async function POST(req: NextRequest) {
 
   const planId = resolvePlanId(plan, cycle)
 
+  // Idempotency: reuse any existing non-terminal subscription for this user+plan+cycle.
+  // Terminal states: cancelled, completed, expired, halted — these can't be reused.
+  const svc = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+  const { data: existing } = await svc
+    .from('subscriptions')
+    .select('razorpay_subscription_id, status')
+    .eq('user_id', user.id)
+    .eq('plan', plan)
+    .eq('cycle', cycle)
+    .or('status.eq.created,status.eq.authenticated,status.eq.active,status.eq.pending,status.eq.paused')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (existing?.razorpay_subscription_id) {
+    console.log(`[/api/billing/subscribe] reusing existing sub ${existing.razorpay_subscription_id} (${existing.status}) for user ${user.id}`)
+    return NextResponse.json({
+      subscription_id: existing.razorpay_subscription_id,
+      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      plan,
+      cycle,
+    })
+  }
+
   let subscription
   try {
     subscription = await razorpay().subscriptions.create({
@@ -58,10 +85,6 @@ export async function POST(req: NextRequest) {
   }
 
   // Record the subscription (service role — RLS allows users to read their own).
-  const svc = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
   const { error: insertErr } = await svc.from('subscriptions').insert({
     user_id: user.id,
     razorpay_subscription_id: subscription.id,

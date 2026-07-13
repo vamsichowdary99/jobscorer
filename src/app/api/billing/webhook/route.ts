@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { redis } from '@/lib/redis'
+
+type RazorpayEvent = {
+  event?: string
+  created_at?: number
+  payload?: { subscription?: { entity?: Record<string, unknown> } }
+}
 
 /**
  * POST /api/billing/webhook  — Razorpay subscription webhook (source of truth).
@@ -35,10 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
-  let event: {
-    event?: string
-    payload?: { subscription?: { entity?: Record<string, unknown> } }
-  }
+  let event: RazorpayEvent
   try {
     event = JSON.parse(raw)
   } catch {
@@ -53,6 +57,21 @@ export async function POST(req: NextRequest) {
   // Only subscription events carry the subscription entity we key on.
   if (!sub?.id) {
     return NextResponse.json({ received: true, ignored: type })
+  }
+
+  // Idempotency guard — Razorpay retries the same event with the same (type, sub.id, created_at).
+  // SET NX: 'OK' = first delivery → process; null = key existed → duplicate → ack and skip.
+  // On Redis error we catch and fall through (fail open) so a real event is never silently dropped.
+  if (event.created_at && redis) {
+    const dedupKey = `webhook:rzp:${type}:${sub.id}:${event.created_at}`
+    try {
+      const result = await redis.set(dedupKey, '1', { nx: true, ex: 60 * 60 * 24 * 7 })
+      if (result === null) {
+        return NextResponse.json({ received: true, duplicate: true })
+      }
+    } catch {
+      console.warn('[billing/webhook] Redis dedupe unavailable, processing anyway')
+    }
   }
 
   const svc = createServiceClient(
@@ -103,11 +122,20 @@ export async function POST(req: NextRequest) {
       break
     case 'subscription.cancelled':
     case 'subscription.completed':
-    case 'subscription.expired':
+    case 'subscription.expired': {
       subStatus = type.split('.')[1]
+      // Only downgrade if the paid period has actually ended. Out-of-order or
+      // premature cancellation webhooks (e.g. Razorpay retries) can otherwise
+      // silently strip an active payer mid-period.
+      const periodEnd = typeof sub?.current_end === 'number' ? sub.current_end * 1000 : 0
+      if (periodEnd > Date.now()) {
+        console.log(`[billing/webhook] ${type} received but period ends ${new Date(periodEnd).toISOString()} — deferring downgrade`)
+        return NextResponse.json({ received: true, deferred: 'period_not_ended' })
+      }
       profilePlan = 'free'
       profileStatus = 'cancelled'
       break
+    }
     default:
       return NextResponse.json({ received: true, ignored: type })
   }
@@ -118,7 +146,7 @@ export async function POST(req: NextRequest) {
       : null
 
   if (subStatus) {
-    await svc
+    const { error: subErr } = await svc
       .from('subscriptions')
       .update({
         status: subStatus,
@@ -126,6 +154,10 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq('razorpay_subscription_id', sub.id)
+    if (subErr) {
+      console.error('[billing/webhook] subscriptions update failed:', subErr.message)
+      return NextResponse.json({ error: 'DB write failed' }, { status: 500 })
+    }
   }
 
   const profileUpdate: Record<string, unknown> = {}
@@ -139,7 +171,11 @@ export async function POST(req: NextRequest) {
     if (renewsAt) profileUpdate.plan_renews_at = renewsAt
   }
   if (Object.keys(profileUpdate).length > 0) {
-    await svc.from('profiles').update(profileUpdate).eq('id', userId)
+    const { error: profileErr } = await svc.from('profiles').update(profileUpdate).eq('id', userId)
+    if (profileErr) {
+      console.error('[billing/webhook] profiles update failed:', profileErr.message)
+      return NextResponse.json({ error: 'DB write failed' }, { status: 500 })
+    }
   }
 
   console.log(`[billing/webhook] ${type} → sub=${sub.id} user=${userId} plan=${profilePlan ?? '(unchanged)'} status=${profileStatus ?? '(unchanged)'}`)
