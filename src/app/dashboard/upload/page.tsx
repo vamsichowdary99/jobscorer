@@ -9,6 +9,8 @@ import { useAuth } from '@/components/providers/AuthProvider'
 import { createClient } from '@/lib/supabase/client'
 import { MorphingPopover, MorphingPopoverTrigger, MorphingPopoverContent } from '@/components/ui/morphing-popover'
 import { motion, AnimatePresence } from 'framer-motion'
+import { LoadingState } from '@/components/loading/LoadingState'
+import { LOADING_VARIANTS } from '@/components/loading/loadingVariants'
 
 const POPOVER_VARIANTS = {
     initial: { opacity: 0, filter: 'blur(8px)' },
@@ -83,6 +85,29 @@ const POP_SECTION_ICONS: Record<string, React.ReactNode> = {
     projects:       <><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></>,
     achievements:   <><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></>,
     links:          <><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></>,
+}
+
+// Resume parsing has no intermediate backend events (single n8n webhook
+// round-trip) — advance currentStepId on a coarse timer for visual position
+// only; the real fetch's resolution (analysisLoading flipping false) is what
+// actually ends the loading state, never this timer.
+function useTimeSlicedStep(stepIds: string[], active: boolean, msPerStep = 4000): string | undefined {
+    const [index, setIndex] = useState(0)
+    // Reset during render (not in an effect) when `active` flips — the
+    // React-recommended pattern for "adjust state when a prop changes"
+    // (avoids the set-state-in-effect lint rule while resetting instantly,
+    // before the next active cycle's interval starts ticking).
+    const [prevActive, setPrevActive] = useState(active)
+    if (active !== prevActive) {
+        setPrevActive(active)
+        if (!active) setIndex(0)
+    }
+    useEffect(() => {
+        if (!active) return
+        const id = setInterval(() => setIndex(i => Math.min(i + 1, stepIds.length - 1)), msPerStep)
+        return () => clearInterval(id)
+    }, [active, stepIds.length, msPerStep])
+    return stepIds[index]
 }
 
 function PopSectionIcon({ k }: { k: string }) {
@@ -451,6 +476,7 @@ export default function UploadPage() {
     const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAiAnalysis | null>(null)
     const [analysisLoading, setAnalysisLoading] = useState(false)
     const [assessmentExpanded, setAssessmentExpanded] = useState(false)
+    const resumeAnalysisStepId = useTimeSlicedStep(LOADING_VARIANTS.resumeAnalysis.steps.map(s => s.id), analysisLoading && !resumeAnalysis)
 
     // ── load resumes ─────────────────────────────────────────────
     useEffect(() => {
@@ -1771,25 +1797,15 @@ export default function UploadPage() {
                                             `}</style>
 
                                             {analysisLoading && !resumeAnalysis ? (
-                                                // Loading skeleton — white
-                                                <div style={{
-                                                    borderRadius: 14,
-                                                    background: '#fff',
-                                                    border: '1px solid #e5e7eb',
-                                                    padding: '28px 32px',
-                                                    overflow: 'hidden',
-                                                    position: 'relative',
-                                                    boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-                                                }}>
-                                                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #135bec, transparent)', animation: 'scan 1.8s ease-in-out infinite' }} />
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-                                                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#135bec', boxShadow: '0 0 8px rgba(19,91,236,0.4)' }} />
-                                                        <span style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: '#94a3b8' }}>AI Analyzing your profile…</span>
-                                                    </div>
-                                                    {[75, 55, 85, 45].map((w, i) => (
-                                                        <div key={i} style={{ height: 9, background: '#f1f5f9', borderRadius: 6, marginBottom: 10, width: `${w}%` }} />
-                                                    ))}
-                                                </div>
+                                                <LoadingState
+                                                    layout="card"
+                                                    title={LOADING_VARIANTS.resumeAnalysis.title}
+                                                    subtitle={LOADING_VARIANTS.resumeAnalysis.subtitle}
+                                                    steps={LOADING_VARIANTS.resumeAnalysis.steps}
+                                                    currentStepId={resumeAnalysisStepId}
+                                                    status="running"
+                                                    estimatedTime={LOADING_VARIANTS.resumeAnalysis.estimatedTime}
+                                                />
                                             ) : resumeAnalysis ? (
                                                 // Populated card — clean white
                                                 <div className="assess-card" style={{
@@ -2036,10 +2052,13 @@ export default function UploadPage() {
                             ) : selectedResume ? (
                                 /* Resume row exists but structured_data not yet written by n8n */
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 280, gap: 14 }}>
-                                    <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #e5e7eb', borderTopColor: '#1d4ed8', animation: 'spin 0.8s linear infinite' }} />
-                                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                                    <p style={{ color: '#6b7280', fontSize: 14, margin: 0 }}>Parsing your resume…</p>
-                                    <p style={{ color: '#9ca3af', fontSize: 12, margin: 0 }}>This usually takes 10–30 seconds</p>
+                                    <LoadingState
+                                        layout="card"
+                                        title="Parsing your resume"
+                                        subtitle="This usually takes 10–30 seconds"
+                                        status="running"
+                                        estimatedTime="10–30 sec"
+                                    />
                                 </div>
                             ) : (
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 280, color: '#9ca3af', fontSize: 14 }}>
