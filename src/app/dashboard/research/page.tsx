@@ -13,6 +13,8 @@ import {
     fetchResearchCountsByResume,
     getPrimaryResumeId,
 } from '@/lib/api'
+import { LoadingState } from '@/components/loading/LoadingState'
+import { LOADING_VARIANTS } from '@/components/loading/loadingVariants'
 
 /* ── Types ── */
 interface JobMatch {
@@ -1871,44 +1873,34 @@ function CompanyIntelPage() {
 
                         {/* Loading */}
                         {researchLoading && (
-                            <div style={{
-                                display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                justifyContent: 'center', height: 'calc(100vh - 200px)', gap: 16,
-                            }}>
-                                <div style={{ width: 40, height: 40, border: '3px solid #dbe1ff', borderTopColor: '#135bec', borderRadius: '50%', animation: 'ci-spin 0.8s linear infinite' }} />
-                                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.65rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-                                    Loading intel…
-                                </span>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 200px)' }}>
+                                <LoadingState
+                                    layout="card"
+                                    title="Loading intel"
+                                    subtitle="Fetching your saved research."
+                                    status="running"
+                                    estimatedTime="a few seconds"
+                                />
                             </div>
                         )}
 
-                        {/* Pending — research is still running in the background */}
+                        {/* Pending — research is still running in the background.
+                            No cache_hit/from_cache signal exists in this component's state
+                            (loadResearch reads company_research directly via Supabase, not
+                            through the /api/company-research POST route that carries a
+                            `cached` flag) — see task-6 investigation notes. Rendered as
+                            status="running" throughout; no currentStepId because this flow
+                            only polls for row existence with no intermediate progress signal. */}
                         {!researchLoading && !research && isPending && (
-                            <div style={{
-                                display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                justifyContent: 'center', height: 'calc(100vh - 200px)', gap: 18, textAlign: 'center',
-                            }}>
-                                <div style={{ width: 40, height: 40, border: '3px solid #dbe1ff', borderTopColor: '#135bec', borderRadius: '50%', animation: 'ci-spin 0.8s linear infinite' }} />
-                                <div>
-                                    <p style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '1rem', color: '#101c2e', margin: '0 0 6px' }}>
-                                        Research in progress
-                                    </p>
-                                    <p style={{ fontSize: '0.825rem', color: '#737687', margin: '0 0 16px', maxWidth: 380 }}>
-                                        AI is reading the company&apos;s website. This usually takes 2&ndash;4 minutes. The page will refresh automatically when results arrive.
-                                    </p>
-                                    <button
-                                        onClick={() => window.location.reload()}
-                                        style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 8,
-                                            padding: '10px 20px', borderRadius: 10,
-                                            background: 'linear-gradient(135deg, #135bec, #0045bd)',
-                                            color: '#fff', fontWeight: 700, fontSize: '0.825rem',
-                                            fontFamily: "'Outfit', sans-serif", border: 'none', cursor: 'pointer',
-                                        }}
-                                    >
-                                        Refresh now
-                                    </button>
-                                </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 200px)' }}>
+                                <LoadingState
+                                    layout="card"
+                                    title={LOADING_VARIANTS.companyResearch.title}
+                                    subtitle={LOADING_VARIANTS.companyResearch.subtitle}
+                                    steps={LOADING_VARIANTS.companyResearch.steps}
+                                    status="running"
+                                    estimatedTime={LOADING_VARIANTS.companyResearch.estimatedTime}
+                                />
                             </div>
                         )}
 
