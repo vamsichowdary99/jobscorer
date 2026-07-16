@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { searchJobs, fetchJobsSince, fetchJobsByIds, triggerJobIngestion, triggerScoring, getPrimaryResumeId, RateLimitError, reportJobStatus } from '@/lib/api'
 import { jobStatusLabel } from '@/lib/jobs/applicationStatus'
-import type { QueueJobState } from '@/lib/hooks/useQueueJob'
-import { QueueStatusBanner } from '@/components/queue/QueueStatusBanner'
+import { useQueueJob, type QueueJobState } from '@/lib/hooks/useQueueJob'
+import { LoadingState } from '@/components/loading/LoadingState'
+import { JOB_SEARCH_CYCLE_PHRASES } from '@/components/loading/loadingVariants'
 import type { Job } from '@/lib/types'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
@@ -15,7 +16,7 @@ import { PasteJobButton } from '@/components/search/PasteJobModal'
 import { DatePostedFilter, filterByDateRange, rangeShortLabel, type DateRange } from '@/components/search/DatePostedFilter'
 import {
     Search, MapPin, ChevronDown, Sparkles, Globe,
-    CheckCircle2, X, AlertCircle, Clock, Briefcase,
+    X, AlertCircle, Clock, Briefcase,
     ExternalLink, Building2, Tag,
 } from 'lucide-react'
 
@@ -1369,10 +1370,11 @@ export default function SearchPage() {
     const [showIngestBanner, setShowIngestBanner] = useState(false)
 
     // Phase 8 — queue-driven ingestion lifecycle (replaces setInterval polling).
-    // The QueueStatusBanner owns the useQueueJob subscription; we just react to
-    // its onComplete/onFail callbacks. Two parallel hooks on the same channel
-    // would conflict (Supabase Realtime de-dupes by channel name).
+    // The page owns the useQueueJob subscription directly (hoisted here so
+    // completion detection doesn't depend on any particular banner component
+    // being mounted) and reacts to terminal state via the effect below.
     const [ingestJobId, setIngestJobId] = useState<string | null>(null)
+    const ingestJob = useQueueJob(ingestJobId)
     const ingestStartTimeRef = useRef<string>('')
     const queryAtStartRef = useRef<string>('')
     const locationAtStartRef = useRef<string>('')
@@ -1437,6 +1439,16 @@ export default function SearchPage() {
         setIngestJobId(null)
     }
 
+    // Fires once when the queue job (ingestJobId) reaches a terminal state.
+    // Mirrors what QueueStatusBanner used to do internally — hoisted here so
+    // it runs regardless of what's rendered on screen.
+    useEffect(() => {
+        if (!ingestJob.terminal) return
+        if (ingestJob.status === 'failed') onIngestFail()
+        else onIngestComplete(ingestJob)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ingestJob.terminal, ingestJob.status])
+
     // Deep Search remaining-count display. Shown on every finite-quota plan
     // (Free / Pro / Max) so the count is always visible; only a genuinely
     // unlimited quota (limit < 0) hides it. Warning colour kicks in when low.
@@ -1455,6 +1467,18 @@ export default function SearchPage() {
 
     const [singleScores, setSingleScores] = useState<Record<string, SingleScoreState>>({})
 
+    // Unified status for the single inline loading banner that replaces the
+    // old queue pill + ingest bar + score bar. NOTE: this intentionally does
+    // NOT gate on `ingestJobId` (unlike the brief's first-draft formula) —
+    // onIngestComplete/onIngestFail null it out the moment a job goes
+    // terminal, which would make success/error flash for zero renders.
+    // `showIngestBanner`/`ingestStatus`/`ingestSuccess` are the fields the old
+    // ingest-status banner itself persisted on, so this reuses those instead.
+    const searchBannerStatus: 'running' | 'success' | 'error' | null =
+        ingesting || scoring ? 'running'
+        : showIngestBanner && ingestStatus && !ingestSuccess ? 'error'
+        : (showIngestBanner && ingestStatus && ingestSuccess) || scoreStatus ? 'success'
+        : null
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -1998,69 +2022,16 @@ export default function SearchPage() {
                     )
                 })()}
 
-                {/* Phase 8 — Queue status pill (shows queue position + lifecycle while waiting) */}
-                {ingestJobId && (
-                    <QueueStatusBanner
-                        jobId={ingestJobId}
-                        label="Fetching jobs"
-                        onComplete={onIngestComplete}
-                        onFail={onIngestFail}
+                {/* Unified search loading banner — replaces the old queue pill + ingest bar + score bar */}
+                {searchBannerStatus && (
+                    <LoadingState
+                        layout="inline"
+                        status={searchBannerStatus}
+                        cyclePhrases={JOB_SEARCH_CYCLE_PHRASES}
+                        successText={scoreStatus || ingestStatus || 'Search complete'}
+                        errorMessage={ingestStatus || "Couldn't reach the job boards — try again"}
+                        onRetry={() => { setShowIngestBanner(false); handleIngest() }}
                     />
-                )}
-
-                {/* Ingest status banner */}
-                {showIngestBanner && ingestStatus && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '10px 14px', borderRadius: 8,
-                        background: ingestSuccess ? '#F0FDF4' : ingesting ? '#EFF6FF' : '#FEF2F2',
-                        border: `1px solid ${ingestSuccess ? '#BBF7D0' : ingesting ? '#BFDBFE' : '#FECACA'}`,
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {ingesting && (
-                                <div style={{
-                                    width: 14, height: 14, border: '2px solid #93C5FD',
-                                    borderTopColor: '#2563EB', borderRadius: '50%',
-                                    animation: 'spin 0.8s linear infinite', flexShrink: 0,
-                                }} />
-                            )}
-                            {ingestSuccess && <CheckCircle2 size={15} style={{ color: '#16A34A', flexShrink: 0 }} />}
-                            {!ingesting && !ingestSuccess && <AlertCircle size={15} style={{ color: '#DC2626', flexShrink: 0 }} />}
-                            <span style={{
-                                fontSize: '0.8125rem', fontWeight: 500,
-                                color: ingestSuccess ? '#166534' : ingesting ? '#1D4ED8' : '#DC2626',
-                            }}>
-                                {ingestStatus}
-                            </span>
-                        </div>
-                        <button
-                            onClick={() => setShowIngestBanner(false)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 2, flexShrink: 0 }}
-                        >
-                            <X size={14} />
-                        </button>
-                    </div>
-                )}
-
-                {/* Score status banner */}
-                {scoreStatus && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '10px 14px', borderRadius: 8,
-                        background: '#EEF2FF', border: '1px solid #C7D2FE',
-                    }}>
-                        {scoring && (
-                            <div style={{
-                                width: 14, height: 14, border: '2px solid #A5B4FC',
-                                borderTopColor: '#6366F1', borderRadius: '50%',
-                                animation: 'spin 0.8s linear infinite', flexShrink: 0,
-                            }} />
-                        )}
-                        {!scoring && <CheckCircle2 size={15} style={{ color: '#4338CA', flexShrink: 0 }} />}
-                        <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#4338CA' }}>
-                            {scoreStatus}
-                        </span>
-                    </div>
                 )}
 
                 {/* Gate warning — low resume match detected */}

@@ -41,7 +41,6 @@ export { default as UpgradeToast } from './billing/UpgradeToast';
 export { default as ConsentBanner } from './legal/ConsentBanner';
 export { default as LegalPageLayout } from './legal/LegalPageLayout';
 
-// ── Queue / Chat ──────────────────────────────────────────────
-export { QueueStatusBanner } from './queue/QueueStatusBanner';
+// ── Chat ──────────────────────────────────────────────────────
 export { default as PendingResearchToaster } from './PendingResearchToaster';
 export { default as ChatPanel } from './chat/ChatPanel';
