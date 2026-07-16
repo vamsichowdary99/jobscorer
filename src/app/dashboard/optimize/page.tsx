@@ -11,6 +11,8 @@ import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
 import TemplatePickerModal, { type TemplateId } from '@/components/TemplatePickerModal'
 import BuildPlanModal from '@/components/BuildPlanModal'
 import { useAuth } from '@/components/providers/AuthProvider'
+import { LoadingState } from '@/components/loading/LoadingState'
+import { LOADING_VARIANTS } from '@/components/loading/loadingVariants'
 
 type FullMatch = UserJobMatch & { job: Job }
 type Phase = 'idle' | 'loading' | 'done' | 'error'
@@ -64,16 +66,6 @@ const T = {
     shadow: '0 1px 3px rgba(0,0,0,0.06)',
     shadowMd: '0 4px 16px rgba(0,0,0,0.08)',
 }
-
-/* ─── Loading Messages ─── */
-const LOADING_MSGS = [
-    { text: 'Analyzing job requirements', icon: '🔍' },
-    { text: 'Comparing your experience', icon: '📋' },
-    { text: 'Identifying keyword gaps', icon: '🎯' },
-    { text: 'Tailoring your experience', icon: '✍️' },
-    { text: 'Optimizing for ATS systems', icon: '⚡' },
-    { text: 'Polishing final resume', icon: '✨' },
-]
 
 /* ─── Keyframes (injected once) ─── */
 function useInjectStyles() {
@@ -328,84 +320,6 @@ function MatchBadge({ score }: { score: number }) {
         }}>
             {score}%
         </span>
-    )
-}
-
-/* ─── Progress Stepper (loading state) ─── */
-function ProgressStepper({ elapsed }: { elapsed: number }) {
-    const stepDuration = 5000
-    const currentStep = Math.min(Math.floor(elapsed / stepDuration), LOADING_MSGS.length - 1)
-    const stepProgress = Math.min(((elapsed % stepDuration) / stepDuration) * 100, 100)
-    const overallProgress = Math.min((elapsed / (LOADING_MSGS.length * stepDuration)) * 100, 95)
-
-    return (
-        <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: 32, padding: '48px 32px',
-            animation: 'optSlideUp 0.5s ease both',
-        }}>
-            {/* Animated icon */}
-            <div style={{
-                width: 88, height: 88, borderRadius: 24,
-                background: `linear-gradient(135deg, ${T.primary}12, ${T.primary}08)`,
-                border: `2px solid ${T.primary}20`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 40,
-                animation: 'optFloat 2s ease-in-out infinite, optGlow 2s ease-in-out infinite',
-            }}>
-                {LOADING_MSGS[currentStep].icon}
-            </div>
-
-            {/* Current step text */}
-            <div style={{ textAlign: 'center' }}>
-                <h3 style={{
-                    fontSize: '1.25rem', fontWeight: 700, color: T.text,
-                    fontFamily: "'DM Sans', sans-serif",
-                    marginBottom: 6,
-                }}>
-                    {LOADING_MSGS[currentStep].text}
-                </h3>
-                <p style={{
-                    fontSize: '0.8125rem', color: T.textMuted,
-                    fontFamily: "'DM Sans', sans-serif",
-                }}>
-                    Step {currentStep + 1} of {LOADING_MSGS.length}
-                </p>
-            </div>
-
-            {/* Overall progress bar */}
-            <div style={{ width: '100%', maxWidth: 320 }}>
-                <div style={{
-                    height: 6, borderRadius: 3,
-                    background: T.bgAlt, overflow: 'hidden',
-                }}>
-                    <div style={{
-                        height: '100%', borderRadius: 3,
-                        background: `linear-gradient(90deg, ${T.primary}, #3b82f6)`,
-                        width: `${overallProgress}%`,
-                        transition: 'width 0.5s ease-out',
-                    }} />
-                </div>
-                <p style={{
-                    fontSize: '0.6875rem', color: T.textMuted, marginTop: 8,
-                    textAlign: 'center', fontFamily: "'JetBrains Mono', monospace",
-                }}>
-                    {Math.round(overallProgress)}% complete
-                </p>
-            </div>
-
-            {/* Step indicators */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {LOADING_MSGS.map((_, i) => (
-                    <div key={i} style={{
-                        width: i === currentStep ? 24 : 8,
-                        height: 8, borderRadius: 4,
-                        background: i < currentStep ? T.success : i === currentStep ? T.primary : T.border,
-                        transition: 'all 0.3s ease',
-                    }} />
-                ))}
-            </div>
-        </div>
     )
 }
 
@@ -2225,6 +2139,9 @@ function OptimizePageInner() {
     const [resumeId, setResumeId] = useState<string | null>(null)
     const [originalResume, setOriginalResume] = useState<ParsedResume | null>(null)
     const [elapsed, setElapsed] = useState(0)
+    const resumeGenSteps = LOADING_VARIANTS.resumeGeneration.steps
+    const resumeGenStepIndex = Math.min(Math.floor(elapsed / 5000), resumeGenSteps.length - 1)
+    const resumeGenStepId = resumeGenSteps[resumeGenStepIndex]?.id
     const timerRef = useRef<NodeJS.Timeout | null>(null)
     const [showTemplatePicker, setShowTemplatePicker] = useState(false)
     const [pendingGapData, setPendingGapData] = useState<Record<string, unknown> | null>(null)
@@ -2706,38 +2623,17 @@ function OptimizePageInner() {
 
                 {/* ── LOADING STATE ── */}
                 {phase === 'loading' && (
-                    <div style={{ padding: '32px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                        <div style={{ width: 72, height: 72, borderRadius: '50%', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18, animation: 'optGlow 1.8s ease-in-out infinite' }}>
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 2l1.9 4.6L18.5 8l-4.6 1.9L12 14l-1.9-4.5L5.5 8l4.6-1.9z"/>
-                            </svg>
-                        </div>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Optimising Resume…</div>
-                        <div style={{ fontSize: '12.5px', color: '#64748b', marginBottom: 16 }}>
-                            Tailoring bullets for {selected?.job.title}{selected?.job.company ? ` · ${selected.job.company}` : ''}
-                        </div>
-                        <div style={{ width: '100%', maxWidth: 280, height: 6, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden', marginBottom: 18 }}>
-                            <div style={{ height: '100%', borderRadius: 99, background: 'linear-gradient(90deg, #135bec, #60a5fa)', width: `${Math.min((elapsed / 30000) * 100, 90)}%`, transition: 'width 0.5s ease-out' }} />
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, width: '100%', textAlign: 'left' }}>
-                            {LOADING_MSGS.map((msg, i) => {
-                                const stepDone = elapsed > (i + 1) * 5000
-                                const stepActive = !stepDone && elapsed > i * 5000
-                                return (
-                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                                        <div style={{ width: 18, height: 18, borderRadius: 5, background: stepDone ? '#dcfce7' : stepActive ? '#eff6ff' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.3s' }}>
-                                            {stepDone ? (
-                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-                                            ) : stepActive ? (
-                                                <svg style={{ animation: 'qsb-spin 0.8s linear infinite' }} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3"/></svg>
-                                            ) : null}
-                                        </div>
-                                        <span style={{ fontSize: 12, color: stepDone ? '#374151' : stepActive ? '#374151' : '#94a3b8', fontWeight: stepActive ? 600 : 400 }}>{msg.text}</span>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                        <button onClick={() => { setPhase('idle'); setError(null) }} style={{ marginTop: 20, padding: '9px 16px', border: '1.5px solid #fecaca', borderRadius: 8, background: '#fff', color: '#b91c1c', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    <div style={{ padding: '32px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <LoadingState
+                            layout="card"
+                            title={LOADING_VARIANTS.resumeGeneration.title}
+                            subtitle={selected ? `${LOADING_VARIANTS.resumeGeneration.subtitle} ${selected.job.title}${selected.job.company ? ` · ${selected.job.company}` : ''}` : LOADING_VARIANTS.resumeGeneration.subtitle}
+                            steps={resumeGenSteps}
+                            currentStepId={resumeGenStepId}
+                            status="running"
+                            estimatedTime={LOADING_VARIANTS.resumeGeneration.estimatedTime}
+                        />
+                        <button onClick={() => { setPhase('idle'); setError(null) }} style={{ marginTop: 16, padding: '9px 16px', border: '1.5px solid #fecaca', borderRadius: 8, background: '#fff', color: '#b91c1c', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                     </div>
                 )}
 
@@ -3225,7 +3121,22 @@ function OptimizePageInner() {
                     )}
 
                     {/* ── LOADING STATE ── */}
-                    {phase === 'loading' && <ProgressStepper elapsed={elapsed} />}
+                    {phase === 'loading' && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            height: '100%', minHeight: 500, padding: 48,
+                        }}>
+                            <LoadingState
+                                layout="card"
+                                title={LOADING_VARIANTS.resumeGeneration.title}
+                                subtitle={selected ? `${LOADING_VARIANTS.resumeGeneration.subtitle} ${selected.job.title}${selected.job.company ? ` · ${selected.job.company}` : ''}` : LOADING_VARIANTS.resumeGeneration.subtitle}
+                                steps={resumeGenSteps}
+                                currentStepId={resumeGenStepId}
+                                status="running"
+                                estimatedTime={LOADING_VARIANTS.resumeGeneration.estimatedTime}
+                            />
+                        </div>
+                    )}
 
                     {/* ── ERROR STATE ── */}
                     {phase === 'error' && (
