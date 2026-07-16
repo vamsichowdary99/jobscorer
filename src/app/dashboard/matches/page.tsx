@@ -14,6 +14,7 @@ import { getScoreColor } from '@/lib/types'
 import type { Job, Resume, UserJobMatch, MatchedSkillEvidence, MatchConfidence, FastestPath } from '@/lib/types'
 import { useAuth } from '@/components/providers/AuthProvider'
 import LegitimacyBadge from '@/components/LegitimacyBadge'
+import { LoadingState } from '@/components/loading/LoadingState'
 
 type FullMatch = UserJobMatch & { job: Job }
 
@@ -2249,19 +2250,11 @@ function TriggerProgressBanner({ runId, accessToken, onComplete }: {
     const isScoring = !run || run.status === 'QUEUED' || run.status === 'EXECUTING'
     if (!isScoring) return null
     return (
-        <div style={{ padding: '10px 12px', marginBottom: 12, borderRadius: 9, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: progress ? 8 : 0 }}>
-                <div style={{ width: 15, height: 15, flexShrink: 0, border: '2px solid #bfdbfe', borderTopColor: '#135bec', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
-                    {progress ? `Scored ${progress.scored} of ${progress.total} jobs` : 'Scoring your matches'}
-                </span>
-            </div>
-            {progress && (
-                <div style={{ background: '#dbeafe', borderRadius: 4, height: 4, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 4, background: '#135bec', width: `${Math.round((progress.scored / progress.total) * 100)}%`, transition: 'width 0.4s ease' }} />
-                </div>
-            )}
-        </div>
+        <LoadingState
+            layout="inline"
+            status="running"
+            cyclePhrases={[progress ? `Scored ${progress.scored} of ${progress.total} jobs` : 'Scoring your matches']}
+        />
     )
 }
 
