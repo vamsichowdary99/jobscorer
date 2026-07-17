@@ -69,6 +69,8 @@ const LOADING_STEPS = [
     'Generating your roadmap…',
 ]
 
+const PROJECT_ROADMAP_CYCLE_PHRASES = LOADING_VARIANTS.projectRoadmap.steps.map(s => `${s.label}…`)
+
 /* ─── Icons ──────────────────────────────────────────────────── */
 const Icon = {
     Briefcase: (p: SVGProps<SVGSVGElement>) => <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>,
@@ -2777,19 +2779,23 @@ function ProjectsSection({ onOpen, onCount }: { onOpen: (roadmapId: string) => v
                                         </span>
                                     )}
                                 </div>
-                                <button className="lib-proj-cta" type="button" disabled={isGenerating}
-                                    onClick={() => roadmap ? onOpen(roadmap.id) : handleGetRoadmap(entry)}>
-                                    {isGenerating ? 'Generating…' : roadmap
-                                        ? (status === 'completed' ? '✓ View Project' : status === 'in_progress' ? `Continue Milestone ${roadmap.current_milestone}` : 'Open Roadmap')
-                                        : 'Get Roadmap'}
-                                    {!isGenerating && (
+                                {isGenerating ? (
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <LoadingState layout="inline" status="running" cyclePhrases={PROJECT_ROADMAP_CYCLE_PHRASES} />
+                                    </div>
+                                ) : (
+                                    <button className="lib-proj-cta" type="button"
+                                        onClick={() => roadmap ? onOpen(roadmap.id) : handleGetRoadmap(entry)}>
+                                        {roadmap
+                                            ? (status === 'completed' ? '✓ View Project' : status === 'in_progress' ? `Continue Milestone ${roadmap.current_milestone}` : 'Open Roadmap')
+                                            : 'Get Roadmap'}
                                         <span className="lib-proj-cta-arrow">
                                             <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
                                                 <path d="M7 17L17 7M7 7h10v10" />
                                             </svg>
                                         </span>
-                                    )}
-                                </button>
+                                    </button>
+                                )}
                             </div>
                             {error && <div style={{ padding: '0 20px 16px', fontSize: 12, color: T.redText }}>{error}</div>}
                         </div>
