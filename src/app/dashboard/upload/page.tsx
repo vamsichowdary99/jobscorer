@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { triggerResumeUpload, fetchResumes, deleteResume, getPrimaryResumeId, setPrimaryResumeId } from '@/lib/api'
+import { takePendingUpload, base64ToFile } from '@/lib/pendingResumeUpload'
 import type { Resume, ResumeAiAnalysis } from '@/lib/types'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { createClient } from '@/lib/supabase/client'
@@ -452,6 +453,27 @@ export default function UploadPage() {
     const [analysisLoading, setAnalysisLoading] = useState(false)
     const [assessmentExpanded, setAssessmentExpanded] = useState(false)
 
+    // ── resume a landing-page upload started before the user had an account ──
+    // The Hero dropzone stashes the file in sessionStorage and sends the user
+    // to signup; once they land here logged in, pick it up and auto-analyse.
+    const autoUploadingRef = useRef(false)
+    useEffect(() => {
+        if (!user) return
+        const pending = takePendingUpload()
+        if (!pending) return
+        autoUploadingRef.current = true
+        setViewMode('upload')
+        setFile(base64ToFile(pending))
+    }, [user])
+
+    useEffect(() => {
+        if (autoUploadingRef.current && file) {
+            autoUploadingRef.current = false
+            handleUpload()
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [file])
+
     // ── load resumes ─────────────────────────────────────────────
     useEffect(() => {
         if (!user) return
@@ -460,7 +482,7 @@ export default function UploadPage() {
             const stored = getPrimaryResumeId()
             const pid = (stored && data.some(r => r.id === stored)) ? stored : data[0]?.id ?? null
             if (pid) { setPrimaryResumeId(pid); setPrimaryId(pid) }
-            if (data.length > 0) { setSelectedResume(data[0]); setViewMode('view'); loadGapResponses(data[0].id) }
+            if (data.length > 0 && !autoUploadingRef.current) { setSelectedResume(data[0]); setViewMode('view'); loadGapResponses(data[0].id) }
         }).catch(console.error).finally(() => setLoadingResumes(false))
     }, [user])
 
@@ -1760,11 +1782,11 @@ export default function UploadPage() {
                                                 .assess-card { animation: fade-in-up 0.5s ease both; }
                                                 .score-ring-fill { transition: stroke-dashoffset 1.4s cubic-bezier(0.34,1.56,0.64,1); }
                                                 .expand-btn:hover { background: #f8fafc !important; }
-                                                .assess-asset-card:hover { border-top-color: #059669 !important; box-shadow: 0 2px 8px rgba(16,185,129,0.1); }
-                                                .assess-action-card:hover { border-top-color: #0f4cc7 !important; box-shadow: 0 2px 8px rgba(19,91,236,0.1); }
+                                                .assess-asset-card:hover { box-shadow: 0 2px 8px rgba(16,185,129,0.12); }
+                                                .assess-action-card:hover { box-shadow: 0 2px 8px rgba(19,91,236,0.12); }
                                                 .pb-card:hover { border-color: #cbd5e1 !important; box-shadow: 0 2px 12px rgba(15,23,42,0.06); transform: translateY(-1px); }
                                                 @media (max-width: 767px) {
-                                                  .mob-assess-topasset { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+                                                  .mob-assess-topasset { grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
                                                   .mob-assess-grid { gap: 8px !important; }
                                                   .mob-assess-grid > .pb-card { padding: 10px 11px !important; }
                                                 }
@@ -1814,73 +1836,73 @@ export default function UploadPage() {
                                                     </div>
 
                                                     {/* Main content */}
-                                                    <div style={{ padding: isMobile ? '12px 14px' : '24px 28px', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: isMobile ? 12 : 28, alignItems: 'start' }}>
-                                                        {/* Score ring — 70px on mobile (matches design), 112px on desktop */}
-                                                        {(() => { const rs = isMobile ? 70 : 112; const rc = rs/2; const rr = isMobile ? 28 : 46; const rsw = isMobile ? 5 : 7; const circ = 2 * Math.PI * rr; return (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, justifySelf: 'start' }}>
-                                                            <div style={{ position: 'relative', width: rs, height: rs }}>
-                                                                <svg width={rs} height={rs} viewBox={`0 0 ${rs} ${rs}`} style={{ transform: 'rotate(-90deg)' }}>
-                                                                    <circle cx={rc} cy={rc} r={rr} fill="transparent" stroke="#f1f5f9" strokeWidth={rsw}/>
-                                                                    <circle cx={rc} cy={rc} r={rr} fill="transparent"
-                                                                        stroke={resumeAnalysis.market_readiness_score >= 7 ? '#10b981' : resumeAnalysis.market_readiness_score >= 5 ? '#f59e0b' : '#ef4444'}
-                                                                        strokeWidth={rsw} strokeLinecap="round"
-                                                                        className="score-ring-fill"
-                                                                        strokeDasharray={circ}
-                                                                        strokeDashoffset={circ * (1 - resumeAnalysis.market_readiness_score / 10)}
-                                                                    />
-                                                                </svg>
-                                                                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                                                                    <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '1.1rem' : '1.6rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
-                                                                        {resumeAnalysis.market_readiness_score.toFixed(1)}
-                                                                    </span>
-                                                                    <span style={{ fontFamily: 'monospace', fontSize: '0.5rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>/10</span>
+                                                    <div style={{ padding: isMobile ? '14px 12px' : '24px 28px' }}>
+                                                        {/* Ring + Headline row */}
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: isMobile ? 10 : 28, alignItems: 'start', marginBottom: 14 }}>
+                                                            {/* Score ring — 68px on mobile, 112px on desktop */}
+                                                            {(() => { const rs = isMobile ? 68 : 112; const rc = rs/2; const rr = isMobile ? 28 : 46; const rsw = isMobile ? 5 : 7; const circ = 2 * Math.PI * rr; return (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, justifySelf: 'start' }}>
+                                                                <div style={{ position: 'relative', width: rs, height: rs }}>
+                                                                    <svg width={rs} height={rs} viewBox={`0 0 ${rs} ${rs}`} style={{ transform: 'rotate(-90deg)' }}>
+                                                                        <circle cx={rc} cy={rc} r={rr} fill="transparent" stroke="#f1f5f9" strokeWidth={rsw}/>
+                                                                        <circle cx={rc} cy={rc} r={rr} fill="transparent"
+                                                                            stroke={resumeAnalysis.market_readiness_score >= 7 ? '#10b981' : resumeAnalysis.market_readiness_score >= 5 ? '#f59e0b' : '#ef4444'}
+                                                                            strokeWidth={rsw} strokeLinecap="round"
+                                                                            className="score-ring-fill"
+                                                                            strokeDasharray={circ}
+                                                                            strokeDashoffset={circ * (1 - resumeAnalysis.market_readiness_score / 10)}
+                                                                        />
+                                                                    </svg>
+                                                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                                                                        <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '1.05rem' : '1.6rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
+                                                                            {resumeAnalysis.market_readiness_score.toFixed(1)}
+                                                                        </span>
+                                                                        <span style={{ fontFamily: 'monospace', fontSize: '0.5rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>/10</span>
+                                                                    </div>
                                                                 </div>
+                                                                <span style={{ fontFamily: 'monospace', fontSize: '0.55rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: resumeAnalysis.market_readiness_score >= 7 ? '#10b981' : resumeAnalysis.market_readiness_score >= 5 ? '#f59e0b' : '#ef4444' }}>
+                                                                    {resumeAnalysis.market_readiness_score >= 7 ? 'Strong' : resumeAnalysis.market_readiness_score >= 5 ? 'Developing' : 'Early Stage'}
+                                                                </span>
                                                             </div>
-                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.55rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: resumeAnalysis.market_readiness_score >= 7 ? '#10b981' : resumeAnalysis.market_readiness_score >= 5 ? '#f59e0b' : '#ef4444' }}>
-                                                                {resumeAnalysis.market_readiness_score >= 7 ? 'Strong' : resumeAnalysis.market_readiness_score >= 5 ? 'Developing' : 'Early Stage'}
-                                                            </span>
-                                                        </div>
-                                                        ); })()}
+                                                            ); })()}
 
-                                                        {/* Right side content */}
-                                                        <div>
                                                             {/* Headline */}
-                                                            <p style={{ fontFamily: "'Georgia', serif", fontSize: isMobile ? '0.88rem' : '1rem', fontWeight: 400, fontStyle: 'italic', color: '#374151', margin: '0 0 14px', lineHeight: 1.6, borderLeft: '3px solid #135bec', paddingLeft: 12 }}>
+                                                            <p style={{ fontFamily: "'Georgia', serif", fontSize: isMobile ? '0.95rem' : '1rem', fontWeight: 400, fontStyle: 'italic', color: '#374151', margin: 0, lineHeight: 1.6, borderLeft: '3px solid #135bec', paddingLeft: 12 }}>
                                                                 {resumeAnalysis.headline}
                                                             </p>
+                                                        </div>
 
-                                                            {/* Asset + Action: 2-column on all viewports */}
-                                                            <div className="mob-assess-topasset" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 8 : 10, marginBottom: 14 }}>
-                                                                <div className="assess-asset-card" style={{ padding: '10px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e2e8f0', borderTop: '2px solid #10b981', transition: 'border-color 0.15s' }}>
-                                                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: isMobile ? '0.05em' : '0.1em', marginBottom: 6 }}>Your Biggest Asset</div>
-                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.775rem', color: '#15803d', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.biggest_asset}</p>
-                                                                </div>
-                                                                <div className="assess-action-card" style={{ padding: '10px 12px', borderRadius: 8, background: '#fff', border: '1px solid #e2e8f0', borderTop: '2px solid #135bec', transition: 'border-color 0.15s' }}>
-                                                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: isMobile ? '0.05em' : '0.1em', marginBottom: 6 }}>Top Action</div>
-                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.775rem', color: '#1e40af', margin: 0, lineHeight: 1.5 }}>{resumeAnalysis.top_action}</p>
-                                                                </div>
+                                                        {/* Asset + Action: full width, 2-column on all viewports */}
+                                                        <div className="mob-assess-topasset" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 8 : 10, marginBottom: 14 }}>
+                                                            <div className="assess-asset-card" style={{ padding: isMobile ? '8px 7px' : '10px 12px', borderRadius: 10, background: '#f0fdf4', border: '1px solid #dcfce7', transition: 'box-shadow 0.15s' }}>
+                                                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: isMobile ? '0.56rem' : '0.6rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: isMobile ? '0.03em' : '0.1em', marginBottom: 5 }}>Your Biggest Asset</div>
+                                                                <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.7rem' : '0.775rem', color: '#15803d', margin: 0, lineHeight: 1.4 }}>{resumeAnalysis.biggest_asset}</p>
                                                             </div>
+                                                            <div className="assess-action-card" style={{ padding: isMobile ? '8px 7px' : '10px 12px', borderRadius: 10, background: '#eff6ff', border: '1px solid #dbeafe', transition: 'box-shadow 0.15s' }}>
+                                                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: isMobile ? '0.56rem' : '0.6rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: isMobile ? '0.03em' : '0.1em', marginBottom: 5 }}>Top Action</div>
+                                                                <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.7rem' : '0.775rem', color: '#1e40af', margin: 0, lineHeight: 1.4 }}>{resumeAnalysis.top_action}</p>
+                                                            </div>
+                                                        </div>
 
-                                                            {/* Strengths + Gaps */}
-                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 8 : 12 }}>
-                                                                <div>
-                                                                    <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: isMobile ? '0.04em' : '0.12em', marginBottom: 8 }}>Strengths</div>
-                                                                    {(resumeAnalysis.strengths || []).map((s, i) => (
-                                                                        <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'flex-start', marginBottom: 5 }}>
-                                                                            <span style={{ color: '#10b981', flexShrink: 0, marginTop: 2, fontSize: 9 }}>✓</span>
-                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.68rem' : '0.75rem', color: '#475569', lineHeight: 1.45 }}>{s}</span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                                <div>
-                                                                    <div style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: isMobile ? '0.04em' : '0.12em', marginBottom: 8 }}>Gaps to Close</div>
-                                                                    {(resumeAnalysis.gaps || []).map((g, i) => (
-                                                                        <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'flex-start', marginBottom: 5 }}>
-                                                                            <span style={{ color: '#ef4444', flexShrink: 0, marginTop: 2, fontSize: 9 }}>○</span>
-                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.68rem' : '0.75rem', color: '#475569', lineHeight: 1.45 }}>{g}</span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
+                                                        {/* Strengths + Gaps: full width */}
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: isMobile ? 10 : 12 }}>
+                                                            <div>
+                                                                <div style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.6rem' : '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: isMobile ? '0.04em' : '0.12em', marginBottom: 8 }}>Strengths</div>
+                                                                {(resumeAnalysis.strengths || []).map((s, i) => (
+                                                                    <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'flex-start', marginBottom: 6 }}>
+                                                                        <span style={{ color: '#10b981', flexShrink: 0, marginTop: 2, fontSize: 9 }}>✓</span>
+                                                                        <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.8rem' : '0.75rem', color: '#475569', lineHeight: 1.45 }}>{s}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.6rem' : '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: isMobile ? '0.04em' : '0.12em', marginBottom: 8 }}>Gaps to Close</div>
+                                                                {(resumeAnalysis.gaps || []).map((g, i) => (
+                                                                    <div key={i} style={{ display: 'flex', gap: 5, alignItems: 'flex-start', marginBottom: 6 }}>
+                                                                        <span style={{ color: '#ef4444', flexShrink: 0, marginTop: 2, fontSize: 9 }}>○</span>
+                                                                        <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.8rem' : '0.75rem', color: '#475569', lineHeight: 1.45 }}>{g}</span>
+                                                                    </div>
+                                                                ))}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1903,7 +1925,7 @@ export default function UploadPage() {
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7h-3V4a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v3H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.44rem' : '0.66rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Apply To These Roles</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.58rem' : '0.66rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Apply To These Roles</span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 12 }}>
                                                                             {resumeAnalysis.recommended_roles!.map((r, i) => {
@@ -1912,14 +1934,14 @@ export default function UploadPage() {
                                                                                 return (
                                                                                     <div key={i}>
                                                                                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
-                                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.75rem' : '0.95rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.35 }}>{r.role}</span>
+                                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.85rem' : '0.95rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.35 }}>{r.role}</span>
                                                                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }} title={r.fit + ' fit'}>
                                                                                                 {[0, 1, 2].map(d => (
                                                                                                     <span key={d} style={{ width: 6, height: 6, borderRadius: '50%', background: d < fitDots ? fitColor : '#e2e8f0' }} />
                                                                                                 ))}
                                                                                             </span>
                                                                                         </div>
-                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.6875rem' : '0.85rem', color: '#475569', margin: 0, lineHeight: 1.5 }}>{r.why}</p>
+                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.85rem', color: '#475569', margin: 0, lineHeight: 1.5 }}>{r.why}</p>
                                                                                     </div>
                                                                                 )
                                                                             })}
@@ -1934,7 +1956,7 @@ export default function UploadPage() {
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><line x1="9" y1="9" x2="9" y2="9"/><line x1="9" y1="13" x2="9" y2="13"/><line x1="9" y1="17" x2="9" y2="17"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.44rem' : '0.66rem', fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Target Companies</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.58rem' : '0.66rem', fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Target Companies</span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 11 }}>
                                                                             {[
@@ -1945,8 +1967,8 @@ export default function UploadPage() {
                                                                                 <div key={i} style={{ display: 'flex', gap: isMobile ? 7 : 10, alignItems: 'flex-start' }}>
                                                                                     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: isMobile ? 16 : 20, height: isMobile ? 16 : 20, borderRadius: 5, background: tier.bg, color: tier.color, fontFamily: 'monospace', fontSize: isMobile ? 8 : 10, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>{tier.glyph}</span>
                                                                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                                                                        <div style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.6rem', fontWeight: 700, color: tier.labelColor, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 2 }}>{tier.label}</div>
-                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.6875rem' : '0.875rem', color: '#1e293b', margin: 0, lineHeight: 1.45 }}>{tier.value}</p>
+                                                                                        <div style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.56rem' : '0.6rem', fontWeight: 700, color: tier.labelColor, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 2 }}>{tier.label}</div>
+                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.875rem', color: '#1e293b', margin: 0, lineHeight: 1.45 }}>{tier.value}</p>
                                                                                     </div>
                                                                                 </div>
                                                                             ))}
@@ -1961,13 +1983,13 @@ export default function UploadPage() {
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.44rem' : '0.66rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Cut From Your Resume</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.58rem' : '0.66rem', fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Cut From Your Resume</span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 7 : 10 }}>
                                                                             {resumeAnalysis.cut_or_condense!.map((item, i) => (
                                                                                 <div key={i} style={{ display: 'flex', gap: isMobile ? 7 : 10, alignItems: 'flex-start' }}>
                                                                                     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: isMobile ? 16 : 20, height: isMobile ? 16 : 20, borderRadius: 5, background: '#fef2f2', color: '#dc2626', fontFamily: 'monospace', fontSize: isMobile ? 10 : 12, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>−</span>
-                                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.6875rem' : '0.875rem', color: '#1e293b', margin: 0, lineHeight: 1.45 }}>{item}</p>
+                                                                                    <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.875rem', color: '#1e293b', margin: 0, lineHeight: 1.45 }}>{item}</p>
                                                                                 </div>
                                                                             ))}
                                                                         </div>
@@ -1981,7 +2003,7 @@ export default function UploadPage() {
                                                                             <div style={{ width: 24, height: 24, borderRadius: 7, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                                                                             </div>
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.44rem' : '0.66rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Chase These Certifications</span>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.58rem' : '0.66rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.14em' }}>Chase These Certifications</span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 12 }}>
                                                                             {resumeAnalysis.recommended_certifications!.map((c, i) => {
@@ -1990,10 +2012,10 @@ export default function UploadPage() {
                                                                                 return (
                                                                                     <div key={i}>
                                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 9, marginBottom: 4, flexWrap: 'wrap' }}>
-                                                                                            <span style={{ padding: isMobile ? '2px 6px' : '3px 8px', borderRadius: 4, background: pBg, color: pColor, fontFamily: 'monospace', fontSize: isMobile ? '0.47rem' : '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', lineHeight: 1.3 }}>{c.priority}</span>
-                                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.75rem' : '0.95rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>{c.name}</span>
+                                                                                            <span style={{ padding: isMobile ? '2px 6px' : '3px 8px', borderRadius: 4, background: pBg, color: pColor, fontFamily: 'monospace', fontSize: isMobile ? '0.56rem' : '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', lineHeight: 1.3 }}>{c.priority}</span>
+                                                                                            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.85rem' : '0.95rem', fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>{c.name}</span>
                                                                                         </div>
-                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.6875rem' : '0.85rem', color: '#475569', margin: 0, lineHeight: 1.45 }}>{c.reason}</p>
+                                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.85rem', color: '#475569', margin: 0, lineHeight: 1.45 }}>{c.reason}</p>
                                                                                     </div>
                                                                                 )
                                                                             })}
