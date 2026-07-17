@@ -327,7 +327,7 @@ h4 {
 /* Drawer & overlay use position:fixed so they need no extra CSS */
 /* here — all styling lives in MobileNavbar.tsx inline styles.   */
 
-/* ── Phase 8 QueueStatusBanner spinner ────────────────────── */
+/* ── Shared spinner keyframe (used by chat/optimize inline spinners) ── */
 @keyframes qsb-spin { to { transform: rotate(360deg); } }
 .qsb-spin { animation: qsb-spin 1s linear infinite; }
 

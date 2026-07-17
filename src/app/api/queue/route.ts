@@ -7,7 +7,7 @@ export const maxDuration = 30;
 /**
  * GET /api/queue
  * Returns the current user's most recent queue items (default 20).
- * Phase 8 frontend uses this to render the QueueStatusBanner.
+ * Phase 8 frontend uses this to render job-search queue status.
  */
 export async function GET() {
     const supabase = await createClient();

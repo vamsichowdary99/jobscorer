@@ -2022,7 +2022,10 @@ export default function SearchPage() {
                     )
                 })()}
 
-                {/* Unified search loading banner — replaces the old queue pill + ingest bar + score bar */}
+                {/* Unified search loading banner — replaces the old queue pill + ingest bar + score bar.
+                    The empty-query validation message ("Please enter a job title first.") reaches this
+                    same 'error' status as real ingest/network failures, but retrying it just re-shows
+                    the identical message — omit onRetry for that one case so no dead-end Retry link renders. */}
                 {searchBannerStatus && (
                     <LoadingState
                         layout="inline"
@@ -2030,7 +2033,7 @@ export default function SearchPage() {
                         cyclePhrases={JOB_SEARCH_CYCLE_PHRASES}
                         successText={scoreStatus || ingestStatus || 'Search complete'}
                         errorMessage={ingestStatus || "Couldn't reach the job boards — try again"}
-                        onRetry={() => { setShowIngestBanner(false); handleIngest() }}
+                        onRetry={ingestStatus === 'Please enter a job title first.' ? undefined : () => { setShowIngestBanner(false); handleIngest() }}
                     />
                 )}
 

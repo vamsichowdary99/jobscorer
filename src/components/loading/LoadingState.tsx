@@ -46,10 +46,9 @@ const LS_KEYFRAMES = `
     @keyframes ls-sweep { to { transform: rotate(360deg) } }
     @keyframes ls-inline-pulse { 0%, 100% { opacity: 0.55 } 50% { opacity: 1 } }
     @keyframes ls-inline-fade { from { opacity: 0; transform: translateY(3px) } to { opacity: 1; transform: translateY(0) } }
-    @media (prefers-reduced-motion: reduce) {
-        * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
-    }
 `
+// prefers-reduced-motion is already handled app-wide by src/app/globals.css (identical
+// animation-duration/animation-iteration-count rule on `*`) — no local override needed here.
 
 type IconName = 'check' | 'alert' | 'clock' | 'zap' | 'sparkles' | 'refresh'
 
