@@ -43,6 +43,7 @@ export async function DELETE(req: NextRequest) {
     await getAdminSupabase().from('user_job_matches').delete().eq('resume_id', id)
     await getAdminSupabase().from('gap_form_responses').delete().eq('resume_id', id)
     await getAdminSupabase().from('optimized_resumes').delete().eq('resume_id', id)
+    await getAdminSupabase().from('resume_layouts').delete().eq('resume_id', id)
 
     // Try these — they may not exist yet, ignore errors
     try { await getAdminSupabase().from('resume_sections_audit').delete().eq('resume_id', id) } catch { }
