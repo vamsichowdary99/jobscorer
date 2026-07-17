@@ -1456,10 +1456,14 @@ function WsReview({ roadmapId, milestoneId, canReview, initialGithubUrl, onBack,
                 </div>
             )}
             {phase === 'loading' && (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 60 }}>
-                    <div style={{ width: 56, height: 56, borderRadius: '50%', border: `3px solid ${T.line}`, borderTopColor: T.blue, marginBottom: 20, animation: 'lp-spin 0.9s linear infinite' }} />
-                    <div style={{ fontSize: 17, fontWeight: 700, color: T.ink, marginBottom: 6 }}>Reviewing your implementation…</div>
-                    <div style={{ fontSize: '13.5px', color: T.muted }}>Checking your checklist against the milestone goal</div>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <LoadingState
+                        layout="card"
+                        title="Reviewing your implementation"
+                        subtitle="Checking your checklist against the milestone goal."
+                        status="running"
+                        estimatedTime="10–20 sec"
+                    />
                 </div>
             )}
         </div>
