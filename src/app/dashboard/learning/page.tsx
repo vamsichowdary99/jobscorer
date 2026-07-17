@@ -14,6 +14,8 @@ import {
 } from '@/lib/api'
 import type { LearningPath, LearningResource, Job, MilestoneChecklistItem, MilestoneTask, CheckpointResult, ProjectEvidence, UserAchievement } from '@/lib/types'
 import { useAuth } from '@/components/providers/AuthProvider'
+import { LoadingState } from '@/components/loading/LoadingState'
+import { LOADING_VARIANTS } from '@/components/loading/loadingVariants'
 
 /* ─── Design tokens (Split layout) ─────────────────────────────── */
 const T = {
@@ -1053,9 +1055,15 @@ function WsMarkdown({ content }: { content: string }) {
 
 function WsCoachLoading({ label }: { label: string }) {
     return (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', border: `3px solid ${T.line}`, borderTopColor: T.blue, animation: 'lp-spin 0.9s linear infinite' }} />
-            <div style={{ fontSize: '13.5px', color: T.muted }}>{label}</div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <LoadingState
+                layout="card"
+                title={LOADING_VARIANTS.projectCoach.title}
+                subtitle={label}
+                steps={LOADING_VARIANTS.projectCoach.steps}
+                status="running"
+                estimatedTime={LOADING_VARIANTS.projectCoach.estimatedTime}
+            />
         </div>
     )
 }
