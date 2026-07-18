@@ -83,9 +83,9 @@ function LSStepRow({ step, state, isLast }: { step: LoadingStep; state: 'done' |
                     {state === 'done' && <span style={{ animation: 'ls-pop 0.3s ease' }}><LSIcon name="check" size={12} color="#fff" strokeWidth={3} /></span>}
                     {state === 'current' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: LS_COLORS.primary, animation: 'ls-pulse 1.2s ease-in-out infinite' }} />}
                 </div>
-                {!isLast && <div style={{ width: 2, flex: 1, minHeight: 16, marginTop: 2, background: state === 'done' ? LS_COLORS.primary : LS_COLORS.border, transition: 'background 0.3s ease' }} />}
+                {!isLast && <div style={{ width: 2, flex: 1, minHeight: 18, marginTop: 2, background: state === 'done' ? LS_COLORS.primary : LS_COLORS.border, transition: 'background 0.3s ease' }} />}
             </div>
-            <div style={{ paddingBottom: isLast ? 0 : 16, paddingTop: 2 }}>
+            <div style={{ paddingBottom: isLast ? 0 : 18, paddingTop: 2 }}>
                 <div style={{
                     fontSize: 14, fontWeight: state === 'pending' ? 500 : 600,
                     color: state === 'pending' ? '#94a3b8' : LS_COLORS.text,
@@ -96,7 +96,7 @@ function LSStepRow({ step, state, isLast }: { step: LoadingStep; state: 'done' |
     )
 }
 
-function LSInline({ steps = [], cyclePhrases, status = 'running', cycleIntervalMs = 1700, successText, errorMessage, onRetry }: LoadingStateProps) {
+function LSInline({ steps = [], cyclePhrases, status = 'running', cycleIntervalMs = 1700, successText, errorMessage, onRetry, estimatedTime }: LoadingStateProps) {
     const phrases = cyclePhrases && cyclePhrases.length ? cyclePhrases : steps.map(s => `${s.label}…`)
     const [i, setI] = useState(0)
     const [fadeKey, setFadeKey] = useState(0)
@@ -114,38 +114,49 @@ function LSInline({ steps = [], cyclePhrases, status = 'running', cycleIntervalM
     const isSuccess = status === 'success'
     const bg = isError ? LS_COLORS.errorBg : isSuccess ? LS_COLORS.successBg : LS_COLORS.primaryLight
     const border = isError ? LS_COLORS.errorBorder : isSuccess ? LS_COLORS.successBorder : '#dce9fc'
+    const showTime = !!estimatedTime && !isError && !isSuccess
 
     return (
         <div style={{
-            display: 'flex', alignItems: 'center', gap: 12, height: 44, padding: '0 16px',
-            borderRadius: 10, background: bg, border: `1px solid ${border}`,
+            display: 'flex', alignItems: 'center', gap: 14, height: 56, padding: '0 20px',
+            borderRadius: 12, background: bg, border: `1px solid ${border}`,
+            boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
             fontFamily: LS_DISPLAY_FONT, width: '100%', boxSizing: 'border-box',
             transition: 'background 0.25s ease, border-color 0.25s ease',
         }}>
             <style>{LS_KEYFRAMES}</style>
             <div style={{
-                position: 'relative', width: 20, height: 20, flexShrink: 0, borderRadius: '50%',
+                position: 'relative', width: 26, height: 26, flexShrink: 0, borderRadius: '50%',
                 background: '#fff', border: `1.5px solid ${isError ? LS_COLORS.errorBorder : isSuccess ? LS_COLORS.successBorder : '#c7dcfb'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
             }}>
-                {isError ? <LSIcon name="alert" size={11} color={LS_COLORS.error} /> :
-                 isSuccess ? <LSIcon name="check" size={11} color={LS_COLORS.success} strokeWidth={3} /> :
+                {isError ? <LSIcon name="alert" size={13} color={LS_COLORS.error} /> :
+                 isSuccess ? <LSIcon name="check" size={13} color={LS_COLORS.success} strokeWidth={3} /> :
                  <>
                     <div style={{ position: 'absolute', inset: 0, background: 'conic-gradient(from 0deg, rgba(19,91,236,0.45), rgba(19,91,236,0) 35%)', animation: 'ls-sweep 2.2s linear infinite' }} />
-                    <div style={{ position: 'relative', width: 5, height: 5, borderRadius: '50%', background: LS_COLORS.primary, animation: 'ls-inline-pulse 2.2s ease-in-out infinite' }} />
+                    <div style={{ position: 'relative', width: 6, height: 6, borderRadius: '50%', background: LS_COLORS.primary, animation: 'ls-inline-pulse 2.2s ease-in-out infinite' }} />
                  </>}
             </div>
             <div style={{
-                fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1,
+                fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1,
                 color: isError ? LS_COLORS.error : isSuccess ? LS_COLORS.success : LS_COLORS.text,
             }}>
                 {isError ? (errorMessage || 'Something went wrong — try again') :
                  isSuccess ? (successText || 'Done') :
                  <span key={fadeKey} style={{ display: 'inline-block', animation: 'ls-inline-fade 0.35s ease' }}>{phrases[i]}</span>}
             </div>
+            {showTime && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+                    paddingLeft: 14, borderLeft: `1px solid ${border}`,
+                }}>
+                    <LSIcon name="clock" size={12} color={LS_COLORS.textSec} />
+                    <span style={{ fontFamily: LS_MONO_FONT, fontSize: 12, fontWeight: 600, color: LS_COLORS.textSec, whiteSpace: 'nowrap' }}>{estimatedTime}</span>
+                </div>
+            )}
             {isError && onRetry && (
                 <button onClick={onRetry} style={{
-                    border: 'none', background: 'none', color: LS_COLORS.error, fontWeight: 700, fontSize: 12.5,
+                    border: 'none', background: 'none', color: LS_COLORS.error, fontWeight: 700, fontSize: 13,
                     cursor: 'pointer', fontFamily: LS_DISPLAY_FONT, flexShrink: 0, padding: 0, textDecoration: 'underline',
                 }}>Retry</button>
             )}
@@ -161,7 +172,7 @@ export function LoadingState({
     if (layout === 'inline') {
         return <LSInline steps={steps} cyclePhrases={cyclePhrases} status={status}
             cycleIntervalMs={cycleIntervalMs} successText={successText}
-            errorMessage={errorMessage} onRetry={onRetry} />
+            errorMessage={errorMessage} onRetry={onRetry} estimatedTime={estimatedTime} />
     }
 
     const currentIndex = steps.findIndex(s => s.id === currentStepId)
@@ -174,26 +185,26 @@ export function LoadingState({
 
     return (
         <div style={{
-            width: 440, maxWidth: '100%', background: LS_COLORS.surface, border: `1px solid ${LS_COLORS.border}`,
-            borderRadius: 16, padding: '32px 32px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 12px 32px -12px rgba(15,23,42,0.12)',
+            width: 460, maxWidth: '100%', background: LS_COLORS.surface, border: `1px solid ${LS_COLORS.border}`,
+            borderRadius: 18, padding: '40px 36px 30px', boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 16px 40px -14px rgba(15,23,42,0.14)',
             fontFamily: LS_DISPLAY_FONT, boxSizing: 'border-box',
         }}>
             <style>{LS_KEYFRAMES}</style>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 26 }}>
                 <div style={{
-                    width: 40, height: 40, borderRadius: 11, background: badgeBg, color: badgeColor,
+                    width: 46, height: 46, borderRadius: 13, background: badgeBg, color: badgeColor,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
-                    {isError ? <LSIcon name="alert" size={19} /> :
-                     isSuccess ? <span style={{ animation: 'ls-pop 0.35s ease' }}><LSIcon name="check" size={19} strokeWidth={2.5} /></span> :
-                     isCached ? <LSIcon name="zap" size={18} /> :
-                     <span style={{ display: 'inline-flex', animation: 'ls-spin 1.4s linear infinite' }}><LSIcon name="sparkles" size={18} /></span>}
+                    {isError ? <LSIcon name="alert" size={21} /> :
+                     isSuccess ? <span style={{ animation: 'ls-pop 0.35s ease' }}><LSIcon name="check" size={21} strokeWidth={2.5} /></span> :
+                     isCached ? <LSIcon name="zap" size={20} /> :
+                     <span style={{ display: 'inline-flex', animation: 'ls-spin 1.4s linear infinite' }}><LSIcon name="sparkles" size={20} /></span>}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 17, fontWeight: 700, color: LS_COLORS.text, lineHeight: 1.3 }}>
+                    <div style={{ fontSize: 18.5, fontWeight: 700, color: LS_COLORS.text, lineHeight: 1.3 }}>
                         {isError ? 'Something went wrong' : title}
                     </div>
-                    <div style={{ fontSize: 13.5, color: LS_COLORS.textSec, marginTop: 3, lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 14, color: LS_COLORS.textSec, marginTop: 5, lineHeight: 1.5 }}>
                         {isError ? (errorMessage || 'We hit a snag — please try again.') : subtitle}
                     </div>
                 </div>
@@ -234,7 +245,7 @@ export function LoadingState({
             {!isError && (
                 <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                    marginTop: 18, paddingTop: 16, borderTop: `1px solid ${LS_COLORS.border}`,
+                    marginTop: 22, paddingTop: 18, borderTop: `1px solid ${LS_COLORS.border}`,
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: LS_COLORS.textSec }}>
                         <LSIcon name="clock" size={13} color={LS_COLORS.textSec} />

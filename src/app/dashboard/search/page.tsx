@@ -2031,6 +2031,7 @@ export default function SearchPage() {
                         layout="inline"
                         status={searchBannerStatus}
                         cyclePhrases={JOB_SEARCH_CYCLE_PHRASES}
+                        estimatedTime="15–30 sec"
                         successText={scoreStatus || ingestStatus || 'Search complete'}
                         errorMessage={ingestStatus || "Couldn't reach the job boards — try again"}
                         onRetry={ingestStatus === 'Please enter a job title first.' ? undefined : () => { setShowIngestBanner(false); handleIngest() }}
