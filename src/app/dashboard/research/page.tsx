@@ -1375,7 +1375,13 @@ function CompanyIntelPage() {
 
         const initial = window.setTimeout(tick, nextDelayMs(0)!)
         return () => { cancelled = true; window.clearTimeout(initial) }
-    }, [isPending, research, selectedJobId, matches, loadResearch, user?.id, requestedCompany, selectedResumeId, pendingEntries])
+        // pendingEntries deliberately omitted: addPending() above dispatches a
+        // store-changed event that updates pendingEntries, which — if listed
+        // here — re-fires this same effect, calls addPending() again, and
+        // loops ("Maximum update depth exceeded"). It's only read as a
+        // fallback for companyName/resumeId, so a stale closure value is fine.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isPending, research, selectedJobId, matches, loadResearch, user?.id, requestedCompany, selectedResumeId])
 
     /* ── Once the research row lands on this page, clear it from the global
        pending list so the cross-page toaster doesn't double-notify a user
