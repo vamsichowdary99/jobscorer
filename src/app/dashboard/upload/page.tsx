@@ -1109,6 +1109,27 @@ export default function UploadPage() {
                         <div style={{ ...S.inner, ...(isMobile ? { maxWidth: '100%' } : {}) }}>
 
                             {viewMode === 'upload' ? (
+                                uploading ? (
+                                    /* Uploading — swap the form for the loading system, not just a button
+                                       label. Keep the filename visible so the transition reads as a
+                                       continuation of the same action, not a reset; width matches the
+                                       vacated form so nothing re-centers underneath it. */
+                                    <div style={{ maxWidth: 460, margin: isMobile ? '16px 0' : '36px auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, animation: 'ls-fade 0.35s ease' }}>
+                                        {file && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: '#64748b', fontFamily: "'Inter', sans-serif" }}>
+                                                <span style={{ fontSize: 15 }}>📄</span>
+                                                <span style={{ maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                                            </div>
+                                        )}
+                                        <LoadingState
+                                            layout="card"
+                                            title="Analyzing your resume"
+                                            subtitle="Extracting your skills, experience, and education"
+                                            status="running"
+                                            estimatedTime="10–30 sec"
+                                        />
+                                    </div>
+                                ) : (
                                 /* Upload form */
                                 <div style={{ maxWidth: 460, margin: isMobile ? '16px 0' : '36px auto', background: '#fff', borderRadius: 16, padding: isMobile ? 20 : 36, boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
                                     <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>Upload your resume</h2>
@@ -1121,6 +1142,7 @@ export default function UploadPage() {
                                     {file && <button onClick={handleUpload} disabled={uploading} style={{ ...S.saveBtn, width: '100%', marginTop: 14, justifyContent: 'center', display: 'flex', opacity: uploading ? 0.6 : 1 }}>{uploading ? 'Analyzing…' : 'Upload & Analyze'}</button>}
                                     {uploadError && <p style={{ color: '#ef4444', fontSize: 13, marginTop: 8 }}>{uploadError}</p>}
                                 </div>
+                                )
 
                             ) : preview ? (
                                 <>
