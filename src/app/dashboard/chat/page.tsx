@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import ReactMarkdown, { type Components as MarkdownComponents } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '@/components/providers/AuthProvider'
-import { fetchResumes, setPrimaryResumeId, getPrimaryResumeId } from '@/lib/api'
+import { fetchResumes, setPrimaryResumeId } from '@/lib/api'
 import type { Resume } from '@/lib/types'
 import type { ChatMessage, ChatToolCall } from '@/lib/chat/types'
 
@@ -127,22 +127,6 @@ function resumeSubtitle(r: Resume): string {
     if (file && file !== resumeDisplayName(r)) parts.push(file)
     if (date) parts.push(`Uploaded ${date}`)
     return parts.join(' · ')
-}
-
-/* ── tool name → icon map for inline tool badges ──────────── */
-function toolBadgeMeta(name: string): { icon: React.ReactNode; label: string } {
-    switch (name) {
-        case 'find_matching_jobs': return { icon: <I.Search />, label: 'find_matching_jobs' }
-        case 'recommend_skill_to_learn': return { icon: <I.Sliders />, label: 'recommend_skill_to_learn' }
-        case 'get_cached_score': return { icon: <I.Cash />, label: 'get_cached_score' }
-        case 'get_user_resume': return { icon: <I.File />, label: 'get_user_resume' }
-        case 'get_job_scores': return { icon: <I.Brief />, label: 'get_job_scores' }
-        case 'get_job_details': return { icon: <I.Brief />, label: 'get_job_details' }
-        case 'get_company_research': return { icon: <I.Building />, label: 'get_company_research' }
-        case 'get_skill_gaps': return { icon: <I.Bolt />, label: 'get_skill_gaps' }
-        case 'search_jobs': return { icon: <I.Search />, label: 'search_jobs' }
-        default: return { icon: <I.Sparkles />, label: name }
-    }
 }
 
 /* ── deterministic company logo gradient ──────────────────── */
@@ -289,6 +273,18 @@ function formatRelTime(ts: number): string {
     return `${days}d ago`
 }
 
+/* Buckets chat history into Today / Yesterday / Earlier — shared by the
+   desktop Sidebar and MobileHistoryDrawer so both group sessions the same way. */
+function groupHistoryByRecency(history: ChatRecord[]): { label: string; items: ChatRecord[] }[] {
+    const now = Date.now()
+    const DAY = 86400000
+    return [
+        { label: 'Today', items: history.filter(h => now - h.updatedAt < DAY) },
+        { label: 'Yesterday', items: history.filter(h => now - h.updatedAt >= DAY && now - h.updatedAt < 2 * DAY) },
+        { label: 'Earlier', items: history.filter(h => now - h.updatedAt >= 2 * DAY) },
+    ].filter(g => g.items.length > 0)
+}
+
 const QUICK_ACTIONS = [
     { icon: <I.Brief />, label: 'Find me jobs that fit', prompt: 'Which jobs are my strongest fit right now? Show me the top matches with what each one is pulling.' },
     { icon: <I.Bolt />, label: 'Tailor my resume', prompt: 'How would you tailor my resume for my best match?' },
@@ -331,42 +327,6 @@ function BetaPill() {
     )
 }
 
-function ToolBadge({ name, durationMs, inProgress }: { name: string; durationMs?: number; inProgress?: boolean }) {
-    const m = toolBadgeMeta(name)
-    const done = typeof durationMs === 'number'
-    // done → green; in-progress → amber; fallback → blue
-    const palette = done
-        ? { bg: '#dcfce7', border: '#a7f3d0', color: '#047857' }
-        : inProgress
-            ? { bg: '#fff7ed', border: '#fde68a', color: '#b45309' }
-            : { bg: 'var(--rs-blue-50)', border: '#DBEAFE', color: 'var(--rs-blue-700)' }
-    return (
-        <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5,
-            padding: '4px 9px',
-            background: palette.bg, border: `1px solid ${palette.border}`,
-            borderRadius: 99, color: palette.color,
-            fontSize: '.6875rem', fontWeight: 600, letterSpacing: '-.005em',
-        }}>
-            {done ? (
-                <I.Check style={{ color: '#10b981', width: 9, height: 9 }} />
-            ) : inProgress ? (
-                <span className="qsb-spin" style={{ display: 'inline-flex', color: palette.color }}>
-                    <I.Refresh style={{ width: 9, height: 9 }} />
-                </span>
-            ) : (
-                <span style={{ display: 'inline-flex', color: palette.color }}>{m.icon}</span>
-            )}
-            <span>{m.label}</span>
-            {done && (
-                <span style={{ color: palette.color, opacity: .65, fontFamily: 'var(--font-mono)', fontSize: '.625rem' }}>
-                    · {(durationMs! / 1000).toFixed(1)}s
-                </span>
-            )}
-        </div>
-    )
-}
-
 function Chip({ children, kind }: { children: React.ReactNode; kind?: 'green' | 'amber' | 'blue' }) {
     const palette = kind === 'green'
         ? { bg: '#DCFCE7', fg: '#15803D', bd: '#86EFAC' }
@@ -386,17 +346,29 @@ function Chip({ children, kind }: { children: React.ReactNode; kind?: 'green' | 
     )
 }
 
-function ScoreBadge({ score }: { score: number }) {
+function ScoreBadge({ score, live }: { score: number; live?: boolean }) {
     const hi = score >= 80
     return (
-        <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            padding: '3px 9px', borderRadius: 7,
-            fontSize: '.75rem', fontWeight: 800, letterSpacing: '-.01em',
-            fontFamily: 'var(--font-mono)',
-            background: hi ? 'var(--rs-blue)' : '#DBEAFE',
-            color: hi ? '#fff' : 'var(--rs-blue-700)',
-        }}>{score}</span>
+        <span
+            title={live ? 'Estimated match — the full AI score hasn\'t run yet. Ask for the real score in chat, or run Find Best Jobs on the Matches page.' : undefined}
+            style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 9px', borderRadius: 7,
+                fontSize: '.75rem', fontWeight: 800, letterSpacing: '-.01em',
+                fontFamily: 'var(--font-mono)',
+                background: hi ? 'var(--rs-blue)' : '#DBEAFE',
+                color: hi ? '#fff' : 'var(--rs-blue-700)',
+                cursor: live ? 'help' : undefined,
+            }}>
+            {score}
+            {live && (
+                <span aria-hidden style={{
+                    width: 5, height: 5, borderRadius: '50%',
+                    background: '#F59E0B', display: 'inline-block',
+                    boxShadow: '0 0 0 2px rgba(245,158,11,.25)',
+                }} />
+            )}
+        </span>
     )
 }
 
@@ -417,6 +389,9 @@ type JobMatchData = {
     missing_skills?: string[]
     similarity?: number
     score: number
+    /** 'similarity' = live RAG match, not yet AI-scored (find_matching_jobs fallback).
+     *  'ai_scored' or undefined = real gpt-4.1-mini score from user_job_matches. */
+    score_source?: 'ai_scored' | 'similarity'
 }
 
 /* ── interactivity context: shared toast + saved-jobs state ──── */
@@ -488,9 +463,20 @@ function JobMatchExpanded({ job }: { job: JobMatchData }) {
                         )}
                     </div>
                 </div>
-                <ScoreBadge score={job.score} />
+                <ScoreBadge score={job.score} live={job.score_source === 'similarity'} />
             </button>
             <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {job.score_source === 'similarity' && (
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        fontSize: '.6875rem', fontWeight: 600, color: '#B45309',
+                    }}>
+                        <span aria-hidden style={{
+                            width: 5, height: 5, borderRadius: '50%', background: '#F59E0B',
+                        }} />
+                        Estimated match — real score pending
+                    </div>
+                )}
                 {(job.matched_skills?.length ?? 0) > 0 && (
                     <div>
                         <div style={{
@@ -578,7 +564,7 @@ function JobMatchRow({ job }: { job: JobMatchData }) {
                     {job.location && <span>{job.location}</span>}
                 </div>
             </div>
-            <ScoreBadge score={job.score} />
+            <ScoreBadge score={job.score} live={job.score_source === 'similarity'} />
             <span style={{ color: 'var(--rs-muted-2)' }}><I.Arrow /></span>
         </button>
     )
@@ -775,6 +761,37 @@ function FollowUpChips({ chips }: { chips: string[] }) {
     )
 }
 
+/* Chat only ever shows estimated (similarity) scores — real AI scoring only
+   runs from Search/Matches. Rather than trying to run it inline (unreliable
+   and slow), this just hands the user off to the page that does it for real. */
+function GetRealScoresChip() {
+    const router = useRouter()
+    return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+            <button
+                type="button"
+                onClick={() => router.push('/dashboard/search')}
+                className="rs-followup-chip"
+                style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '7px 12px', borderRadius: 99,
+                    background: '#fff', border: '1px solid var(--rs-line)',
+                    fontSize: '.78rem', fontWeight: 500,
+                    color: 'var(--rs-ink-2)', letterSpacing: '-.005em',
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(15,23,42,.04)',
+                    fontFamily: 'inherit',
+                }}
+            >
+                <span style={{ color: 'var(--rs-blue)', display: 'inline-flex' }}>
+                    <I.Sparkles width={13} height={13} />
+                </span>
+                Get real AI scores on Search →
+            </button>
+        </div>
+    )
+}
+
 /* Build chips for the skill-gap chart from the gaps themselves. */
 function buildSkillGapChips(gaps: SkillGap[]): string[] {
     if (!gaps.length) return []
@@ -911,6 +928,33 @@ function CompanySnapshotCard({ co }: { co: CompanyData }) {
     )
 }
 
+/* The AI Scoring n8n workflow has written matched_skills/missing_skills in two
+ * different shapes over time — plain strings ("Python") and richer objects
+ * ({ skill: "Python", evidence: "..." }) — into the same user_job_matches JSONB
+ * column. Rendering the object shape as a React key/child crashes, so every
+ * entry is normalized to a plain label here before it reaches JobMatchData. */
+function skillLabel(item: unknown): string | null {
+    if (typeof item === 'string') return item.trim() || null
+    if (item && typeof item === 'object') {
+        const o = item as Record<string, unknown>
+        const label = typeof o.skill === 'string' ? o.skill : typeof o.name === 'string' ? o.name : null
+        return label?.trim() || null
+    }
+    return null
+}
+function normalizeSkillList(raw: unknown): string[] {
+    if (!Array.isArray(raw)) return []
+    const out: string[] = []
+    const seen = new Set<string>()
+    for (const item of raw) {
+        const label = skillLabel(item)
+        if (!label || seen.has(label.toLowerCase())) continue
+        seen.add(label.toLowerCase())
+        out.push(label)
+    }
+    return out
+}
+
 /* Normalize a row from either find_matching_jobs or get_job_scores into JobMatchData. */
 function normalizeJobRow(row: Record<string, unknown>): JobMatchData | null {
     if (!row || typeof row !== 'object') return null
@@ -934,10 +978,13 @@ function normalizeJobRow(row: Record<string, unknown>): JobMatchData | null {
         salary: (row.salary as string | null | undefined) ?? null,
         experience_level: (row.experience_level as string | null | undefined) ?? null,
         required_skills: (row.required_skills as string[] | undefined) ?? [],
-        matched_skills: (row.matched_skills as string[] | undefined) ?? [],
-        missing_skills: (row.missing_skills as string[] | undefined) ?? [],
+        matched_skills: normalizeSkillList(row.matched_skills),
+        missing_skills: normalizeSkillList(row.missing_skills),
         similarity: typeof row.similarity === 'number' ? (row.similarity as number) : undefined,
         score,
+        score_source: row.score_source === 'ai_scored' || row.score_source === 'similarity'
+            ? (row.score_source as 'ai_scored' | 'similarity')
+            : undefined,
     }
 }
 
@@ -947,6 +994,12 @@ function ToolResultCard({ call }: { call: ChatToolCall }) {
     let parsed: unknown
     try { parsed = JSON.parse(call.result) } catch { return null }
 
+    // This resume has zero real AI-scored matches — point straight at Search
+    // rather than letting the model fall back to unscored RAG estimates.
+    if (call.name === 'get_job_scores' && parsed && typeof parsed === 'object' && (parsed as Record<string, unknown>).no_scores) {
+        return <GetRealScoresChip />
+    }
+
     // Job lists — both find_matching_jobs (RAG live) and get_job_scores (cached n8n scoring)
     // produce arrays of jobs we can render with the same card. Normalize and render.
     if ((call.name === 'find_matching_jobs' || call.name === 'get_job_scores') && Array.isArray(parsed)) {
@@ -954,9 +1007,11 @@ function ToolResultCard({ call }: { call: ChatToolCall }) {
             .map(normalizeJobRow)
             .filter((j): j is JobMatchData => j !== null)
         if (!jobs.length) return null
+        const hasEstimates = jobs.some(j => j.score_source === 'similarity')
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <JobMatchesCard jobs={jobs} />
+                {hasEstimates && <GetRealScoresChip />}
                 <FollowUpChips chips={buildJobMatchChips(jobs)} />
             </div>
         )
@@ -1194,13 +1249,6 @@ function AsstMessage({
         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
             <Avatar size={30} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 2 }}>
-                {!streaming && toolCalls && toolCalls.length > 0 && (
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {toolCalls.map((t, i) => (
-                            <ToolBadge key={i} name={t.name} durationMs={t.durationMs} />
-                        ))}
-                    </div>
-                )}
                 <div className={`rs-asst-md${streaming ? ' rs-streaming' : ''}`} style={{
                     fontSize: '.9375rem', lineHeight: 1.6, color: 'var(--rs-ink)',
                     wordBreak: 'break-word',
@@ -1226,72 +1274,39 @@ function AsstMessage({
     )
 }
 
+/* Idle thinking copy — cycles while no tool is running, grounded in what the
+   assistant actually does (reads the resume, checks matches, weighs gaps) so
+   it reads as real progress rather than a decorative loading message. */
+const THINKING_PHRASES = [
+    'Reading your resume',
+    'Cross-checking job matches',
+    'Weighing skill gaps',
+    'Lining up your strongest fits',
+]
+
 function TypingIndicator({ pendingTool }: { pendingTool?: string | null }) {
-    // When a tool is running, the bubble morphs into a status row with a
-    // conic-gradient halo + the tool's friendly label. Otherwise it shows the
-    // three classic bouncing dots so the user knows the model is thinking.
-    const label = pendingTool ? toolLabel(pendingTool) : null
+    const [phraseIdx, setPhraseIdx] = useState(0)
+    useEffect(() => {
+        if (pendingTool) return
+        const id = setInterval(() => setPhraseIdx(i => (i + 1) % THINKING_PHRASES.length), 1800)
+        return () => clearInterval(id)
+    }, [pendingTool])
+
+    const label = pendingTool ? toolLabel(pendingTool) : THINKING_PHRASES[phraseIdx]
+
     return (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
-            <Avatar size={30} />
-            <div style={{
-                background: '#fff',
-                border: '1px solid var(--rs-line)',
-                borderRadius: '4px 14px 14px 14px',
-                padding: label ? '10px 14px 10px 12px' : '12px 14px',
-                display: 'flex', gap: 10, alignItems: 'center',
-                boxShadow: '0 1px 2px rgba(15,23,42,.04)',
-                minHeight: 32,
-                transition: 'padding .18s ease',
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span aria-hidden style={{
+                position: 'relative', width: 30, height: 30, flexShrink: 0,
+                borderRadius: '50%', display: 'grid', placeItems: 'center',
+                background: 'linear-gradient(135deg,#2563EB,#1E40AF)',
             }}>
-                {label ? (
-                    <>
-                        <span aria-hidden style={{
-                            position: 'relative',
-                            width: 16, height: 16, flexShrink: 0,
-                            borderRadius: '50%',
-                            background: 'conic-gradient(from 0deg, transparent 0deg, var(--rs-blue) 90deg, transparent 270deg)',
-                            animation: 'rsToolSpin 1.05s linear infinite',
-                            display: 'inline-block',
-                        }}>
-                            <span style={{
-                                position: 'absolute', inset: 2,
-                                borderRadius: '50%', background: '#fff',
-                                display: 'inline-block',
-                            }} />
-                            <span style={{
-                                position: 'absolute', inset: 6,
-                                borderRadius: '50%', background: 'var(--rs-blue)',
-                                opacity: 0.85, display: 'inline-block',
-                            }} />
-                        </span>
-                        <span style={{
-                            fontSize: '.8125rem', fontWeight: 600,
-                            color: 'var(--rs-ink, #0f172a)', letterSpacing: '-.005em',
-                            display: 'inline-flex', alignItems: 'baseline', gap: 6,
-                        }}>
-                            {label}
-                            <span style={{
-                                fontFamily: "var(--font-mono, 'JetBrains Mono', ui-monospace, monospace)",
-                                fontSize: '.6875rem', fontWeight: 600,
-                                color: 'var(--rs-muted-2, #94a3b8)',
-                                letterSpacing: '.06em', textTransform: 'uppercase',
-                            }}>·&nbsp;tool</span>
-                        </span>
-                    </>
-                ) : (
-                    <>
-                        {[0, 160, 320].map(d => (
-                            <span key={d} style={{
-                                width: 6, height: 6, borderRadius: '50%',
-                                background: 'var(--rs-blue)', display: 'inline-block',
-                                animation: 'rsTypingBounce 1.2s ease-in-out infinite',
-                                animationDelay: `${d}ms`,
-                            }} />
-                        ))}
-                    </>
-                )}
-            </div>
+                <span className="rs-think-glow" aria-hidden />
+                <span className="rs-think-spark" style={{ color: '#fff', display: 'inline-flex' }}>
+                    <I.Sparkles width={15} height={15} />
+                </span>
+            </span>
+            <span key={label} className="rs-think-label">{label}</span>
         </div>
     )
 }
@@ -1401,70 +1416,79 @@ function Sidebar({
             <div style={{
                 fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-.01em',
                 color: 'var(--rs-ink, #0F172A)',
-                padding: '14px 18px 10px',
+                padding: '14px 18px 4px',
             }}>Recents</div>
 
             <div className="rs-thread-scroll" style={{
                 flex: 1, overflowY: 'auto',
                 padding: '0 8px 14px',
-                display: 'flex', flexDirection: 'column', gap: 1,
                 minHeight: 0,
             }}>
                 {history.length === 0 ? (
                     <div style={{
-                        padding: '14px 14px', fontSize: '.8125rem',
-                        color: 'var(--rs-muted-2)', lineHeight: 1.5,
+                        margin: '6px 4px 0',
+                        padding: '16px 14px', borderRadius: 12,
+                        background: '#fff', border: '1px dashed var(--rs-line)',
+                        fontSize: '.8125rem', color: 'var(--rs-muted)', lineHeight: 1.55,
                     }}>
-                        No chats yet. Start asking — I&apos;ll remember.
+                        No chats yet. Ask about a match, a company, or your resume — I&apos;ll remember it here.
                     </div>
                 ) : (
-                    history.map(h => {
-                        const on = h.id === activeId
-                        return (
-                            <div key={h.id} className="rs-history-row"
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: 8,
-                                    padding: '9px 12px', borderRadius: 8,
-                                    // Active state is a subtle slate fill — no dot, no border, no shadow.
-                                    background: on ? 'rgba(15,23,42,.06)' : 'transparent',
-                                    cursor: 'pointer',
-                                    transition: 'background .12s ease',
-                                }}
-                                onClick={() => onSelect(h.id)}>
-                                <span style={{
-                                    flex: 1, minWidth: 0,
-                                    fontSize: '0.9375rem',
-                                    fontWeight: on ? 600 : 500,
-                                    color: 'var(--rs-ink, #0F172A)',
-                                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                    letterSpacing: '-.005em',
-                                    lineHeight: 1.45,
-                                }}>{h.title || 'New chat'}</span>
-                                <button type="button"
-                                    onClick={(e) => { e.stopPropagation(); onDelete(h.id) }}
-                                    aria-label="Delete chat"
-                                    className="rs-history-del"
-                                    style={{
-                                        width: 26, height: 26,
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                        borderRadius: 5, background: 'transparent', border: 'none',
-                                        color: 'var(--rs-muted-2)',
-                                        cursor: 'pointer', opacity: 0,
-                                        transition: 'opacity .15s ease, background .15s ease, color .15s ease',
-                                    }}>
-                                    <I.Trash />
-                                </button>
+                    groupHistoryByRecency(history).map(group => (
+                        <div key={group.label}>
+                            <div className="rs-history-group-label">{group.label}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {group.items.map(h => {
+                                    const on = h.id === activeId
+                                    return (
+                                        <div key={h.id}
+                                            className={`rs-history-row${on ? ' active' : ''}`}
+                                            onClick={() => onSelect(h.id)}>
+                                            <span style={{
+                                                color: on ? 'var(--rs-blue)' : 'var(--rs-muted-2)',
+                                                display: 'inline-flex', flexShrink: 0,
+                                            }}><I.ChatBubble /></span>
+                                            <span style={{
+                                                flex: 1, minWidth: 0,
+                                                fontSize: '0.875rem',
+                                                fontWeight: on ? 600 : 500,
+                                                color: 'var(--rs-ink, #0F172A)',
+                                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                                letterSpacing: '-.005em',
+                                                lineHeight: 1.45,
+                                            }}>{h.title || 'New chat'}</span>
+                                            <button type="button"
+                                                onClick={(e) => { e.stopPropagation(); onDelete(h.id) }}
+                                                aria-label="Delete chat"
+                                                className="rs-history-del"
+                                                style={{
+                                                    width: 26, height: 26,
+                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                    borderRadius: 5, background: 'transparent', border: 'none',
+                                                    color: 'var(--rs-muted-2)',
+                                                    cursor: 'pointer', opacity: 0, flexShrink: 0,
+                                                    transition: 'opacity .15s ease, background .15s ease, color .15s ease',
+                                                }}>
+                                                <I.Trash />
+                                            </button>
+                                        </div>
+                                    )
+                                })}
                             </div>
-                        )
-                    })
+                        </div>
+                    ))
                 )}
             </div>
 
             <div style={{
-                padding: '12px 14px',
+                display: 'flex', alignItems: 'center', gap: 7,
+                padding: '12px 16px',
                 borderTop: '1px solid var(--rs-line-2)',
                 fontSize: '.6875rem', color: 'var(--rs-muted)', lineHeight: 1.5,
             }}>
+                <span style={{ color: 'var(--rs-muted-2)', display: 'inline-flex', flexShrink: 0 }}>
+                    <I.File width={12} height={12} />
+                </span>
                 Chats are saved in this browser only.
             </div>
         </aside>
@@ -1486,13 +1510,7 @@ function MobileHistoryDrawer({
     onDelete: (id: string) => void
     userEmail?: string | null
 }) {
-    const now = Date.now()
-    const DAY = 86400000
-    const groups = [
-        { label: 'Today', items: history.filter(h => now - h.updatedAt < DAY) },
-        { label: 'Yesterday', items: history.filter(h => now - h.updatedAt >= DAY && now - h.updatedAt < 2 * DAY) },
-        { label: 'Earlier', items: history.filter(h => now - h.updatedAt >= 2 * DAY) },
-    ].filter(g => g.items.length > 0)
+    const groups = groupHistoryByRecency(history)
 
     const initial = userEmail ? userEmail[0].toUpperCase() : 'U'
     const displayName = userEmail?.split('@')[0] ?? 'User'
@@ -2088,27 +2106,10 @@ export default function AIChatPage() {
                     persist(final, only.id)
                     return
                 }
-                // Auto-select the user's saved primary resume when one exists — avoids the
-                // modal interrupt for users who've already declared their primary. They can
-                // switch via "Switch resume" in the locked-resume strip if needed.
-                const savedPrimaryId = getPrimaryResumeId()
-                const savedPrimary = savedPrimaryId ? list.find(r => r.id === savedPrimaryId) : undefined
-                const dbPrimary = !savedPrimary ? list.find(r => (r as any).is_primary) : undefined
-                const auto = savedPrimary ?? dbPrimary
-                if (auto) {
-                    setSessionResumeId(auto.id)
-                    setSessionResumeName(resumeDisplayName(auto))
-                    setPrimaryResumeId(auto.id)
-                    const confirm: EnrichedMessage = {
-                        role: 'assistant',
-                        content: `Using **${resumeDisplayName(auto)}** for this session.`,
-                    }
-                    const afterConfirm = [...newMsgs, confirm]
-                    setMessages(afterConfirm)
-                    const final = await runStream(trimmed, auto.id, afterConfirm)
-                    persist(final, auto.id)
-                    return
-                }
+                // Always ask which resume to use for a new session when the user has 2+
+                // resumes — silently reusing a saved/DB primary caused the chat to score
+                // against a stale resume (e.g. a freshly uploaded resume was ignored in
+                // favor of an old primary). The picker below covers this.
                 setPendingPick({ message: trimmed, resumes: list })
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Failed to load your resumes.')
@@ -2387,6 +2388,10 @@ export default function AIChatPage() {
                             }}>
                                 {messages.map((m, i) => {
                                     if (m.role === 'user') return <UserBubble key={i} text={m.content} />
+                                    // A freshly-inserted streaming placeholder has no content yet — skip
+                                    // rendering its (empty) bubble entirely and let the TypingIndicator
+                                    // below stand in, instead of showing a bare avatar with nothing next to it.
+                                    if (m.streaming && !m.content) return null
                                     const isSessionResume = m.content.startsWith('Using **') && m.content.includes('for this session.')
                                     return (
                                         <div key={i} className={isSessionResume ? 'mob-resume-session-msg' : undefined}>
@@ -2408,22 +2413,14 @@ export default function AIChatPage() {
                                     />
                                 )}
 
-                                {/* TypingIndicator only renders when the streaming
-                                    placeholder bubble hasn't appeared yet OR
-                                    a tool is currently executing (so the user
-                                    sees an explicit "Searching matching roles…"
-                                    chip even before text starts to stream). */}
-                                {isLoading && !pendingPick && (
-                                    (() => {
-                                        const last = messages[messages.length - 1]
-                                        const showAboveStreaming = pendingTool && last?.role === 'assistant' && last.streaming
-                                        const showStandalone = !last || last.role === 'user' || !last.streaming
-                                        if (showStandalone || showAboveStreaming) {
-                                            return <TypingIndicator pendingTool={pendingTool} />
-                                        }
-                                        return null
-                                    })()
-                                )}
+                                {/* Covers every pre-content moment in one continuous indicator: waiting on
+                                    the resume fetch, a tool call, or the model's first token — so there is
+                                    never a gap where a bare avatar shows with nothing next to it. */}
+                                {isLoading && !pendingPick && (() => {
+                                    const last = messages[messages.length - 1]
+                                    const showThinking = !last || last.role === 'user' || (last.role === 'assistant' && !!last.streaming && !last.content)
+                                    return showThinking ? <TypingIndicator pendingTool={pendingTool} /> : null
+                                })()}
 
                                 <div ref={threadEndRef} />
                             </div>
@@ -2560,12 +2557,17 @@ const globalChatStyle = `
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes rsTypingBounce {
-  0%, 80%, 100% { transform: translateY(0); opacity: .4; }
-  40%           { transform: translateY(-4px); opacity: 1; }
+@keyframes rsThinkGlow {
+  0%, 100% { opacity: .35; transform: scale(.82); }
+  50%      { opacity: .9;  transform: scale(1.18); }
 }
-@keyframes rsToolSpin {
-  to { transform: rotate(360deg); }
+@keyframes rsThinkTwinkle {
+  0%, 100% { transform: scale(.9) rotate(-8deg); opacity: .8; }
+  50%      { transform: scale(1.14) rotate(8deg); opacity: 1; }
+}
+@keyframes rsShimmerSweep {
+  0%   { background-position: 220% 0; }
+  100% { background-position: -20% 0; }
 }
 @keyframes rsCaret {
   0%, 49%   { opacity: 1; }
@@ -2678,12 +2680,56 @@ const globalChatStyle = `
 }
 
 .rs-history-row:hover .rs-history-del { opacity: 1 !important; }
+.rs-history-row {
+  position: relative;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 8px;
+  cursor: pointer; background: transparent;
+  transition: background .12s ease;
+}
 .rs-history-row:hover { background: rgba(37,99,235,.06); }
+.rs-history-row.active { background: var(--rs-blue-50); }
 .rs-history-del:hover { background: #fff; color: #EF4444 !important; }
 
 .rs-new-chat-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 24px -8px rgba(37,99,235,.55);
+}
+
+/* "Thinking" indicator — twinkling sparkle avatar + shimmer-swept label.
+   Signature loading motif for JobScorer AI, replaces the generic dot bounce. */
+.rs-think-glow {
+  position: absolute; inset: -7px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(37,99,235,.5), transparent 70%);
+  animation: rsThinkGlow 1.8s ease-in-out infinite;
+}
+.rs-think-spark {
+  position: relative;
+  animation: rsThinkTwinkle 1.8s ease-in-out infinite;
+}
+.rs-think-label {
+  font-size: .8125rem; font-weight: 600; letter-spacing: -.005em;
+  background-image: linear-gradient(90deg, var(--rs-muted) 0%, var(--rs-blue) 45%, var(--rs-muted-2) 65%, var(--rs-muted) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: rsShimmerSweep 2.1s linear infinite, rsFadeUp .25s ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-think-glow, .rs-think-spark, .rs-think-label { animation: none !important; }
+}
+
+/* Sidebar history rows — grouped headers + accent-bar active state */
+.rs-history-group-label {
+  padding: 14px 12px 6px;
+  font-size: .6875rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--rs-muted-2);
+}
+.rs-history-group-label:first-child { padding-top: 4px; }
+.rs-history-row.active::before {
+  content: '';
+  position: absolute; left: -8px; top: 6px; bottom: 6px;
+  width: 3px; border-radius: 3px;
+  background: linear-gradient(180deg,#2563EB,#1E40AF);
 }
 
 @media (max-width: 767px) {

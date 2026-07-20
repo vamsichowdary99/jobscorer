@@ -16,6 +16,7 @@ const FULL_BLEED_PAGES = [
     '/dashboard/learning',
     '/dashboard/resumes',
     '/dashboard/applications',
+    '/dashboard/settings',
 ]
 
 export default function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {

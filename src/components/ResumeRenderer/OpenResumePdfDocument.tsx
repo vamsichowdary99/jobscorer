@@ -61,6 +61,7 @@ interface ResumeEditorState {
   leadership: LeadershipEntry[];
   certifications: string[];
   achievements: string[];
+  sectionOrder?: string[];
 }
 
 // ── Constants — theme color from open-resume ──────────────
@@ -177,6 +178,10 @@ interface OpenResumePdfDocumentProps {
   state: ResumeEditorState;
 }
 
+// 'summary' is intentionally excluded — it renders fixed between the name
+// and contact line for this template, not as its own reorderable block.
+const DEFAULT_ORDER = ["experience", "education", "projects", "skills", "leadership", "certifications", "achievements"];
+
 const OpenResumePdfDocument: React.FC<OpenResumePdfDocumentProps> = ({ state }) => {
   const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state;
 
@@ -189,6 +194,160 @@ const OpenResumePdfDocument: React.FC<OpenResumePdfDocumentProps> = ({ state }) 
   ].filter(Boolean);
 
   const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft;
+
+  const order = state.sectionOrder ?? DEFAULT_ORDER;
+  const sections: Record<string, () => React.ReactNode> = {
+    experience: () => experience.length > 0 && (
+      <View>
+        <SectionHeading title="Work Experience" />
+        {experience.map((exp, i) => (
+          <View key={i} style={{ marginBottom: "6pt" }}>
+            <HeaderRow
+              left={exp.company || "Company"}
+              right={[exp.startDate, exp.endDate].filter(Boolean).join(" - ")}
+              bold
+            />
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginTop: "1pt",
+              }}
+            >
+              <Text style={{ fontSize: "10pt", color: TEXT_COLOR }}>{dL(exp.title)}</Text>
+              {exp.location ? (
+                <Text style={{ fontSize: "9.5pt", color: "#525252" }}>{dL(exp.location)}</Text>
+              ) : null}
+            </View>
+            {exp.bullets.filter((b) => b.trim()).length > 0 && (
+              <BulletList items={exp.bullets} />
+            )}
+          </View>
+        ))}
+      </View>
+    ),
+
+    education: () => education.length > 0 && (
+      <View>
+        <SectionHeading title="Education" />
+        {education.map((edu, i) => {
+          const eduTop = edu.school || "University";
+          const showDegree = edu.degree && !sameText(edu.degree, eduTop);
+          return (
+          <View key={i} style={{ marginBottom: "5pt" }}>
+            <HeaderRow left={eduTop} right={edu.date} bold />
+            {showDegree ? (
+              <Text style={{ fontSize: "10pt", color: TEXT_COLOR, marginTop: "1pt" }}>
+                {dL(edu.degree)}
+                {edu.gpa ? `  -  GPA: ${edu.gpa}` : ""}
+              </Text>
+            ) : null}
+            {edu.coursework ? (
+              <Text style={{ fontSize: "9.5pt", color: "#404040", marginTop: "1pt" }}>
+                <Text style={{ fontWeight: "bold" }}>Coursework: </Text>
+                {dL(edu.coursework)}
+              </Text>
+            ) : null}
+          </View>
+          );
+        })}
+      </View>
+    ),
+
+    projects: () => projects.length > 0 && (
+      <View>
+        <SectionHeading title="Projects" />
+        {projects.map((proj, i) => (
+          <View key={i} style={{ marginBottom: "5pt" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+              }}
+            >
+              <Text style={{ fontWeight: "bold", fontSize: "10.5pt", color: TEXT_COLOR }}>
+                {dL(proj.name)}
+                {proj.tech ? (
+                  <Text style={{ fontWeight: "normal", color: "#525252" }}>
+                    {"  |  "}
+                    {dL(proj.tech)}
+                  </Text>
+                ) : ""}
+              </Text>
+              {proj.date ? (
+                <Text style={{ fontSize: "10pt", color: "#404040" }}>{proj.date}</Text>
+              ) : null}
+            </View>
+            {proj.bullets.filter((b) => b.trim()).length > 0 && (
+              <BulletList items={proj.bullets} />
+            )}
+          </View>
+        ))}
+      </View>
+    ),
+
+    skills: () => hasSkills ? (
+      <View>
+        <SectionHeading title="Skills" />
+        <View style={{ fontSize: "10pt", lineHeight: 1.5 }}>
+          {skills.languages ? (
+            <Text style={{ marginBottom: "1.5pt", color: TEXT_COLOR }}>
+              <Text style={{ fontWeight: "bold" }}>{dL("Technical Skills: ")}</Text>
+              {dL(skills.languages)}
+            </Text>
+          ) : null}
+          {skills.frameworks ? (
+            <Text style={{ marginBottom: "1.5pt", color: TEXT_COLOR }}>
+              <Text style={{ fontWeight: "bold" }}>Frameworks: </Text>
+              {dL(skills.frameworks)}
+            </Text>
+          ) : null}
+          {skills.tools ? (
+            <Text style={{ marginBottom: "1.5pt", color: TEXT_COLOR }}>
+              <Text style={{ fontWeight: "bold" }}>Tools: </Text>
+              {dL(skills.tools)}
+            </Text>
+          ) : null}
+          {skills.soft ? (
+            <Text style={{ marginBottom: "1.5pt", color: TEXT_COLOR }}>
+              <Text style={{ fontWeight: "bold" }}>Soft Skills: </Text>
+              {dL(skills.soft)}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    ) : null,
+
+    leadership: () => leadership.length > 0 && (
+      <View>
+        <SectionHeading title="Leadership" />
+        {leadership.map((lead, i) => (
+          <View key={i} style={{ marginBottom: "5pt" }}>
+            <HeaderRow left={lead.org} right={lead.date} bold />
+            {lead.role ? (
+              <Text style={{ fontSize: "10pt", color: TEXT_COLOR }}>{dL(lead.role)}</Text>
+            ) : null}
+            {lead.bullets.filter((b) => b.trim()).length > 0 && <BulletList items={lead.bullets} />}
+          </View>
+        ))}
+      </View>
+    ),
+
+    certifications: () => certifications.length > 0 && (
+      <View>
+        <SectionHeading title="Certifications" />
+        <BulletList items={certifications} />
+      </View>
+    ),
+
+    achievements: () => achievements.length > 0 && (
+      <View>
+        <SectionHeading title="Achievements" />
+        <BulletList items={achievements} />
+      </View>
+    ),
+  };
 
   return (
     <Document title={`${profile.name || "Resume"}`} author={profile.name} producer="JobScorer">
@@ -252,167 +411,13 @@ const OpenResumePdfDocument: React.FC<OpenResumePdfDocumentProps> = ({ state }) 
                 color: "#404040",
               }}
             >
-              {dL(contactParts.join("   ·   "))}
+              {dL(contactParts.join(" \u00a0\u00b7\u00a0 "))}
             </Text>
           )}
 
-          {/* Work Experience */}
-          {experience.length > 0 && (
-            <View>
-              <SectionHeading title="Work Experience" />
-              {experience.map((exp, i) => (
-                <View key={i} style={{ marginBottom: "6pt" }}>
-                  <HeaderRow
-                    left={exp.company || "Company"}
-                    right={[exp.startDate, exp.endDate].filter(Boolean).join(" - ")}
-                    bold
-                  />
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      marginTop: "1pt",
-                    }}
-                  >
-                    <Text style={{ fontSize: "10pt", color: TEXT_COLOR }}>{dL(exp.title)}</Text>
-                    {exp.location ? (
-                      <Text style={{ fontSize: "9.5pt", color: "#525252" }}>{dL(exp.location)}</Text>
-                    ) : null}
-                  </View>
-                  {exp.bullets.filter((b) => b.trim()).length > 0 && (
-                    <BulletList items={exp.bullets} />
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Education */}
-          {education.length > 0 && (
-            <View>
-              <SectionHeading title="Education" />
-              {education.map((edu, i) => {
-                const eduTop = edu.school || "University";
-                const showDegree = edu.degree && !sameText(edu.degree, eduTop);
-                return (
-                <View key={i} style={{ marginBottom: "5pt" }}>
-                  <HeaderRow left={eduTop} right={edu.date} bold />
-                  {showDegree ? (
-                    <Text style={{ fontSize: "10pt", color: TEXT_COLOR, marginTop: "1pt" }}>
-                      {dL(edu.degree)}
-                      {edu.gpa ? `  -  GPA: ${edu.gpa}` : ""}
-                    </Text>
-                  ) : null}
-                  {edu.coursework ? (
-                    <Text style={{ fontSize: "9.5pt", color: "#404040", marginTop: "1pt" }}>
-                      <Text style={{ fontWeight: "bold" }}>Coursework: </Text>
-                      {dL(edu.coursework)}
-                    </Text>
-                  ) : null}
-                </View>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Projects */}
-          {projects.length > 0 && (
-            <View>
-              <SectionHeading title="Projects" />
-              {projects.map((proj, i) => (
-                <View key={i} style={{ marginBottom: "5pt" }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "flex-end",
-                    }}
-                  >
-                    <Text style={{ fontWeight: "bold", fontSize: "10.5pt", color: TEXT_COLOR }}>
-                      {dL(proj.name)}
-                      {proj.tech ? (
-                        <Text style={{ fontWeight: "normal", color: "#525252" }}>
-                          {"  |  "}
-                          {dL(proj.tech)}
-                        </Text>
-                      ) : ""}
-                    </Text>
-                    {proj.date ? (
-                      <Text style={{ fontSize: "10pt", color: "#404040" }}>{proj.date}</Text>
-                    ) : null}
-                  </View>
-                  {proj.bullets.filter((b) => b.trim()).length > 0 && (
-                    <BulletList items={proj.bullets} />
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Skills */}
-          {hasSkills ? (
-            <View>
-              <SectionHeading title="Skills" />
-              <View style={{ fontSize: "10pt", lineHeight: 1.5 }}>
-                {skills.languages ? (
-                  <Text style={{ marginBottom: "1.5pt", color: TEXT_COLOR }}>
-                    <Text style={{ fontWeight: "bold" }}>{dL("Technical Skills: ")}</Text>
-                    {dL(skills.languages)}
-                  </Text>
-                ) : null}
-                {skills.frameworks ? (
-                  <Text style={{ marginBottom: "1.5pt", color: TEXT_COLOR }}>
-                    <Text style={{ fontWeight: "bold" }}>Frameworks: </Text>
-                    {dL(skills.frameworks)}
-                  </Text>
-                ) : null}
-                {skills.tools ? (
-                  <Text style={{ marginBottom: "1.5pt", color: TEXT_COLOR }}>
-                    <Text style={{ fontWeight: "bold" }}>Tools: </Text>
-                    {dL(skills.tools)}
-                  </Text>
-                ) : null}
-                {skills.soft ? (
-                  <Text style={{ marginBottom: "1.5pt", color: TEXT_COLOR }}>
-                    <Text style={{ fontWeight: "bold" }}>Soft Skills: </Text>
-                    {dL(skills.soft)}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
-
-          {/* Leadership */}
-          {leadership.length > 0 && (
-            <View>
-              <SectionHeading title="Leadership" />
-              {leadership.map((lead, i) => (
-                <View key={i} style={{ marginBottom: "5pt" }}>
-                  <HeaderRow left={lead.org} right={lead.date} bold />
-                  {lead.role ? (
-                    <Text style={{ fontSize: "10pt", color: TEXT_COLOR }}>{dL(lead.role)}</Text>
-                  ) : null}
-                  {lead.bullets.filter((b) => b.trim()).length > 0 && <BulletList items={lead.bullets} />}
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Certifications */}
-          {certifications.length > 0 && (
-            <View>
-              <SectionHeading title="Certifications" />
-              <BulletList items={certifications} />
-            </View>
-          )}
-
-          {/* Achievements */}
-          {achievements.length > 0 && (
-            <View>
-              <SectionHeading title="Achievements" />
-              <BulletList items={achievements} />
-            </View>
-          )}
+          {order.map((key) => (
+            <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+          ))}
         </View>
       </Page>
     </Document>

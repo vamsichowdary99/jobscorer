@@ -188,6 +188,34 @@ const illoLearn = (
   </div>
 );
 
+const illoRoadmap = (
+  <div style={{ ...cardSx, padding: '13px 15px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 9, borderBottom: `1px solid ${C.border}`, marginBottom: 10 }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 20l-5.5-2V5l5.5 2 6-2 5.5 2v13l-5.5-2-6 2z" /><path d="M9 7v13M15 5v13" /></svg>
+      <span style={{ fontSize: 9, fontWeight: 700, color: C.text, fontFamily: MONO, letterSpacing: '0.04em' }}>PORTFOLIO PROJECT ROADMAP</span>
+    </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+      {([
+        ['Set up project skeleton', 'done'],
+        ['Implement core feature — in progress', 'active'],
+        ['Ship + write up proof-of-work', 'todo'],
+      ] as Array<[string, 'done' | 'active' | 'todo']>).map(([t, state]) => (
+        <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          {state === 'done' ? (
+            <div style={{ width: 12, height: 12, borderRadius: '50%', background: C.success, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{ck('white')}</div>
+          ) : (
+            <div style={{ width: 12, height: 12, borderRadius: '50%', border: `1.5px solid ${state === 'active' ? C.primary : '#cbd5e1'}`, flexShrink: 0 }} />
+          )}
+          <span style={{ fontSize: 8.5, fontWeight: state === 'todo' ? 500 : 700, color: state === 'todo' ? C.textTer : C.text }}>{t}</span>
+        </div>
+      ))}
+    </div>
+    <div style={{ height: 4, borderRadius: 3, background: '#eef2f7', overflow: 'hidden' }}>
+      <div style={{ height: '100%', width: '38%', background: C.primary, borderRadius: 3 }} />
+    </div>
+  </div>
+);
+
 type Step = {
   n: string;
   title: string;
@@ -197,13 +225,14 @@ type Step = {
 };
 
 const STEPS: Step[] = [
-  { n: '01', title: 'Upload your resume',                              desc: 'Drop your PDF. We extract 50+ data points — skills, experience depth, project impact, education signals — in seconds.',                                                                            illo: illoUpload,   highlight: false },
-  { n: '02', title: 'Match to real job listings',                      desc: "We scan thousands of live roles on Naukri, LinkedIn, and Instahyre. Each match shows your fit score — a clear number that tells you if it's worth applying.",                            illo: illoMatch,    highlight: false },
-  { n: '03', title: 'See exactly where you fall short',                desc: "Your skill gap report shows the specific keywords, tools, and experience levels you're missing — ranked by how much they'll affect your chances.",                                       illo: illoGap,      highlight: false },
-  { n: '04', title: 'We research the company — not just the JD',       desc: 'Before touching your resume, we study the target company: their live tech stack, recent engineering blog posts, team structure, what they value in candidates, and how their ATS is configured.', illo: illoResearch, highlight: true  },
-  { n: '05', title: 'Your resume, rewritten for that company',         desc: 'Using the company research, we rewrite your bullets to speak their language — matching their stack, mirroring their values, hitting the keywords their ATS looks for.',                  illo: illoRewrite,  highlight: false },
-  { n: '06', title: 'Download an ATS-safe PDF',                        desc: 'Export a clean, ATS-tested PDF. No tables, text boxes, or headers scanners choke on. Passes systems at TCS, Razorpay, and Swiggy.',                                                       illo: illoPdf,      highlight: false },
-  { n: '07', title: 'Get your personalised learning plan',             desc: 'For every gap found, a focused plan: courses, projects, and timelines to close them — calibrated to this role and company.',                                                              illo: illoLearn,    highlight: false },
+  { n: '01', title: 'Upload your resume',                              desc: 'Drop your PDF. We extract 50+ data points — skills, experience depth, project impact, education signals — in seconds.',                          illo: illoUpload,   highlight: false },
+  { n: '02', title: 'Match to real job listings',                      desc: 'We scan thousands of live roles on Naukri, LinkedIn, and Instahyre. Each match shows your fit score.',                                             illo: illoMatch,    highlight: false },
+  { n: '03', title: 'See exactly where you fall short',                desc: "Your skill gap report shows the specific keywords, tools, and experience levels you're missing.",                                                  illo: illoGap,      highlight: false },
+  { n: '04', title: 'We research the company — not just the JD',       desc: 'Before touching your resume, we study the target company: tech stack, blog posts, team structure, values, and ATS config.',                       illo: illoResearch, highlight: true  },
+  { n: '05', title: 'Your resume, rewritten for that company',         desc: 'We rewrite your bullets to speak their language — matching their stack, mirroring their values.',                                                   illo: illoRewrite,  highlight: false },
+  { n: '06', title: 'Download an ATS-safe PDF',                        desc: 'Export a clean, ATS-tested PDF. No tables or headers scanners choke on. Passes systems at TCS, Razorpay, Swiggy.',                                  illo: illoPdf,      highlight: false },
+  { n: '07', title: 'Get your personalised learning plan',             desc: 'For every gap found, a focused plan: courses, projects, and timelines — calibrated to this role and company.',                                      illo: illoLearn,    highlight: false },
+  { n: '08', title: 'Build the project that proves it',                desc: 'Pick an AI-suggested portfolio project that closes a specific gap. Get a milestone roadmap with a skill-progression curve, work through it with autosaved notes and a GitHub link, and call on an AI mentor when stuck. On completion, we draft portfolio-ready proof-of-work text for your resume.', illo: illoRoadmap, highlight: false },
 ];
 
 export default function Journey() {
@@ -332,7 +361,7 @@ export default function Journey() {
             </div>
           </div>
           <div style={{ textAlign: 'center', marginTop: 20 }}>
-            <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)' }}>STEP {STEPS[active].n} / 07</span>
+            <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)' }}>STEP {STEPS[active].n} / {String(STEPS.length).padStart(2, '0')}</span>
           </div>
           <div style={{ display: 'flex', gap: 7, justifyContent: 'center', marginTop: 12 }}>
             {STEPS.map((_, i) => (

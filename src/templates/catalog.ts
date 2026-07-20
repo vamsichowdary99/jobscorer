@@ -30,6 +30,11 @@ export interface TemplateMeta {
   rendererPath?: string  // relative path to PDF renderer component
   tags: string[]
   notes?: string
+  // Resume Layout Manager (plans/25) — default order of the 8 movable
+  // sections ('profile' is always a fixed header, never in this array),
+  // matching each template's current hardcoded output exactly. Undefined
+  // = template not yet wired into the layout manager.
+  sectionOrder?: string[]
 }
 
 export const TEMPLATES: TemplateMeta[] = [
@@ -47,6 +52,8 @@ export const TEMPLATES: TemplateMeta[] = [
     status: 'active',
     rendererPath: '@/components/ResumeRenderer/ClassicPdfDocument',
     tags: ['serif', 'uppercase headers', 'bullet points', 'centered name'],
+    notes: 'Kept over Rezi Standard 2026-07-19 — the two were near-identical twins (same left-aligned bold-caps-underline header layout, same bullet style), only differing by font (Roboto vs Lato). Classic kept as the plain sans-serif anchor.',
+    sectionOrder: ['summary', 'education', 'experience', 'projects', 'skills', 'certifications', 'achievements', 'leadership'],
   },
   {
     id: 'rezi',
@@ -60,19 +67,7 @@ export const TEMPLATES: TemplateMeta[] = [
     status: 'active',
     rendererPath: '@/components/ResumeRenderer/ReziPdfDocument',
     tags: ['serif', 'lora', 'em-dash bullets', 'inline bold skills', 'generous spacing'],
-  },
-  {
-    id: 'rezi-standard',
-    name: 'Rezi Standard',
-    tagline: 'Clean sans-serif with thin ruled sections',
-    category: 'sans-serif',
-    atsScore: 'full',
-    source: 'competitor',
-    fonts: ['Lato'],
-    accent: null,
-    status: 'active',
-    rendererPath: '@/components/ResumeRenderer/ReziStandardPdfDocument',
-    tags: ['sans-serif', 'lato', 'thin rules', 'centered name', 'minimal'],
+    sectionOrder: ['summary', 'education', 'experience', 'projects', 'skills', 'certifications', 'achievements', 'leadership'],
   },
   {
     id: 'london',
@@ -87,20 +82,7 @@ export const TEMPLATES: TemplateMeta[] = [
     rendererPath: '@/components/ResumeRenderer/LondonPdfDocument',
     tags: ['serif', 'lora', 'extending section lines', 'italic', 'editorial'],
     notes: 'Resume.io London style. Lora extracts cleanly when not co-rendered with another Lora template.',
-  },
-  {
-    id: 'stitch',
-    name: 'Stitch',
-    tagline: 'Navy serif with bullet markers and pipe contacts',
-    category: 'serif',
-    atsScore: 'full',
-    source: 'original',
-    fonts: ['Times-Roman'],
-    accent: '#1e3a5f',
-    status: 'active',
-    rendererPath: '@/components/ResumeRenderer/StitchPdfDocument',
-    tags: ['serif', 'times-roman', 'navy', 'pipe contacts', 'centered name', 'built-in font'],
-    notes: 'Font is Times-Roman (PDF base-14 built-in). Bypasses font-subset/CMap corruption that affected Lora when multiple Lora templates rendered in the same browser session.',
+    sectionOrder: ['summary', 'education', 'experience', 'projects', 'skills', 'certifications', 'achievements', 'leadership'],
   },
   {
     id: 'harvard',
@@ -114,21 +96,8 @@ export const TEMPLATES: TemplateMeta[] = [
     status: 'active',
     rendererPath: '@/components/ResumeRenderer/HarvardPdfDocument',
     tags: ['serif', 'times-roman', 'underlined headers', 'centered name', 'academic', 'hbs', 'built-in font'],
-    notes: 'Font is Times-Roman (PDF base-14 built-in) for guaranteed ATS extraction in strict parsers like Workday and Taleo.',
-  },
-  {
-    id: 'sb2nov',
-    name: 'sb2nov',
-    tagline: 'LaTeX-style academic with open-circle bullets',
-    category: 'academic',
-    atsScore: 'full',
-    source: 'rendercv',
-    fonts: ['Times-Roman'],
-    accent: null,
-    status: 'active',
-    rendererPath: '@/components/ResumeRenderer/Sb2novPdfDocument',
-    tags: ['serif', 'times-roman', 'open circle bullets', 'latex', 'academic', 'built-in font'],
-    notes: 'Font is Times-Roman (PDF base-14 built-in). Closer to LaTeX Computer Modern than Lora was, and bypasses font-subset corruption.',
+    notes: 'Font is Times-Roman (PDF base-14 built-in) for guaranteed ATS extraction in strict parsers like Workday and Taleo. Kept as the sole plain-serif/academic option — Stitch and sb2nov were removed 2026-07-18 (same font, near-identical header treatment, no real differentiation; see audit).',
+    sectionOrder: ['summary', 'education', 'experience', 'projects', 'leadership', 'skills', 'certifications', 'achievements'],
   },
   {
     id: 'open-resume',
@@ -142,6 +111,10 @@ export const TEMPLATES: TemplateMeta[] = [
     status: 'active',
     rendererPath: '@/components/ResumeRenderer/OpenResumePdfDocument',
     tags: ['sans-serif', 'roboto', 'accent bar', 'modern', 'open-resume.io'],
+    // 'summary' is NOT movable for this template — it renders fixed between
+    // the name and contact line (part of the header treatment), not as its
+    // own SectionHeading block like the other templates.
+    sectionOrder: ['experience', 'education', 'projects', 'skills', 'leadership', 'certifications', 'achievements'],
   },
   {
     id: 'cobalt',
@@ -156,6 +129,7 @@ export const TEMPLATES: TemplateMeta[] = [
     rendererPath: '@/components/ResumeRenderer/CobaltPdfDocument',
     tags: ['sans-serif', 'roboto', 'navy', 'blue headers', 'single-column', 'left-aligned name', 'it-fresher'],
     notes: 'Recreates the aarav-sharma landing carousel design. Two inks only: blue #06296b accent + black. Uses true Roboto-Italic for the company·location line.',
+    sectionOrder: ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership'],
   },
   {
     id: 'onyx',
@@ -170,20 +144,22 @@ export const TEMPLATES: TemplateMeta[] = [
     rendererPath: '@/components/ResumeRenderer/OnyxPdfDocument',
     tags: ['sans-serif', 'open sans', 'minimalist', 'monochrome', 'letter-spaced headers', 'navy divider', 'single-column', 'it-fresher'],
     notes: 'Recreates the rohan-mehta landing carousel design. Monochrome black text + one thin navy #224a85 divider rule under the header; rule-less wide-letter-spaced section headers. Open Sans (incl. true OpenSans-Italic).',
+    sectionOrder: ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership'],
   },
   {
     id: 'jade',
     name: 'Jade',
-    tagline: 'Two-column teal with ruled section headers',
+    tagline: 'Single-column teal with ruled section headers',
     category: 'modern',
-    atsScore: 'visual-only',
+    atsScore: 'full',
     source: 'original',
     fonts: ['Open Sans'],
     accent: '#026857',
     status: 'active',
     rendererPath: '@/components/ResumeRenderer/JadePdfDocument',
-    tags: ['sans-serif', 'open sans', 'teal', 'two-column', 'ruled headers', 'left identity column', 'it-fresher'],
-    notes: 'Recreates the priya-nair landing carousel design. Two-column (left: identity/contact/skills/education, right: summary/experience/projects), whitespace-separated with no divider line. Two inks only, ink-core pixel-sampled: teal #026857 accent (name, headers, header rules) + black. Skills render as bold category label + bullets. atsScore visual-only — all text is selectable and standard headers are present, but PDF text-extraction order is left-column then right-column. Open Sans (incl. true OpenSans-Italic for the project tech line).',
+    tags: ['sans-serif', 'open sans', 'teal', 'single-column', 'ruled headers', 'it-fresher'],
+    notes: 'Converted from two-column to single-column 2026-07-19 (was a recreation of the priya-nair landing carousel design). Two inks only, ink-core pixel-sampled: teal #026857 accent (name, headers, header rules) + black. Skills render as "Label: comma, separated, items" (same convention as Cobalt/Onyx/Lapis) — the original grouped one-bullet-per-item format was carried over from the two-column build at first but wasted a full line per skill once the sidebar’s ~178pt width constraint was gone; fixed same day. atsScore now full — no more column-order ambiguity for text extraction. Open Sans (incl. true OpenSans-Italic for the project tech line).',
+    sectionOrder: ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership'],
   },
   {
     id: 'lapis',
@@ -198,6 +174,23 @@ export const TEMPLATES: TemplateMeta[] = [
     rendererPath: '@/components/ResumeRenderer/LapisPdfDocument',
     tags: ['sans-serif', 'open sans', 'indigo', 'single-column', 'skill pills', 'vertical-bar headers', 'it-fresher'],
     notes: 'Recreates the ananya-reddy landing carousel design. Single-column, modern. Two inks (ink-core pixel-sampled): deep indigo #1a1670 accent (name, subtitle, section headers + vertical bars, italic company/tech line) + near-black #1f2024. Section headers = thin light divider rule + vertical indigo bar + indigo uppercase label. Skills render as a wrapping cloud of outlined pills, each a real extractable <Text> in order — atsScore full (single-column, standard headings, no tables; pills are a visual treatment over selectable text). Open Sans (incl. true OpenSans-Italic).',
+    sectionOrder: ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership'],
+  },
+
+  {
+    id: 'axis',
+    name: 'Axis',
+    tagline: 'Violet career timeline with node markers',
+    category: 'modern',
+    atsScore: 'full',
+    source: 'original',
+    fonts: ['Roboto'],
+    accent: '#7c3aed',
+    status: 'active',
+    rendererPath: '@/components/ResumeRenderer/AxisPdfDocument',
+    tags: ['sans-serif', 'roboto', 'violet', 'timeline', 'node markers', 'single-column', 'modern'],
+    notes: 'Built 2026-07-19 — not adapted from a reference mockup, designed to fill a genuine structural gap: every active template (single-column since Jade\'s 2026-07-19 conversion) separates entries with flat rules/panels/pills. Axis is the only one with a vertical "career timeline" rail — a small violet node per dated entry (Experience/Education/Projects/Leadership/Certifications/Achievements), connected by a thin line segment spanning that entry\'s height. Preceded by research into whether two-column layouts are the only real ATS risk: they mostly aren\'t anymore on modern parsers (Greenhouse/Lever/Ashby use XY-Cut-style reading-order algorithms that reconstruct columns correctly) but legacy government/enterprise Taleo-style parsers still can fail on them — so the project default of single-column stays deliberate, not because two-column is universally broken. Axis sidesteps the debate entirely: the rail is pure decoration (borders + circles), not a layout mechanism, so it\'s a single linear column of real text with zero reading-order ambiguity for any parser. Accent violet #7c3aed is the one color not yet used elsewhere (navy/teal/indigo/sky-blue/gold/red are all taken). Font Roboto reused from Classic/Open Resume/Cobalt — no new font file needed.',
+    sectionOrder: ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership'],
   },
 
   // ── PENDING — Original 7 (view-original-7.html) ───────────────────────────
@@ -233,10 +226,28 @@ export const TEMPLATES: TemplateMeta[] = [
     category: 'executive',
     atsScore: 'full',
     source: 'original',
-    fonts: ['Caladea', 'Garamond'],
+    fonts: ['Caladea'],
     accent: null,
-    status: 'pending',
-    tags: ['serif', 'garamond', 'diamond bullets', 'uppercase headers', 'executive'],
+    status: 'active',
+    rendererPath: '@/components/ResumeRenderer/ExecutivePdfDocument',
+    tags: ['serif', 'caladea', 'diamond bullets', 'wide-tracked headers', 'left-aligned name', 'executive'],
+    notes: 'Built 2026-07-19 from the "Executive" card in .superpowers/brainstorm/2042-1774507943/view-original-7.html. First pending template promoted to active — chosen to fill the one real audience gap in the catalog (senior/executive tone; every other active template reads fresher/generic). Caladea is the open-source metric-compatible substitute for Garamond/Cambria (true Garamond isn\'t freely licensed); no true italic face exists so fonts.ts reuses the Regular file for the italic slot (same fallback as Lora/Lato). Contact line is a row of independent flexbox spans (space-between) framed by a thick top rule + thin bottom rule, rather than one joined separator-delimited string — sidesteps the wrap-hyphen bug class entirely instead of needing the NBSP-flanking fix the other templates got.',
+    sectionOrder: ['summary', 'experience', 'projects', 'skills', 'education', 'certifications', 'achievements', 'leadership'],
+  },
+  {
+    id: 'amber',
+    name: 'Amber',
+    tagline: 'Editorial serif name with gold accent',
+    category: 'modern',
+    atsScore: 'full',
+    source: 'original',
+    fonts: ['Playfair Display', 'Open Sans'],
+    accent: '#b8912f',
+    status: 'active',
+    rendererPath: '@/components/ResumeRenderer/AmberPdfDocument',
+    tags: ['serif name', 'sans body', 'gold', 'centered header', 'editorial', 'it-fresher'],
+    notes: 'Built 2026-07-19 from a karthik-iyer.png reference image (QA Automation Engineer resume, user-supplied). Only active template combining a serif display name (Playfair Display) with a sans body (Open Sans, already registered — no second sans added to the pipeline) — Executive is all-serif, every other active template is all-sans. Also the only warm/gold accent color; everything else is navy/teal/indigo/sky-blue or monochrome. Centered header: name, bold-caps subtitle, then a gold line–dot–line divider, then centered contact line. Section headers are bold sans caps with a full-width thin gold rule below. Skills render as "Label: comma, separated, items" (same convention as Cobalt/Onyx/Jade/Lapis).',
+    sectionOrder: ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership'],
   },
   {
     id: 'sharp',
@@ -291,16 +302,19 @@ export const TEMPLATES: TemplateMeta[] = [
     tags: ['purple', 'gradient header', 'chip skills', 'modern'],
   },
   {
-    id: 'kickresume-gradient',
-    name: 'Kickresume Gradient',
-    tagline: 'Dark navy gradient header with dot skills',
+    id: 'beacon',
+    name: 'Beacon',
+    tagline: 'Solid navy banner header with reversed text',
     category: 'modern',
     atsScore: 'full',
     source: 'competitor',
     fonts: ['Open Sans'],
     accent: '#0f3460',
-    status: 'pending',
-    tags: ['dark navy', 'gradient', 'dot ratings', 'dramatic header'],
+    status: 'active',
+    rendererPath: '@/components/ResumeRenderer/BeaconPdfDocument',
+    tags: ['dark navy', 'banner header', 'reversed text', 'modern', 'dramatic header'],
+    notes: 'Built 2026-07-19, promoted from the pending "Kickresume Gradient" entry. Research-driven pick (not adapted from a specific mockup): the full-bleed colored banner header with reversed white name/contact text is the single most common "modern professional" resume archetype across Zety, Canva, Enhancv\'s Modern category, and Kickresume\'s own top template — none of the other 13 active templates use reversed text on a solid color block (they all put dark text on white/light backgrounds even with strong accent colors). Dropped the source idea\'s "dot skills" proficiency rating — implies a quantified skill level with no real backing data, so skills stay plain extractable "Label: comma, list" text like every other template. Banner is a SOLID navy fill, not a true gradient — react-pdf gradient support is SVG-only and adds fragility for a purely decorative effect. Font: Open Sans (already registered, reused from Onyx/Jade/Lapis).',
+    sectionOrder: ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership'],
   },
   {
     id: 'enhancv-timeline',
@@ -359,11 +373,13 @@ export const TEMPLATES: TemplateMeta[] = [
     category: 'modern',
     atsScore: 'full',
     source: 'competitor',
-    fonts: ['Arial'],
+    fonts: ['Helvetica'],
     accent: '#c0392b',
-    status: 'pending',
-    tags: ['red', 'gray header', 'outlined skills', 'clean'],
-    notes: 'Resume.io Athens style',
+    status: 'active',
+    rendererPath: '@/components/ResumeRenderer/AthensPdfDocument',
+    tags: ['red', 'gray header panel', 'outlined skills', 'triangle bullets', 'clean'],
+    notes: 'Built 2026-07-19 from the "Resume.io Athens" card in .superpowers/brainstorm/2042-1774507943/view-competitor-10.html. Fills the last warm-accent-color gap (red — Amber\'s gold was the other). Font is Helvetica, the PDF base-14 built-in (same guaranteed-ATS-extraction approach as Harvard\'s Times-Roman) — the mockup specifies Arial, and Helvetica is its metric-compatible PDF-standard substitute, so no new font file/registration was needed. Only active template with a filled gray header panel + colored bottom border instead of a rule/divider. Bullet marker is a CSS border-triangle, not a "▸" glyph, sidestepping the same glyph-coverage bug class fixed for Executive\'s diamond bullets (Helvetica\'s base-14 WinAnsi encoding doesn\'t include that Unicode triangle). Source-mockup quirk carried over faithfully: the bold left column in Experience rows is the COMPANY name (not the job title, unlike every other active template), with title+location as the muted subtitle below. Skills render as a wrapping cloud of red-outlined pills (same mechanism as Lapis, recolored).',
+    sectionOrder: ['summary', 'experience', 'projects', 'skills', 'education', 'certifications', 'achievements', 'leadership'],
   },
 
   // ── PENDING — RenderCV Themes (rendercv/docs/assets/images/examples/) ────
@@ -456,6 +472,26 @@ export const TEMPLATES: TemplateMeta[] = [
 
 /** Get only active (implemented) templates */
 export const ACTIVE_TEMPLATES = TEMPLATES.filter(t => t.status === 'active')
+
+/** Thumbnail image for each active template, used by the template picker carousel */
+export const TEMPLATE_IMAGES: Record<string, string> = {
+  // Verified against each renderer's actual accent color/layout (2026-07-18 audit):
+  cobalt: '/templates/aarav-sharma.png',   // navy #06296b underline rules — matches Cobalt's own "recreates aarav-sharma" note
+  onyx: '/templates/rohan-mehta.png',      // monochrome + single navy divider — matches Onyx's own "recreates rohan-mehta" note
+  lapis: '/templates/ananya-reddy.png',    // indigo bars + outlined pills — matches Lapis's own "recreates ananya-reddy" note
+  // Real renders of the live PdfDocument (scripts/generate-template-shots.mts), 2026-07-18/19.
+  classic: '/template-previews/classic.png',
+  rezi: '/template-previews/rezi.png',
+  london: '/template-previews/london.png',
+  harvard: '/template-previews/harvard.png',
+  'open-resume': '/template-previews/open-resume.png',
+  jade: '/template-previews/jade.png',     // single-column conversion, 2026-07-19 — replaces the old two-column priya-nair.png mockup
+  executive: '/template-previews/executive.png', // new template, 2026-07-19
+  amber: '/template-previews/amber.png', // new template, 2026-07-19
+  athens: '/template-previews/athens.png', // new template, 2026-07-19
+  axis: '/template-previews/axis.png', // new template, 2026-07-19
+  beacon: '/template-previews/beacon.png', // new template, 2026-07-19
+}
 
 /** Get all pending templates grouped by source */
 export const PENDING_BY_SOURCE = TEMPLATES

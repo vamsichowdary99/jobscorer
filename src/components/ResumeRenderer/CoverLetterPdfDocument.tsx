@@ -67,7 +67,7 @@ const CoverLetterPdfDocument: React.FC<CoverLetterPdfDocumentProps> = ({ letter,
           </Text>
           {contactParts.length > 0 && (
             <Text style={{ fontSize: "9.5pt", color: "#333", marginTop: "3pt" }}>
-              {dL(contactParts.join("   ·   "))}
+              {dL(contactParts.join(" \u00a0\u00b7\u00a0 "))}
             </Text>
           )}
         </View>

@@ -1143,6 +1143,11 @@ function CompanyIntelPage() {
     // Tracks job ids we've already refreshed the sidebar for after a research
     // landed, so the refresh fires at most once per job (no refetch loop).
     const refreshedHistoryFor = useRef<Set<string>>(new Set())
+    // Guards the addPending() call below so it fires once per jobId instead of
+    // on every pendingEntries change — addPending's write() dispatches a
+    // storage-changed event that this same effect listens to via pendingEntries,
+    // so calling it unconditionally caused an infinite render loop.
+    const registeredPendingFor = useRef<Set<string>>(new Set())
 
     /* ── In-flight researches (cross-page store, survives navigation/reload).
        fetchResearchHistory only returns COMPLETED rows, so without this the
@@ -1342,7 +1347,11 @@ function CompanyIntelPage() {
         const resumeIdForRegister = matchFromHistory?.resume_id ?? pendingEntry?.resumeId ?? selectedResumeId ?? null
 
         // Register globally so the cross-page toaster catches completion too.
-        if (user?.id) {
+        // Guarded to once per jobId — addPending's write() dispatches a change
+        // event that updates pendingEntries (a dep of this effect), so calling
+        // it unconditionally on every run re-triggers itself infinitely.
+        if (user?.id && !registeredPendingFor.current.has(selectedJobId)) {
+            registeredPendingFor.current.add(selectedJobId)
             addPending({
                 jobId: selectedJobId,
                 userId: user.id,
@@ -1383,6 +1392,7 @@ function CompanyIntelPage() {
         if (!selectedJobId) return
         if (!user?.id) return
         removePending(selectedJobId, user.id)
+        registeredPendingFor.current.delete(selectedJobId)
     }, [research, selectedJobId, user?.id])
 
     /* ── When a research completes for a company not yet in the sidebar history

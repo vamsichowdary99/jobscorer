@@ -17,6 +17,10 @@ const ALLOWED_FONTS = new Set([
   'OpenSans-Regular.ttf',
   'OpenSans-Bold.ttf',
   'OpenSans-Italic.ttf',
+  'Caladea-Regular.ttf',
+  'Caladea-Bold.ttf',
+  'PlayfairDisplay-Regular.ttf',
+  'PlayfairDisplay-Bold.ttf',
 ])
 
 export async function GET(

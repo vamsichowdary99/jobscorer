@@ -142,9 +142,8 @@ async function getJobScores(userId: string, sessionResumeId: string | null, limi
   if (error) return JSON.stringify({ error: error.message });
   if (!data || data.length === 0) {
     return JSON.stringify({
-      error: resumeId
-        ? 'No cached scores yet for the selected resume. Run scoring from the Search or Matches page, or use find_matching_jobs for live RAG matches.'
-        : 'No job matches found. Try uploading a resume and running job scoring first.',
+      no_scores: true,
+      error: 'No AI-scored matches yet for this resume. Go to Search and click "Find Best Jobs" to score it.',
       resume_id: resumeId,
     });
   }

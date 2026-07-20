@@ -7,14 +7,11 @@ export { default as Hero } from './landing/Hero';
 export { default as Features } from './landing/Features';
 export { default as Pricing } from './landing/Pricing';
 export { MatchScoreReceipt, ATSIntelReceipt, ResumeOptReceipt } from './landing/Receipts';
-export { default as TrustBar } from './landing/TrustBar';
 export { default as CTABanner } from './landing/CTABanner';
 export { default as Journey } from './landing/Journey';
 export { default as Testimonials } from './landing/Testimonials';
-export { default as ResumeShowcase } from './landing/ResumeShowcase';
 export { default as LandingNav } from './landing/LandingNav';
 export { default as LandingFooter } from './landing/LandingFooter';
-export { default as CompanyResearch } from './landing/CompanyResearch';
 
 // ── Nav / Layout ──────────────────────────────────────────────
 export { default as Navbar } from './Navbar';

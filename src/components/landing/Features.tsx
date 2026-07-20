@@ -15,12 +15,8 @@ type Feat = {
 };
 
 const FEATS: Feat[] = [
-  { n: '01', label: 'AI Match Scoring',     title: 'Know your odds before you apply.',  desc: "See a clear fit score for every job before you apply — a real read on whether you're a match, explained in plain terms. Not keyword guessing.",           proof: ['More accurate than eyeballing job lists yourself', 'Match · Gap · Verdict AI reasoning for every job', 'Scored against your specific resume, not a generic profile'], r: 'match',   side: 'right' },
-  { n: '02', label: 'ATS Intelligence',     title: 'See exactly what the ATS sees.',     desc: 'Most rejections happen before a human reads your PDF. We surface keyword density, phrase gaps, and a HIGH / MED / LOW callback prediction — so you fix it first.', proof: ["See which keywords you have and which you're missing, at a glance", 'HIGH / MEDIUM / LOW callback verdict per role', 'Top keyword gap + strongest bullet — always actionable'],                  r: 'ats',     side: 'left'  },
-  { n: '03', label: 'Resume Optimization',  title: 'Before → after rewrites, per JD.',   desc: 'Vague bullets get buried. AI rewrites each experience bullet to mirror the job description — adding specificity and keywords ATS systems reward.',                  proof: ['Before-and-after bullet diff view for every experience entry', '4 ATS-safe PDF export templates', 'Tailored resume generates in ~30 seconds per job'],               r: 'resume',  side: 'right' },
-  { n: '04', label: 'Application Tracker',  title: 'Your entire job hunt in one kanban.', desc: 'Applied, Interview, Offer, Rejected — all in one board. Per-role interview prep checklists generated automatically. Confetti when you land an offer. You earned it.', proof: ['4-column kanban: Applied / Interview / Offer / Rejected', 'Per-role interview prep checklist auto-generated', 'Application timeline with status history and notes'],          r: 'kanban',  side: 'left'  },
-  { n: '05', label: 'Company Intelligence', title: 'Insider prep before the interview.', desc: "We research the company for you — tech stack, salary range, culture, and whether they're actively hiring — so you walk into interviews prepared.", proof: ['Automatic company research on every job match', 'India-specific salary bands in ₹ LPA, not vague ranges', 'Hiring signals extracted from recent engineering blog posts'],    r: 'company', side: 'right' },
-  { n: '06', label: 'Paste Any Job',        title: 'Score any JD in 10 seconds.',        desc: 'Found something on Naukri, LinkedIn, Instahyre, or a referral email? Paste the raw JD. Get an instant match score, full reasoning, and an optimization path.',       proof: ['Works with any job source — paste raw text, no formatting', 'Naukri, LinkedIn, Instahyre, Internshala, referrals all work', 'Score + reasoning + optimized resume path in under 10 s'],     r: 'paste',   side: 'left'  },
+  { n: '01', label: 'Application Tracker',  title: 'Your entire job hunt in one kanban.', desc: 'Applied, Interview, Offer, Rejected — all in one board. Per-role interview prep checklists generated automatically. Confetti when you land an offer. You earned it.', proof: ['4-column kanban: Applied / Interview / Offer / Rejected', 'Per-role interview prep checklist auto-generated', 'Application timeline with status history and notes'], r: 'kanban', side: 'right' },
+  { n: '02', label: 'Paste Any Job',        title: 'Score any JD in 10 seconds.',        desc: 'Found something on Naukri, LinkedIn, Instahyre, or a referral email? Paste the raw JD. Get an instant match score, full reasoning, and an optimization path.',       proof: ['Works with any job source — paste raw text, no formatting', 'Naukri, LinkedIn, Instahyre, Internshala, referrals all work', 'Score + reasoning + optimized resume path in under 10 s'], r: 'paste', side: 'left' },
 ];
 
 export default function Features() {
@@ -35,10 +31,10 @@ export default function Features() {
       <div ref={ref} style={{ maxWidth: 1200, margin: '0 auto', padding: '0 32px' }}>
         <div style={{ marginBottom: 64 }}>
           <div style={{ fontFamily: MONO, fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: C.primary, marginBottom: 12 }}>
-            What it does
+            Also included
           </div>
           <h2 style={{ fontFamily: SANS, fontSize: 'clamp(1.75rem,3vw,2.5rem)', fontWeight: 800, letterSpacing: '-0.03em', color: C.text, lineHeight: 1.15, maxWidth: 520 }}>
-            Six tools. One focused mission.
+            Two more things it does.
           </h2>
         </div>
 

@@ -45,14 +45,6 @@
   from { opacity: 0; transform: scale(1.16) translateY(8px); }
   to   { opacity: 1; transform: scale(1.26) translateY(0); }
 }
-@keyframes jsLogoMarquee {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
-}
-@keyframes jsScFocusIn {
-  from { opacity: 0; transform: scale(.94); }
-  to   { opacity: 1; transform: scale(1); }
-}
 
 .jobscorer-landing .fade-hero {
   opacity: 0;
@@ -63,32 +55,6 @@
 .jobscorer-landing .fh3 { animation-delay: 160ms; }
 .jobscorer-landing .fh4 { animation-delay: 240ms; }
 .jobscorer-landing .fh5 { animation-delay: 320ms; }
-
-.jobscorer-landing .logo-marquee {
-  animation: jsLogoMarquee 48s linear infinite;
-}
-
-.jobscorer-landing .rs-carousel-card {
-  transition: filter 260ms ease, box-shadow 320ms cubic-bezier(0.22,0.65,0.28,1), transform 320ms cubic-bezier(0.22,0.65,0.28,1);
-}
-
-/* Resume carousel — preview (side) cards: signal that they're clickable.
-   Lift + sharpen + deepen shadow on the inner card on hover. We animate the
-   INNER card (not the .sc-stage-back wrapper) so the wrapper's positioning
-   transform (translateX/scale/rotate) is left untouched. */
-.jobscorer-landing .sc-stage-back:hover {
-  opacity: 0.72 !important;
-}
-.jobscorer-landing .sc-stage-back:hover .rs-carousel-card {
-  transform: translateY(-8px);
-  filter: blur(1.4px) !important;
-  box-shadow: 0 30px 64px -18px rgba(15,23,42,.46), 0 8px 18px rgba(15,23,42,.14), inset 0 0 0 1px rgba(15,23,42,.06) !important;
-}
-.jobscorer-landing .sc-stage-back:focus-visible {
-  outline: 3px solid #135bec;
-  outline-offset: 6px;
-  border-radius: 14px;
-}
 
 /* Receipt confetti animation hook */
 .jobscorer-landing .js-confetti {
@@ -117,8 +83,6 @@
 /* Responsive */
 @media (max-width: 900px) {
   .jobscorer-landing .feat-row { flex-direction: column !important; }
-  .jobscorer-landing .india-grid { grid-template-columns: 1fr !important; }
-  .jobscorer-landing .ba-grid { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 820px) {
   .jobscorer-landing .sn-wrap { grid-template-columns: 1fr !important; gap: 18px !important; }
@@ -127,7 +91,6 @@
   .jobscorer-landing .sn-rail-spacer { display: none !important; }
 }
 @media (max-width: 760px) {
-  .jobscorer-landing .sc-stage-back { display: none !important; }
   .jobscorer-landing .cmp-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
   .jobscorer-landing .cmp-table { min-width: 640px; }
   .jobscorer-landing .cmp-table th:first-child,
@@ -180,11 +143,6 @@
   .jobscorer-landing .trust-grid { grid-template-columns: 1fr !important; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .jobscorer-landing .logo-marquee { animation: none; }
-  .jobscorer-landing .rs-carousel-card { transition: none !important; }
-}
-
 /* ── Mobile responsive fixes ───────────────────────────────── */
 
 /* Pricing cards: set default 3-col via CSS so the media queries below
@@ -207,6 +165,16 @@
     padding-left: 16px !important;
     padding-right: 16px !important;
   }
+}
+
+/* Hero process strip: 3 steps per row on tablets, arrows only make sense
+   between steps on the same row, so they're dropped once it wraps. */
+@media (max-width: 720px) {
+  .jobscorer-landing .hero-process-arrow { display: none !important; }
+  .jobscorer-landing .hero-process-step-wrap { width: 33.33%; justify-content: center; }
+}
+@media (max-width: 480px) {
+  .jobscorer-landing .hero-process-step-wrap { width: 50%; }
 }
 
 /* Journey: tighter side padding on tablets */

@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/components/providers/AuthProvider'
+import { hasPendingUpload } from '@/lib/pendingResumeUpload'
 import {
     fetchDashboardStats,
     fetchMatches,
@@ -154,6 +156,14 @@ function CareerProgressStrip({ activeRoadmap, nextProject }: {
 
 export default function DashboardHomePage() {
     const { user } = useAuth()
+    const router = useRouter()
+
+    // A resume selected on the landing page before signup hands off here via
+    // sessionStorage — send the user straight to the upload page to finish it.
+    useEffect(() => {
+        if (user?.id && hasPendingUpload()) router.replace('/dashboard/upload')
+    }, [user?.id, router])
+
     const [stats, setStats] = useState<DashboardStats | null>(null)
     const [topMatches, setTopMatches] = useState<FullMatch[]>([])
     const [pipeline, setPipeline] = useState<{ company_name: string; job_title: string | null; researched_at: string }[]>([])

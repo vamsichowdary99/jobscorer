@@ -72,19 +72,30 @@ interface ResumeEditorState {
 }
 
 // ── Constants ─────────────────────────────────────────────
-// Palette pixel-sampled from the aarav-sharma carousel mockup: exactly two
-// ink colors — blue accent + black. No gray anywhere (dates/company/contact
-// are all black; the "gray" look in the mockup was anti-aliased edges).
-// Font registered centrally in ./fonts.ts (incl. true Roboto-Italic).
+// Beacon — promoted from the pending "Kickresume Gradient" catalog entry
+// (dark navy gradient header), built 2026-07-19. Research-driven pick: the
+// full-bleed colored banner header with reversed (white) name/contact text
+// is the single most common "modern professional" archetype across Zety,
+// Canva, Enhancv's Modern category, and Kickresume's own top template — none
+// of the other 13 active templates use reversed text on a solid color block
+// (they all put dark text on white/light backgrounds even with strong accent
+// colors). Dropped the source idea's "dot skills" proficiency rating —
+// implies a quantified skill level with no real backing data, so skills stay
+// plain extractable text like every other template. Banner is a SOLID navy
+// fill, not a true gradient: react-pdf's gradient support is SVG-only and
+// adds fragility for a purely decorative effect — solid color reads the same
+// at a glance and is more reliable. Font: Open Sans (already registered,
+// reused from Onyx/Jade/Lapis).
 
-const FONT = "Roboto";
-const ACCENT = "#06296b"; // role subtitle, section headers, underline rules
-const INK = "#111111";    // everything else
+const FONT = "Open Sans";
+const NAVY = "#0f3460";
+const INK = "#1a1a2e";
+const MUTED = "#5c5c6e";
+const BANNER_TEXT = "#f4f6fb";
+const BANNER_MUTED = "#c3cbe0";
 const PAGE_W = 612;
 const PAGE_H = 792;
 const MARGIN_H = "44pt";
-const MARGIN_V = "32pt";
-const SKILL_LABEL_W = "92pt";
 
 // ── Bold-marker renderer (**bold** → bold run) ────────────
 
@@ -110,38 +121,36 @@ const BoldText: React.FC<BoldTextProps> = ({ children: text, style = {} }) => {
   );
 };
 
-// ── Section Heading (blue, uppercase, blue underline rule) ─
+// ── Section Heading (bold navy uppercase, thin rule below) ─
 
 const SectionHeading: React.FC<{ title: string }> = ({ title }) => (
-  <View style={{ marginTop: "7pt", marginBottom: "4pt" }}>
+  <View style={{ marginTop: "11pt", marginBottom: "5pt" }}>
     <Text
       style={{
         fontWeight: "bold",
         fontSize: "10.5pt",
-        letterSpacing: "0.8pt",
+        letterSpacing: "1.2pt",
         textTransform: "uppercase",
-        color: ACCENT,
-        paddingBottom: "2pt",
-        borderBottomWidth: 1.2,
-        borderBottomColor: ACCENT,
-        borderBottomStyle: "solid",
+        color: NAVY,
+        marginBottom: "3pt",
       }}
     >
       {dL(title)}
     </Text>
+    <View style={{ borderBottomWidth: 1, borderBottomColor: NAVY, borderBottomStyle: "solid" }} />
   </View>
 );
 
-// ── Bullet list (round • marker, black) ───────────────────
+// ── Bullet list (round • marker) ──────────────────────────
 
 const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
   <View style={{ marginTop: "2pt" }}>
     {items
       .filter((b) => b.trim())
       .map((b, i) => (
-        <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "1pt" }}>
-          <Text style={{ width: "12pt", fontSize: "10pt" }}>{"•"}</Text>
-          <BoldText style={{ flex: 1, fontSize: "10pt", lineHeight: 1.26 }}>
+        <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "1.5pt" }}>
+          <Text style={{ width: "10pt", fontSize: "9.5pt", color: MUTED }}>{"•"}</Text>
+          <BoldText style={{ flex: 1, fontSize: "9.5pt", lineHeight: 1.32, color: INK }}>
             {b}
           </BoldText>
         </View>
@@ -149,50 +158,43 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
   </View>
 );
 
-// ── Row: left (bold) + right date, both black ─────────────
+// ── Row: left (bold) + right (navy bold) ──────────────────
 
-const HeaderRow: React.FC<{ left: string; right?: string; bold?: boolean }> = ({
-  left,
-  right,
-  bold = true,
-}) => (
+const HeaderRow: React.FC<{ left: string; right?: string }> = ({ left, right }) => (
   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-    <Text style={{ fontWeight: bold ? "bold" : "normal", fontSize: "10.5pt", flex: 1 }}>
-      {dL(left)}
-    </Text>
+    <Text style={{ fontWeight: "bold", fontSize: "10.3pt", flex: 1, color: INK }}>{dL(left)}</Text>
     {right ? (
-      <Text style={{ fontSize: "9.5pt", color: INK, marginLeft: "10pt" }}>{dL(right)}</Text>
+      <Text style={{ fontSize: "8.7pt", fontWeight: "bold", color: NAVY, marginLeft: "8pt" }}>{dL(right)}</Text>
     ) : null}
   </View>
 );
 
 // ── Main PDF Document ─────────────────────────────────────
 
-interface CobaltPdfDocumentProps {
+interface BeaconPdfDocumentProps {
   state: ResumeEditorState;
 }
 
 const DEFAULT_ORDER = ["summary", "skills", "experience", "projects", "education", "certifications", "achievements", "leadership"];
 
-const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
+const BeaconPdfDocument: React.FC<BeaconPdfDocumentProps> = ({ state }) => {
   const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state;
 
   const contactParts = [
-    profile.phone,
     profile.email,
+    profile.phone,
     profile.location,
     profile.linkedin,
     profile.github,
     profile.portfolio,
   ].filter(Boolean);
 
-  // Role subtitle: editable Profile headline, falling back to the first experience title.
   const roleSubtitle = profile.headline?.trim() || experience.find((e) => e.title && e.title.trim())?.title?.trim() || "";
 
   const skillRows = [
     { label: "Languages", value: skills.languages },
     { label: "Frameworks", value: skills.frameworks },
-    { label: "Tools & Cloud", value: skills.tools },
+    { label: "Tools & Platforms", value: skills.tools },
     { label: "Core Competencies", value: skills.soft },
   ].filter((r) => r.value && r.value.trim());
 
@@ -200,8 +202,8 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
   const sections: Record<string, () => React.ReactNode> = {
     summary: () => summary ? (
       <View>
-        <SectionHeading title="Professional Summary" />
-        <BoldText style={{ fontSize: "10pt", lineHeight: 1.35, color: INK }}>
+        <SectionHeading title="Summary" />
+        <BoldText style={{ fontSize: "9.7pt", lineHeight: 1.42, color: INK }}>
           {summary}
         </BoldText>
       </View>
@@ -211,12 +213,10 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
       <View>
         <SectionHeading title="Skills" />
         {skillRows.map((row, i) => (
-          <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "2pt" }}>
-            <Text style={{ fontWeight: "bold", width: SKILL_LABEL_W, fontSize: "10pt" }}>
-              {dL(`${row.label}:`)}
-            </Text>
-            <Text style={{ flex: 1, fontSize: "10pt" }}>{dL(row.value)}</Text>
-          </View>
+          <Text key={i} wrap={false} style={{ fontSize: "9.5pt", lineHeight: 1.4, marginBottom: "2.5pt", color: INK }}>
+            <Text style={{ fontWeight: "bold" }}>{dL(`${row.label}:  `)}</Text>
+            {dL(row.value)}
+          </Text>
         ))}
       </View>
     ),
@@ -225,15 +225,15 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
       <View>
         <SectionHeading title="Experience" />
         {experience.map((exp, i) => {
-          const companyLine = [exp.company, exp.location].filter(Boolean).join(", ");
+          const companyLine = [exp.company, exp.location].filter(Boolean).join(" · ");
           return (
-            <View key={i} style={{ marginBottom: "5pt" }}>
+            <View key={i} style={{ marginBottom: "7pt" }}>
               <HeaderRow
                 left={exp.title || "Role"}
                 right={[exp.startDate, exp.endDate].filter(Boolean).join(" – ")}
               />
               {companyLine ? (
-                <Text style={{ fontStyle: "italic", fontSize: "10pt", marginTop: "0.5pt" }}>
+                <Text style={{ fontStyle: "italic", fontSize: "9.3pt", color: MUTED, marginTop: "0.5pt", marginBottom: "1pt" }}>
                   {dL(companyLine)}
                 </Text>
               ) : null}
@@ -250,21 +250,13 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
       <View>
         <SectionHeading title="Projects" />
         {projects.map((proj, i) => (
-          <View key={i} style={{ marginBottom: "4pt" }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-              <Text style={{ fontWeight: "bold", fontSize: "10.5pt", flex: 1 }}>
-                {dL(proj.name)}
-                {proj.tech ? (
-                  <Text style={{ fontWeight: "normal" }}>
-                    {" | "}
-                    <Text style={{ fontStyle: "italic" }}>{dL(proj.tech)}</Text>
-                  </Text>
-                ) : ""}
+          <View key={i} style={{ marginBottom: "6pt" }}>
+            <HeaderRow left={proj.name} right={proj.date} />
+            {proj.tech ? (
+              <Text style={{ fontStyle: "italic", fontSize: "9.3pt", color: MUTED, marginTop: "0.5pt" }}>
+                {dL(proj.tech)}
               </Text>
-              {proj.date ? (
-                <Text style={{ fontSize: "9.5pt", color: INK, marginLeft: "10pt" }}>{dL(proj.date)}</Text>
-              ) : null}
-            </View>
+            ) : null}
             {proj.bullets.filter((b) => b.trim()).length > 0 && (
               <BulletList items={proj.bullets} />
             )}
@@ -277,21 +269,21 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
       <View>
         <SectionHeading title="Education" />
         {education.map((edu, i) => {
-          const eduTop = edu.degree || edu.school || "Degree";
-          const showSchool = edu.school && !sameText(edu.school, eduTop);
+          const eduTop = edu.school || "University";
+          const showDegree = edu.degree && !sameText(edu.degree, eduTop);
           return (
           <View key={i} style={{ marginBottom: "5pt" }}>
             <HeaderRow left={eduTop} right={edu.date} />
-            {(showSchool || edu.gpa) && (
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-                <Text style={{ fontSize: "10pt", flex: 1 }}>{showSchool ? dL(edu.school) : ""}</Text>
-                {edu.gpa ? (
-                  <Text style={{ fontSize: "9.5pt", color: INK, marginLeft: "10pt" }}>{dL(edu.gpa)}</Text>
-                ) : null}
-              </View>
-            )}
+            {showDegree ? (
+              <Text style={{ fontStyle: "italic", fontSize: "9.3pt", color: MUTED, marginTop: "0.5pt" }}>
+                {dL(edu.degree)}
+                {edu.gpa ? `  ·  GPA: ${edu.gpa}` : ""}
+              </Text>
+            ) : edu.gpa ? (
+              <Text style={{ fontSize: "9.3pt", color: MUTED, marginTop: "0.5pt" }}>GPA: {dL(edu.gpa)}</Text>
+            ) : null}
             {edu.coursework ? (
-              <Text style={{ fontSize: "9.5pt", marginTop: "1.5pt" }}>
+              <Text style={{ fontSize: "8.8pt", marginTop: "1.5pt", lineHeight: 1.3, color: INK }}>
                 <Text style={{ fontWeight: "bold" }}>Relevant Coursework: </Text>
                 {dL(edu.coursework)}
               </Text>
@@ -323,7 +315,7 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
           <View key={i} style={{ marginBottom: "5pt" }}>
             <HeaderRow left={lead.org} right={lead.date} />
             {lead.role ? (
-              <Text style={{ fontStyle: "italic", fontSize: "10pt", marginTop: "0.5pt" }}>{dL(lead.role)}</Text>
+              <Text style={{ fontStyle: "italic", fontSize: "9.3pt", color: MUTED, marginTop: "0.5pt" }}>{dL(lead.role)}</Text>
             ) : null}
             {lead.bullets.filter((b) => b.trim()).length > 0 && (
               <BulletList items={lead.bullets} />
@@ -342,35 +334,37 @@ const CobaltPdfDocument: React.FC<CobaltPdfDocumentProps> = ({ state }) => {
           fontFamily: FONT,
           fontSize: "10pt",
           color: INK,
-          paddingTop: MARGIN_V,
-          paddingBottom: MARGIN_V,
-          paddingLeft: MARGIN_H,
-          paddingRight: MARGIN_H,
+          paddingTop: 0,
+          paddingBottom: "36pt",
+          paddingLeft: 0,
+          paddingRight: 0,
         }}
       >
-        {/* ── Header (left-aligned) ── */}
-        <View style={{ marginBottom: "3pt" }}>
-          <Text style={{ fontWeight: "bold", fontSize: "20pt", letterSpacing: "0.5pt", lineHeight: 1.05 }}>
-            {dL((profile.name || "Your Name").toUpperCase())}
+        {/* ── Banner header (solid navy, reversed white text) ── */}
+        <View style={{ backgroundColor: NAVY, paddingTop: "26pt", paddingBottom: "16pt", paddingLeft: MARGIN_H, paddingRight: MARGIN_H }}>
+          <Text style={{ fontWeight: "bold", fontSize: "21pt", color: BANNER_TEXT, lineHeight: 1.08 }}>
+            {dL(profile.name || "Your Name")}
           </Text>
           {roleSubtitle ? (
-            <Text style={{ fontWeight: "bold", fontSize: "11pt", color: ACCENT, marginTop: "2pt" }}>
+            <Text style={{ fontWeight: "bold", fontSize: "10.5pt", letterSpacing: "0.8pt", textTransform: "uppercase", color: BANNER_MUTED, marginTop: "3pt" }}>
               {dL(roleSubtitle)}
             </Text>
           ) : null}
           {contactParts.length > 0 && (
-            <Text style={{ fontSize: "9.5pt", color: INK, marginTop: "4pt", letterSpacing: "0.1pt" }}>
-              {dL(contactParts.join(" \u00a0|\u00a0 "))}
+            <Text style={{ fontSize: "8.8pt", color: BANNER_MUTED, marginTop: "6pt" }}>
+              {dL(contactParts.join("  ·  "))}
             </Text>
           )}
         </View>
 
-        {order.map((key) => (
-          <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
-        ))}
+        <View style={{ paddingLeft: MARGIN_H, paddingRight: MARGIN_H, paddingTop: "10pt" }}>
+          {order.map((key) => (
+            <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+          ))}
+        </View>
       </Page>
     </Document>
   );
 };
 
-export default CobaltPdfDocument;
+export default BeaconPdfDocument;

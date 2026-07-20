@@ -17,7 +17,7 @@ export const chatTools: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_job_scores',
-      description: 'Fetch the user\'s AI-scored job matches from the Matches page, ordered by relevance score. ALWAYS call this first when the user asks "which jobs are my strongest fit", "show me my top matches", "what are my best matches", "what should I apply to", or any question about their current/existing match results. Returns the same scores shown on the Matches page (AI-evaluated, not just similarity). Set limit to 15–20 to show all matches. PREFER this over find_matching_jobs when the user is asking about their scored matches.',
+      description: 'Fetch the user\'s AI-scored job matches from the Matches page, ordered by relevance score. ALWAYS call this first when the user asks "which jobs are my strongest fit", "show me my top matches", "what are my best matches", "what should I apply to", or any question about their current/existing match results. Returns the same scores shown on the Matches page (AI-evaluated, not just similarity). Set limit to 15–20 to show all matches. PREFER this over find_matching_jobs when the user is asking about their scored matches. If the result has no_scores:true, this resume has zero real AI-scored matches — do NOT call find_matching_jobs as a fallback; tell the user to go to Search and click "Find Best Jobs" instead.',
       parameters: {
         type: 'object',
         properties: {

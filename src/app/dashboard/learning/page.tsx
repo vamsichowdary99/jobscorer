@@ -1071,9 +1071,9 @@ function WsCoachError({ message, onRetry }: { message: string; onRetry: () => vo
 
 type WsCoach = 'teach-me' | 'stuck' | 'review' | null
 
-function WsCoachHeader({ icon, iconBg, iconBorder, title, sub, active, showReview = true, onBack, onSwitch }: {
+function WsCoachHeader({ icon, iconBg, iconBorder, title, sub, active, showReview = true, onBack, onSwitch, isNarrow }: {
     icon: ReactElement; iconBg: string; iconBorder: string; title: string; sub: string
-    active: WsCoach; showReview?: boolean; onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void
+    active: WsCoach; showReview?: boolean; onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void; isNarrow?: boolean
 }) {
     const allTabs: { key: Exclude<WsCoach, null>; label: string; color: string; icon: ReactElement }[] = [
         { key: 'teach-me', label: 'Teach Me', color: T.blue, icon: <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg> },
@@ -1082,26 +1082,26 @@ function WsCoachHeader({ icon, iconBg, iconBorder, title, sub, active, showRevie
     ]
     const tabs = showReview ? allTabs : allTabs.filter(t => t.key !== 'review')
     return (
-        <div style={{ flexShrink: 0, padding: '16px 32px 0', background: '#fff', borderBottom: `1px solid ${T.line2}` }}>
+        <div style={{ flexShrink: 0, padding: isNarrow ? '12px 14px 0' : '16px 32px 0', background: '#fff', borderBottom: `1px solid ${T.line2}` }}>
             <div style={{ fontSize: 12, color: T.muted, marginBottom: 10 }}>
                 <span style={{ color: T.blue, cursor: 'pointer', fontWeight: 600 }} onClick={onBack}>Project Coach</span>
                 {' › '}<strong style={{ color: T.ink }}>{title}</strong>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 9, background: iconBg, border: `1px solid ${iconBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
-                    <div>
-                        <div style={{ fontFamily: WS_DISPLAY_FONT, fontSize: 20, fontWeight: 800, color: T.ink, letterSpacing: '-.02em' }}>{title}</div>
-                        <div style={{ fontSize: 13, color: T.muted }}>{sub}</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 9, background: iconBg, border: `1px solid ${iconBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
+                    <div style={{ minWidth: 0 }}>
+                        <div style={{ fontFamily: WS_DISPLAY_FONT, fontSize: isNarrow ? 17 : 20, fontWeight: 800, color: T.ink, letterSpacing: '-.02em' }}>{title}</div>
+                        <div style={{ fontSize: isNarrow ? 12 : 13, color: T.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: isNarrow ? 'nowrap' : 'normal' }}>{sub}</div>
                     </div>
                 </div>
-                <button onClick={onBack} style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${T.line}`, background: '#fff', cursor: 'pointer', fontSize: 16, color: T.muted }}>✕</button>
+                <button onClick={onBack} style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${T.line}`, background: '#fff', cursor: 'pointer', fontSize: 16, color: T.muted, flexShrink: 0 }}>✕</button>
             </div>
-            <div style={{ display: 'flex', gap: 0 }}>
+            <div style={{ display: 'flex', gap: 0, overflowX: isNarrow ? 'auto' : 'visible' }}>
                 {tabs.map(tb => (
                     <button key={tb.key} onClick={() => onSwitch(tb.key)} style={{
-                        padding: '10px 18px', border: 'none', background: 'transparent',
-                        fontSize: '13.5px', fontWeight: active === tb.key ? 700 : 600,
+                        padding: isNarrow ? '9px 10px' : '10px 18px', border: 'none', background: 'transparent', whiteSpace: 'nowrap',
+                        fontSize: isNarrow ? 12.5 : '13.5px', fontWeight: active === tb.key ? 700 : 600,
                         color: active === tb.key ? tb.color : T.muted, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: 7,
                         borderBottom: active === tb.key ? `2px solid ${tb.color}` : '2px solid transparent', marginBottom: -1,
@@ -1112,11 +1112,11 @@ function WsCoachHeader({ icon, iconBg, iconBorder, title, sub, active, showRevie
     )
 }
 
-function WsTeachMe({ roadmapId, milestoneId, taskIndex, milestoneTitle, task, cache, onCache, showReviewLink, onBack, onSwitch }: {
+function WsTeachMe({ roadmapId, milestoneId, taskIndex, milestoneTitle, task, cache, onCache, showReviewLink, onBack, onSwitch, isNarrow }: {
     roadmapId: string; milestoneId: string; taskIndex: number; milestoneTitle: string; task: MilestoneTask | undefined
     cache: Record<string, string>; onCache: (key: string, content: string) => void
     showReviewLink: boolean
-    onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void
+    onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void; isNarrow?: boolean
 }) {
     const cacheKey = `${milestoneId}:${taskIndex}`
     const [content, setContent] = useState<string | null>(cache[cacheKey] ?? null)
@@ -1150,7 +1150,7 @@ function WsTeachMe({ roadmapId, milestoneId, taskIndex, milestoneTitle, task, ca
         <WsCoachHeader
             icon={<svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2.2} strokeLinecap="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>}
             iconBg={T.blue50} iconBorder={T.blueLight} title="Teach Me" sub={task ? `${milestoneTitle} — ${task.title}` : milestoneTitle}
-            active="teach-me" showReview={showReviewLink} onBack={onBack} onSwitch={onSwitch}
+            active="teach-me" showReview={showReviewLink} onBack={onBack} onSwitch={onSwitch} isNarrow={isNarrow}
         />
     )
 
@@ -1165,29 +1165,40 @@ function WsTeachMe({ roadmapId, milestoneId, taskIndex, milestoneTitle, task, ca
         )
     }
 
+    const resourceList = task && (task.resources || []).length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {task.resources.map((r, i) => (
+                <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#fff', border: `1px solid ${T.line2}`, borderRadius: 10, textDecoration: 'none' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: WS_RES_ICON[resIconFor(r.type)].bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><WsResIcon k={resIconFor(r.type)} /></div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '12.5px', fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</div>
+                        <div style={{ fontSize: 11, color: T.muted, textTransform: 'capitalize' }}>{r.type}</div>
+                    </div>
+                </a>
+            ))}
+        </div>
+    ) : null
+
     // Header scrolls away WITH the content (not pinned) — the whole panel scrolls as one unit.
+    // On narrow/mobile widths, resources stack below the content instead of living in a side rail.
     return (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
             <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto' }}>
                 {header}
-                <div style={{ padding: '28px 32px' }}>
+                <div style={{ padding: isNarrow ? '16px 14px' : '28px 32px' }}>
                     <WsMarkdown content={content || ''} />
                 </div>
+                {isNarrow && resourceList && (
+                    <div style={{ padding: '0 14px 24px' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted2, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>Resources</div>
+                        {resourceList}
+                    </div>
+                )}
             </div>
-            {task && (task.resources || []).length > 0 && (
+            {!isNarrow && resourceList && (
                 <div style={{ width: 220, flexShrink: 0, minHeight: 0, borderLeft: `1px solid ${T.line2}`, overflowY: 'auto', background: '#fff', padding: '16px 14px' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.muted2, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>Resources</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {task.resources.map((r, i) => (
-                            <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#fff', border: `1px solid ${T.line2}`, borderRadius: 10, textDecoration: 'none' }}>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: WS_RES_ICON[resIconFor(r.type)].bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><WsResIcon k={resIconFor(r.type)} /></div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: '12.5px', fontWeight: 700, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</div>
-                                    <div style={{ fontSize: 11, color: T.muted, textTransform: 'capitalize' }}>{r.type}</div>
-                                </div>
-                            </a>
-                        ))}
-                    </div>
+                    {resourceList}
                 </div>
             )}
         </div>
@@ -1196,11 +1207,11 @@ function WsTeachMe({ roadmapId, milestoneId, taskIndex, milestoneTitle, task, ca
 
 type WsStuckTurn = { query: string; content?: string; error?: string }
 
-function WsStuck({ roadmapId, milestoneId, taskIndex, history, onHistoryChange, showReviewLink, onBack, onSwitch }: {
+function WsStuck({ roadmapId, milestoneId, taskIndex, history, onHistoryChange, showReviewLink, onBack, onSwitch, isNarrow }: {
     roadmapId: string; milestoneId: string; taskIndex: number
     history: Record<string, WsStuckTurn[]>; onHistoryChange: (key: string, turns: WsStuckTurn[]) => void
     showReviewLink: boolean
-    onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void
+    onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void; isNarrow?: boolean
 }) {
     const cacheKey = `${milestoneId}:${taskIndex}`
     const [turns, setTurns] = useState<WsStuckTurn[]>(history[cacheKey] ?? [])
@@ -1237,7 +1248,7 @@ function WsStuck({ roadmapId, milestoneId, taskIndex, history, onHistoryChange, 
         <WsCoachHeader
             icon={<svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth={2.2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>}
             iconBg="#FEF2F2" iconBorder="#FECACA" title="I'm Stuck" sub="Describe your issue or paste an error — I'll diagnose and guide you step-by-step."
-            active="stuck" showReview={showReviewLink} onBack={onBack} onSwitch={onSwitch}
+            active="stuck" showReview={showReviewLink} onBack={onBack} onSwitch={onSwitch} isNarrow={isNarrow}
         />
     )
 
@@ -1245,9 +1256,9 @@ function WsStuck({ roadmapId, milestoneId, taskIndex, history, onHistoryChange, 
         return (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
                 {header}
-                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 60px', overflowY: 'auto' }}>
-                    <div style={{ fontSize: 28, fontWeight: 800, color: T.ink, marginBottom: 8, letterSpacing: '-0.02em' }}>What&apos;s going wrong?</div>
-                    <div style={{ fontSize: 14, color: T.muted, marginBottom: 32 }}>Describe your error or paste a message — I&apos;ll diagnose it instantly.</div>
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: isNarrow ? '32px 16px' : '40px 60px', overflowY: 'auto' }}>
+                    <div style={{ fontSize: isNarrow ? 20 : 28, fontWeight: 800, color: T.ink, marginBottom: 8, letterSpacing: '-0.02em', textAlign: 'center' }}>What&apos;s going wrong?</div>
+                    <div style={{ fontSize: 14, color: T.muted, marginBottom: isNarrow ? 20 : 32, textAlign: 'center' }}>Describe your error or paste a message — I&apos;ll diagnose it instantly.</div>
                     <div style={{ width: '100%', maxWidth: 680, background: '#fff', border: `1.5px solid ${T.line}`, borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
                         <div style={{ padding: '14px 16px' }}>
                             <textarea
@@ -1277,11 +1288,11 @@ function WsStuck({ roadmapId, milestoneId, taskIndex, history, onHistoryChange, 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
             <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {header}
-                <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div style={{ padding: isNarrow ? '16px 14px' : '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
                     {turns.map((t, i) => (
                         <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <div style={{ maxWidth: '60%', background: T.blue, color: '#fff', borderRadius: '16px 16px 4px 16px', padding: '12px 18px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{t.query}</div>
+                                <div style={{ maxWidth: isNarrow ? '85%' : '60%', background: T.blue, color: '#fff', borderRadius: '16px 16px 4px 16px', padding: '12px 18px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{t.query}</div>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                                 <div style={{ width: 34, height: 34, borderRadius: '50%', background: T.blue50, border: `2px solid ${T.blue}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
@@ -1306,7 +1317,7 @@ function WsStuck({ roadmapId, milestoneId, taskIndex, history, onHistoryChange, 
                     )}
                 </div>
             </div>
-            <div style={{ flexShrink: 0, borderTop: `1px solid ${T.line2}`, padding: '12px 24px', background: '#fff', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+            <div style={{ flexShrink: 0, borderTop: `1px solid ${T.line2}`, padding: isNarrow ? '10px 12px' : '12px 24px', background: '#fff', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
                 <textarea
                     value={query} onChange={e => setQuery(e.target.value)} rows={1}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); analyze(query) } }}
@@ -1322,10 +1333,10 @@ function WsStuck({ roadmapId, milestoneId, taskIndex, history, onHistoryChange, 
     )
 }
 
-function WsReview({ roadmapId, milestoneId, canReview, initialGithubUrl, onBack, onSwitch, onPassed }: {
+function WsReview({ roadmapId, milestoneId, canReview, initialGithubUrl, onBack, onSwitch, onPassed, isNarrow }: {
     roadmapId: string; milestoneId: string; canReview: boolean; initialGithubUrl: string
     onBack: () => void; onSwitch: (c: Exclude<WsCoach, null>) => void
-    onPassed: (result: CheckpointResult, githubUrl: string) => Promise<boolean>
+    onPassed: (result: CheckpointResult, githubUrl: string) => Promise<boolean>; isNarrow?: boolean
 }) {
     const [phase, setPhase] = useState<'input' | 'loading' | 'results'>('input')
     const [githubUrl, setGithubUrl] = useState(initialGithubUrl)
@@ -1372,7 +1383,7 @@ function WsReview({ roadmapId, milestoneId, canReview, initialGithubUrl, onBack,
         <WsCoachHeader
             icon={<svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth={2.2} strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>}
             iconBg="#DCFCE7" iconBorder="#BBF7D0" title="Review My Work" sub="Submit your GitHub repo (optional) and get an AI verdict on this milestone."
-            active="review" onBack={onBack} onSwitch={onSwitch}
+            active="review" onBack={onBack} onSwitch={onSwitch} isNarrow={isNarrow}
         />
     )
 
@@ -1382,7 +1393,7 @@ function WsReview({ roadmapId, milestoneId, canReview, initialGithubUrl, onBack,
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
                 <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                     {header}
-                    <div style={{ display: 'flex', flexDirection: 'column', padding: '22px 28px 40px', gap: 18 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', padding: isNarrow ? '16px 14px 32px' : '22px 28px 40px', gap: 18 }}>
                         {result.passed ? (
                             <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 14, padding: '20px 24px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -1420,8 +1431,8 @@ function WsReview({ roadmapId, milestoneId, canReview, initialGithubUrl, onBack,
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
             {header}
             {phase === 'input' && (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 60px', gap: 20, overflowY: 'auto' }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: T.ink, letterSpacing: '-.02em' }}>Ready to submit this milestone?</div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: isNarrow ? '28px 16px' : '40px 60px', gap: 20, overflowY: 'auto' }}>
+                    <div style={{ fontSize: isNarrow ? 19 : 22, fontWeight: 800, color: T.ink, letterSpacing: '-.02em', textAlign: 'center' }}>Ready to submit this milestone?</div>
                     <div style={{ fontSize: 14, color: T.muted, textAlign: 'center', maxWidth: 480 }}>The AI reviews your checklist and (optionally) your GitHub repo, then tells you if you&apos;re ready for the next milestone.</div>
                     {!canReview && (
                         <div style={{ padding: '10px 16px', background: T.amberBg, color: T.amberText, borderRadius: 10, fontSize: '12.5px', fontWeight: 600, maxWidth: 480, textAlign: 'center' }}>
@@ -1550,10 +1561,10 @@ function WsTaskRow({ task, idx, checklistState, onToggleItem, open, onToggleOpen
     )
 }
 
-function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, openTask, onToggleOpenTask, onOpenCoach, isLastMilestone, canContinue, continuing, onContinue }: {
+function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, openTask, onToggleOpenTask, onOpenCoach, isLastMilestone, canContinue, continuing, onContinue, isNarrow }: {
     milestone: ProjectMilestoneWithProgress; checklistState: boolean[]; onToggleChecklistItem: (flatIdx: number) => void
     openTask: number | null; onToggleOpenTask: (i: number) => void; onOpenCoach: (c: Exclude<WsCoach, null>) => void
-    isLastMilestone: boolean; canContinue: boolean; continuing: boolean; onContinue: () => void
+    isLastMilestone: boolean; canContinue: boolean; continuing: boolean; onContinue: () => void; isNarrow?: boolean
 }) {
     const [tab, setTab] = useState<'overview' | 'tasks' | 'coach'>('overview')
     const offsets = useMemo(() => taskChecklistOffsets(milestone), [milestone])
@@ -1568,11 +1579,11 @@ function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, o
 
     return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: T.bgAlt, minHeight: 0 }}>
-            <div style={{ padding: '28px 36px 0', borderBottom: `1px solid ${T.line2}`, background: T.bgAlt }}>
+            <div style={{ padding: isNarrow ? '16px 16px 0' : '28px 36px 0', borderBottom: `1px solid ${T.line2}`, background: T.bgAlt }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: 240 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: T.blue, marginBottom: 6 }}>Milestone {milestone.milestone_number}</div>
-                        <h2 style={{ fontSize: 30, fontWeight: 800, color: T.ink, letterSpacing: '-0.04em', margin: '0 0 8px' }}>{milestone.title}</h2>
+                        <h2 style={{ fontSize: isNarrow ? 20 : 30, fontWeight: 800, color: T.ink, letterSpacing: '-0.04em', margin: '0 0 8px' }}>{milestone.title}</h2>
                         <div style={{ fontSize: 14, color: T.muted }}>{milestone.goal}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0, paddingTop: 4 }}>
@@ -1599,10 +1610,10 @@ function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, o
                         <div style={{ width: `${pct}%`, height: '100%', background: T.blue, borderRadius: 99, transition: 'width .4s' }} />
                     </div>
                 </div>
-                <div style={{ display: 'flex', gap: 0 }}>
+                <div style={{ display: 'flex', gap: 0, overflowX: isNarrow ? 'auto' : 'visible' }}>
                     {(['overview', 'tasks', 'coach'] as const).map(tb => (
                         <button key={tb} onClick={() => setTab(tb)} style={{
-                            padding: '10px 20px', border: 'none', background: 'transparent', fontSize: 14,
+                            padding: isNarrow ? '10px 12px' : '10px 20px', border: 'none', background: 'transparent', fontSize: 14, whiteSpace: 'nowrap',
                             fontWeight: tab === tb ? 700 : 500, color: tab === tb ? T.blue : T.muted, cursor: 'pointer',
                             borderBottom: tab === tb ? `2.5px solid ${T.blue}` : '2.5px solid transparent', marginBottom: -1,
                         }}>{tb === 'overview' ? 'Overview' : tb === 'tasks' ? 'Tasks' : 'Project Coach'}</button>
@@ -1612,7 +1623,7 @@ function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, o
 
             {!isLastMilestone && !alreadyCompleted && (
                 <div style={{
-                    padding: '14px 36px', background: canContinue ? '#F0FDF4' : '#fff', borderBottom: `1px solid ${T.line2}`,
+                    padding: isNarrow ? '12px 16px' : '14px 36px', background: canContinue ? '#F0FDF4' : '#fff', borderBottom: `1px solid ${T.line2}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
                 }}>
                     <div style={{ fontSize: '13.5px', color: canContinue ? T.greenText : T.muted, fontWeight: canContinue ? 700 : 500 }}>
@@ -1626,18 +1637,18 @@ function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, o
                 </div>
             )}
             {isLastMilestone && !alreadyCompleted && (
-                <div style={{ padding: '14px 36px', background: '#fff', borderBottom: `1px solid ${T.line2}` }}>
+                <div style={{ padding: isNarrow ? '12px 16px' : '14px 36px', background: '#fff', borderBottom: `1px solid ${T.line2}` }}>
                     <div style={{ fontSize: '13.5px', color: T.muted }}>
                         This is the final milestone — pass <strong style={{ color: T.ink }}>Review My Work</strong> in the Project Coach tab to mark the whole project complete.
                     </div>
                 </div>
             )}
 
-            <div style={{ padding: '28px 36px 60px', flex: 1 }}>
+            <div style={{ padding: isNarrow ? '16px 16px 40px' : '28px 36px 60px', flex: 1 }}>
                 {tab === 'overview' && (
                     <>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, border: `1px solid ${T.line}`, borderRadius: 14, overflow: 'hidden', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', marginBottom: 24 }}>
-                            <div style={{ padding: 28, borderRight: `1px solid ${T.line}` }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : '1fr 1fr', gap: 0, border: `1px solid ${T.line}`, borderRadius: 14, overflow: 'hidden', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', marginBottom: 24 }}>
+                            <div style={{ padding: isNarrow ? 18 : 28, borderRight: isNarrow ? 'none' : `1px solid ${T.line}`, borderBottom: isNarrow ? `1px solid ${T.line}` : 'none' }}>
                                 <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, marginBottom: 10 }}>Goal</div>
                                 <div style={{ fontSize: 14, color: T.muted, lineHeight: 1.7, marginBottom: 22 }}>{milestone.goal}</div>
                                 <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, marginBottom: 14 }}>What You&apos;ll Do</div>
@@ -1652,7 +1663,7 @@ function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, o
                                     ))}
                                 </div>
                             </div>
-                            <div style={{ padding: 28 }}>
+                            <div style={{ padding: isNarrow ? 18 : 28 }}>
                                 <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, marginBottom: 18 }}>Expected Deliverables</div>
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                     {dels.length === 0 && <div style={{ fontSize: 13, color: T.muted }}>No standalone deliverables for this milestone.</div>}
@@ -1667,19 +1678,19 @@ function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, o
                                 </div>
                             </div>
                         </div>
-                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: isNarrow ? '16px 16px' : '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                                 <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2} strokeLinecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                                 <span style={{ fontSize: 16, fontWeight: 800, color: T.ink }}>Project Coach</span>
                             </div>
                             <div style={{ fontSize: 13, color: T.muted, marginBottom: 20 }}>I&apos;m here to help you with this milestone. Choose an option below or ask me anything.</div>
-                            <div style={{ display: 'grid', gridTemplateColumns: isLastMilestone ? '1fr 1fr 1fr' : '1fr 1fr', gap: 12 }}>
-                                <WsCoachCard label="Teach Me" desc="Explain concepts step-by-step" onClick={() => onOpenCoach('teach-me')}
+                            <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : isLastMilestone ? '1fr 1fr 1fr' : '1fr 1fr', gap: 12 }}>
+                                <WsCoachCard label="Teach Me" desc="Explain concepts step-by-step" onClick={() => onOpenCoach('teach-me')} isNarrow={isNarrow}
                                     icon={<svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={1.8} strokeLinecap="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>} />
-                                <WsCoachCard label="I'm Stuck" desc="Get help with errors or issues" onClick={() => onOpenCoach('stuck')}
+                                <WsCoachCard label="I'm Stuck" desc="Get help with errors or issues" onClick={() => onOpenCoach('stuck')} isNarrow={isNarrow}
                                     icon={<svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth={1.8} strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>} />
                                 {isLastMilestone && (
-                                    <WsCoachCard label="Review My Work" desc="Final AI review — completes the project" onClick={() => onOpenCoach('review')}
+                                    <WsCoachCard label="Review My Work" desc="Final AI review — completes the project" onClick={() => onOpenCoach('review')} isNarrow={isNarrow}
                                         icon={<svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={1.8} strokeLinecap="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>} />
                                 )}
                             </div>
@@ -1721,13 +1732,13 @@ function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, o
                             <div style={{ fontSize: 18, fontWeight: 800, color: T.ink, letterSpacing: '-0.02em' }}>Project Coach</div>
                         </div>
                         <div style={{ fontSize: '13.5px', color: T.muted, marginBottom: 20 }}>I&apos;m here to help you with this milestone. Choose an option below or ask me anything.</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: isLastMilestone ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: 10, marginBottom: 22 }}>
-                            <WsCoachCard label="Teach Me" desc="Explain concepts step-by-step" onClick={() => onOpenCoach('teach-me')}
+                        <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : isLastMilestone ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: 10, marginBottom: 22 }}>
+                            <WsCoachCard label="Teach Me" desc="Explain concepts step-by-step" onClick={() => onOpenCoach('teach-me')} isNarrow={isNarrow}
                                 icon={<svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></svg>} />
-                            <WsCoachCard label="I'm Stuck" desc="Get help with errors or issues" onClick={() => onOpenCoach('stuck')}
+                            <WsCoachCard label="I'm Stuck" desc="Get help with errors or issues" onClick={() => onOpenCoach('stuck')} isNarrow={isNarrow}
                                 icon={<svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M8 6l4-4 4 4" /><path d="M12 2v10.3" /><path d="M4.93 10.93A10 10 0 1021.07 10.93" /></svg>} />
                             {isLastMilestone && (
-                                <WsCoachCard label="Review My Work" desc="Final AI review — completes the project" onClick={() => onOpenCoach('review')}
+                                <WsCoachCard label="Review My Work" desc="Final AI review — completes the project" onClick={() => onOpenCoach('review')} isNarrow={isNarrow}
                                     icon={<svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>} />
                             )}
                         </div>
@@ -1753,7 +1764,18 @@ function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, o
     )
 }
 
-function WsCoachCard({ icon, label, desc, onClick }: { icon: ReactElement; label: string; desc: string; onClick: () => void }) {
+function WsCoachCard({ icon, label, desc, onClick, isNarrow }: { icon: ReactElement; label: string; desc: string; onClick: () => void; isNarrow?: boolean }) {
+    if (isNarrow) {
+        return (
+            <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', background: '#fff', border: `1px solid ${T.line}`, borderRadius: 12, padding: '14px 16px', textAlign: 'left', cursor: 'pointer' }}>
+                <div style={{ flexShrink: 0 }}>{icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 12, color: T.muted }}>{desc}</div>
+                </div>
+            </button>
+        )
+    }
     return (
         <button onClick={onClick} className="ws-coach-card" style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 12, padding: '18px 12px', textAlign: 'center', cursor: 'pointer' }}>
             <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center' }}>{icon}</div>
@@ -1763,9 +1785,9 @@ function WsCoachCard({ icon, label, desc, onClick }: { icon: ReactElement; label
     )
 }
 
-function WsOverview({ roadmap, milestones, onStart, onSelectMilestone }: {
+function WsOverview({ roadmap, milestones, onStart, onSelectMilestone, isNarrow }: {
     roadmap: import('@/lib/types').ProjectRoadmap; milestones: ProjectMilestoneWithProgress[]
-    onStart: () => void; onSelectMilestone: (i: number) => void
+    onStart: () => void; onSelectMilestone: (i: number) => void; isNarrow?: boolean
 }) {
     const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
     const curve = roadmap.milestone_score_curve || []
@@ -1807,23 +1829,25 @@ function WsOverview({ roadmap, milestones, onStart, onSelectMilestone }: {
 
     return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.bgAlt, minHeight: 0 }}>
-            <div style={{ flexShrink: 0, padding: '13px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderBottom: `1px solid ${T.line2}`, gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: T.muted }}>
-                    <span>My Projects</span>
-                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={T.muted2} strokeWidth={2} strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
-                    <span style={{ fontWeight: 600, color: T.ink }}>{roadmap.project_name}</span>
+            {!isNarrow && (
+                <div style={{ flexShrink: 0, padding: '13px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderBottom: `1px solid ${T.line2}`, gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: T.muted }}>
+                        <span>My Projects</span>
+                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={T.muted2} strokeWidth={2} strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+                        <span style={{ fontWeight: 600, color: T.ink }}>{roadmap.project_name}</span>
+                    </div>
+                    <button onClick={onStart} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', background: T.blue, color: '#fff', border: 'none', borderRadius: 10, fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(37,99,235,.25)', whiteSpace: 'nowrap' }}>
+                        <svg width={13} height={13} viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+                        Start Milestone 1
+                    </button>
                 </div>
-                <button onClick={onStart} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 22px', background: T.blue, color: '#fff', border: 'none', borderRadius: 10, fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(37,99,235,.25)' }}>
-                    <svg width={13} height={13} viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
-                    Start Milestone 1
-                </button>
-            </div>
+            )}
 
             <div style={{ flex: 1, overflowY: 'auto' }}>
-                <div style={{ padding: '32px 40px 60px', maxWidth: 1440, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+                <div style={{ padding: isNarrow ? '20px 16px 40px' : '32px 40px 60px', maxWidth: 1440, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
 
                     {roadmap.status === 'completed' && (
-                        <div style={{ background: T.blue50, border: `1px solid ${T.blueLight}`, borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
+                        <div style={{ background: T.blue50, border: `1px solid ${T.blueLight}`, borderRadius: 14, padding: isNarrow ? '16px 16px' : '20px 24px', marginBottom: 24 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth={2.5} strokeLinecap="round"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" /></svg>
                                 <span style={{ fontSize: 15, fontWeight: 800, color: T.ink }}>Project Complete</span>
@@ -1856,29 +1880,35 @@ function WsOverview({ roadmap, milestones, onStart, onSelectMilestone }: {
 
                     <div style={{ marginBottom: 28 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                            <h1 style={{ fontSize: 30, fontWeight: 800, color: T.ink, letterSpacing: '-0.04em', margin: 0 }}>Project Overview</h1>
+                            <h1 style={{ fontSize: isNarrow ? 24 : 30, fontWeight: 800, color: T.ink, letterSpacing: '-0.04em', margin: 0 }}>Project Overview</h1>
                         </div>
-                        <p style={{ fontSize: 14, color: T.muted, marginBottom: 22 }}>Get a complete understanding of this project and what you will build.</p>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                        <p style={{ fontSize: isNarrow ? '12.5px' : 14, color: T.muted, marginBottom: isNarrow ? 18 : 22 }}>Get a complete understanding of this project and what you will build.</p>
+                        {isNarrow && (
+                            <button onClick={onStart} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '11px 16px', marginBottom: 18, background: T.blue, color: '#fff', border: 'none', borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(37,99,235,.25)' }}>
+                                <svg width={13} height={13} viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
+                                Start Milestone 1
+                            </button>
+                        )}
+                        <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr 1fr' : 'repeat(auto-fit, minmax(220px, 1fr))', gap: isNarrow ? 10 : 14 }}>
                             {[
                                 { icon: <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>, label: 'Estimated Time', big: roadmap.estimated_weeks ? `${roadmap.estimated_weeks} Week${roadmap.estimated_weeks === 1 ? '' : 's'}` : 'Not estimated', sub: `${milestones.length} milestones` },
                                 { icon: <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>, label: 'Difficulty', big: cap(roadmap.difficulty), sub: 'Great for building real-world skills' },
                                 { icon: <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>, label: 'Score Impact', big: totalGain ? `+${totalGain}%` : 'Not estimated', sub: 'Match score gain on completion' },
                                 { icon: <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>, label: 'Skills Covered', big: `${roadmap.tech_stack.length} Skill${roadmap.tech_stack.length === 1 ? '' : 's'}`, sub: roadmap.tech_stack.slice(0, 3).join(', ') || 'See tech stack below' },
                             ].map(c => (
-                                <div key={c.label} style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 12, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-                                        {c.icon}<span style={{ fontSize: 12, fontWeight: 600, color: T.muted }}>{c.label}</span>
+                                <div key={c.label} style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 12, padding: isNarrow ? 14 : '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: isNarrow ? 6 : 7, marginBottom: isNarrow ? 6 : 10 }}>
+                                        {c.icon}<span style={{ fontSize: isNarrow ? 11 : 12, fontWeight: 600, color: T.muted }}>{c.label}</span>
                                     </div>
-                                    <div style={{ fontSize: c.big.length > 14 ? 18 : 21, fontWeight: 800, color: T.ink, lineHeight: 1.25, marginBottom: 5 }}>{c.big}</div>
-                                    <div style={{ fontSize: 12, color: T.blue, fontWeight: 500 }}>{c.sub}</div>
+                                    <div style={{ fontSize: isNarrow ? 16 : (c.big.length > 14 ? 18 : 21), fontWeight: 800, color: T.ink, lineHeight: 1.25, marginBottom: isNarrow ? 2 : 5 }}>{c.big}</div>
+                                    <div style={{ fontSize: isNarrow ? '10.5px' : 12, color: T.blue, fontWeight: isNarrow ? 600 : 500 }}>{c.sub}</div>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, marginBottom: 18 }}>
-                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : '1.4fr 1fr', gap: 18, marginBottom: 18 }}>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: isNarrow ? '16px 16px' : '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
                             <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 14 }}>About This Project</div>
                             <p style={{ fontSize: 14, color: T.muted, lineHeight: 1.8, marginBottom: 12, whiteSpace: 'pre-line' }}>
                                 {roadmap.project_theory || roadmap.project_description || 'No description generated yet.'}
@@ -1889,7 +1919,7 @@ function WsOverview({ roadmap, milestones, onStart, onSelectMilestone }: {
                                 ))}
                             </div>
                         </div>
-                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: isNarrow ? '16px 16px' : '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
                             <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 14 }}>Why This Project?</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
                                 {progressions.length === 0 && <div style={{ fontSize: 13, color: T.muted }}>Closes {roadmap.tech_stack.join(', ') || 'key'} gaps for this role.</div>}
@@ -1916,34 +1946,62 @@ function WsOverview({ roadmap, milestones, onStart, onSelectMilestone }: {
                         </div>
                     </div>
 
-                    <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)', marginBottom: 18, overflowX: 'auto' }}>
+                    <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: isNarrow ? '16px 16px' : '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)', marginBottom: 18, overflowX: 'auto' }}>
                         <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 22 }}>Your Milestone Journey</div>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative', minWidth: 560 }}>
-                            <div style={{ position: 'absolute', top: 19, left: '10%', right: '10%', height: 2, background: T.line2, zIndex: 0 }} />
-                            {milestones.map((m, i) => {
-                                const complete = m.progress?.status === 'completed'
-                                const active = m.milestone_number === roadmap.current_milestone
-                                const clickable = !m.locked
-                                return (
-                                    <div key={m.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, position: 'relative', zIndex: 1 }}>
-                                        <div onClick={() => clickable && onSelectMilestone(i)} style={{
-                                            width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontFamily: WS_MONO, fontSize: 14, fontWeight: 700, cursor: clickable ? 'pointer' : 'default',
-                                            background: complete ? '#22C55E' : active ? T.blue : '#fff',
-                                            border: complete ? 'none' : active ? `2.5px solid ${T.blue}` : `2px solid ${T.line}`,
-                                            color: complete || active ? '#fff' : T.muted2, opacity: m.locked ? 0.6 : 1,
-                                        }}>{complete ? '✓' : m.milestone_number}</div>
-                                        <div style={{ textAlign: 'center' }}>
-                                            <div style={{ fontSize: 12, fontWeight: active ? 700 : 600, color: active ? T.blue : T.muted }}>{m.title}</div>
+                        {isNarrow ? (
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                {milestones.map((m, i) => {
+                                    const complete = m.progress?.status === 'completed'
+                                    const active = m.milestone_number === roadmap.current_milestone
+                                    const clickable = !m.locked
+                                    return (
+                                        <div key={m.id} style={{ display: 'flex', gap: 12 }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                                                <div onClick={() => clickable && onSelectMilestone(i)} style={{
+                                                    width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontFamily: WS_MONO, fontSize: 12, fontWeight: 700, cursor: clickable ? 'pointer' : 'default',
+                                                    background: complete ? '#22C55E' : active ? T.blue : '#fff',
+                                                    border: complete ? 'none' : active ? `2.5px solid ${T.blue}` : `2px solid ${T.line}`,
+                                                    color: complete || active ? '#fff' : T.muted2, opacity: m.locked ? 0.6 : 1,
+                                                }}>{complete ? '✓' : m.milestone_number}</div>
+                                                {i < milestones.length - 1 && <div style={{ width: 2, flex: 1, minHeight: 22, background: T.line2 }} />}
+                                            </div>
+                                            <div style={{ paddingBottom: 20 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: active ? T.blue : T.ink, marginBottom: 2 }}>Milestone {m.milestone_number}</div>
+                                                <div style={{ fontSize: 12, color: T.muted }}>{m.title}</div>
+                                            </div>
                                         </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
+                                    )
+                                })}
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative', minWidth: 560 }}>
+                                <div style={{ position: 'absolute', top: 19, left: '10%', right: '10%', height: 2, background: T.line2, zIndex: 0 }} />
+                                {milestones.map((m, i) => {
+                                    const complete = m.progress?.status === 'completed'
+                                    const active = m.milestone_number === roadmap.current_milestone
+                                    const clickable = !m.locked
+                                    return (
+                                        <div key={m.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, position: 'relative', zIndex: 1 }}>
+                                            <div onClick={() => clickable && onSelectMilestone(i)} style={{
+                                                width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                fontFamily: WS_MONO, fontSize: 14, fontWeight: 700, cursor: clickable ? 'pointer' : 'default',
+                                                background: complete ? '#22C55E' : active ? T.blue : '#fff',
+                                                border: complete ? 'none' : active ? `2.5px solid ${T.blue}` : `2px solid ${T.line}`,
+                                                color: complete || active ? '#fff' : T.muted2, opacity: m.locked ? 0.6 : 1,
+                                            }}>{complete ? '✓' : m.milestone_number}</div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: 12, fontWeight: active ? 700 : 600, color: active ? T.blue : T.muted }}>{m.title}</div>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 }}>
-                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : '1fr 1fr', gap: 18, marginBottom: 18 }}>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: isNarrow ? '16px 16px' : '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
                             <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 16 }}>What You&apos;ll Be Able To Do</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
                                 {milestones.length === 0 && <div style={{ fontSize: 13, color: T.muted }}>Milestone goals not available for this project.</div>}
@@ -1957,7 +2015,7 @@ function WsOverview({ roadmap, milestones, onStart, onSelectMilestone }: {
                                 ))}
                             </div>
                         </div>
-                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                        <div style={{ background: '#fff', border: `1px solid ${T.line}`, borderRadius: 14, padding: isNarrow ? '16px 16px' : '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
                             <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, marginBottom: 16 }}>Portfolio Outcome</div>
                             <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.7, marginBottom: 10 }}>{roadmap.github_outcome || 'A working GitHub repo demonstrating this project.'}</p>
                             <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.7, marginBottom: 20 }}>{roadmap.portfolio_outcome}</p>
@@ -1976,8 +2034,8 @@ function WsOverview({ roadmap, milestones, onStart, onSelectMilestone }: {
                             </div>
                             <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.6, marginBottom: 16 }}>Here&apos;s where you stand on the skills this project covers.</p>
                             <div style={{ border: `1px solid ${T.line}`, borderRadius: 12, overflow: 'hidden' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-                                    <div style={{ borderRight: `1px solid ${T.line}` }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : '1fr 1fr' }}>
+                                    <div style={{ borderRight: isNarrow ? 'none' : `1px solid ${T.line}`, borderBottom: isNarrow ? `1px solid ${T.line}` : 'none' }}>
                                         <div style={{ padding: '12px 16px', background: '#F0FDF4', borderBottom: '1px solid #BBF7D0' }}>
                                             <span style={{ fontSize: 12, fontWeight: 700, color: '#15803D' }}>Some Experience Already</span>
                                         </div>
@@ -2213,27 +2271,37 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
     }
 
     const activeMilestone = milestones[msIdx]
+    const NARROW_TOPBAR_H = 52
+    const narrowTitle = coach === 'teach-me' ? 'Project Coach › Teach Me' : coach === 'stuck' ? "Project Coach › I'm Stuck" : coach === 'review' ? 'Project Coach › Review My Work'
+        : view === 'overview' ? roadmap.project_name : activeMilestone ? `Milestone ${activeMilestone.milestone_number}` : ''
 
     return (
-        <div style={{ height: 'calc(100vh - 64px)', overflow: 'hidden', background: T.bgAlt, minWidth: 320, display: 'flex', flexDirection: 'row', position: 'relative' }}>
+        <div style={{ height: 'calc(100vh - 64px)', overflow: 'hidden', background: T.bgAlt, minWidth: 320, display: 'flex', flexDirection: 'column', position: 'relative' }}>
             <AchievementToastStack toasts={achievementToasts} />
-            {isNarrow && railOpen && (
-                <div onClick={() => setRailOpen(false)} style={{ position: 'fixed', inset: 0, top: 64, background: 'rgba(15,23,42,.4)', zIndex: 40 }} />
+            {isNarrow && (
+                <div style={{ flexShrink: 0, height: NARROW_TOPBAR_H, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '0 14px', background: '#fff', borderBottom: `1px solid ${T.line}`, zIndex: 20 }}>
+                    <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', color: T.muted, fontSize: 13, fontWeight: 600, padding: 0, flexShrink: 0 }}>
+                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                        Projects
+                    </button>
+                    <div style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 13, fontWeight: 700, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{narrowTitle}</div>
+                    <button onClick={() => setRailOpen(true)} aria-label="Open milestone list" style={{
+                        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                        background: '#fff', border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    }}>
+                        <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth={2.2} strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+                    </button>
+                </div>
             )}
-            {isNarrow && !railOpen && (
-                <button onClick={() => setRailOpen(true)} aria-label="Open milestone list" style={{
-                    position: 'absolute', top: 12, left: 12, zIndex: 30, width: 36, height: 36, borderRadius: 9,
-                    background: '#fff', border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,.08)',
-                }}>
-                    <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth={2.2} strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-                </button>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'row', position: 'relative' }}>
+            {isNarrow && railOpen && (
+                <div onClick={() => setRailOpen(false)} style={{ position: 'fixed', inset: 0, top: 64 + NARROW_TOPBAR_H, background: 'rgba(15,23,42,.4)', zIndex: 40 }} />
             )}
             <div style={{
                 width: 220, minWidth: 220, flexShrink: 0, height: '100%', background: '#fff', borderRight: `1px solid ${T.line}`,
                 display: 'flex', flexDirection: 'column', overflow: 'hidden',
                 ...(isNarrow ? {
-                    position: 'fixed' as const, top: 64, bottom: 0, left: railOpen ? 0 : -221,
+                    position: 'fixed' as const, top: 64 + NARROW_TOPBAR_H, bottom: 0, left: railOpen ? 0 : -221,
                     transition: 'left .25s ease', zIndex: 41, boxShadow: railOpen ? '4px 0 24px rgba(15,23,42,.15)' : 'none',
                 } : {}),
             }}>
@@ -2297,7 +2365,7 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
                         milestoneTitle={activeMilestone.title} task={activeMilestone.tasks[openTask ?? 0]}
                         cache={teachMeCache} onCache={(key, content) => setTeachMeCache(prev => ({ ...prev, [key]: content }))}
                         showReviewLink={activeMilestone.milestone_number === milestones.length}
-                        onBack={() => setCoach(null)} onSwitch={setCoach}
+                        onBack={() => setCoach(null)} onSwitch={setCoach} isNarrow={isNarrow}
                     />
                 )}
                 {coach === 'stuck' && activeMilestone && (
@@ -2305,7 +2373,7 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
                         roadmapId={roadmapId} milestoneId={activeMilestone.id} taskIndex={openTask ?? 0}
                         history={stuckHistory} onHistoryChange={(key, turns) => setStuckHistory(prev => ({ ...prev, [key]: turns }))}
                         showReviewLink={activeMilestone.milestone_number === milestones.length}
-                        onBack={() => setCoach(null)} onSwitch={setCoach}
+                        onBack={() => setCoach(null)} onSwitch={setCoach} isNarrow={isNarrow}
                     />
                 )}
                 {coach === 'review' && activeMilestone && (
@@ -2314,12 +2382,12 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
                         canReview={allRequiredChecked(activeMilestone, checklistByMilestone[msIdx] ?? [])}
                         initialGithubUrl={activeMilestone.progress?.github_url ?? ''}
                         onBack={() => setCoach(null)} onSwitch={setCoach}
-                        onPassed={handleMilestonePassed}
+                        onPassed={handleMilestonePassed} isNarrow={isNarrow}
                     />
                 )}
                 {coach === null && view === 'overview' && (
                     <WsOverview roadmap={roadmap} milestones={milestones} onStart={handleStart}
-                        onSelectMilestone={(i) => !milestones[i].locked && goMilestone(i)} />
+                        onSelectMilestone={(i) => !milestones[i].locked && goMilestone(i)} isNarrow={isNarrow} />
                 )}
                 {coach === null && view === 'ms' && activeMilestone && (
                     <WsMilestoneDetail
@@ -2334,8 +2402,10 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
                         canContinue={allRequiredChecked(activeMilestone, checklistByMilestone[msIdx] ?? [])}
                         continuing={continuing}
                         onContinue={handleSimpleContinue}
+                        isNarrow={isNarrow}
                     />
                 )}
+            </div>
             </div>
         </div>
     )
@@ -2348,7 +2418,9 @@ function LearningHistoryIndex({ summaries }: { summaries: LearningPathSummary[] 
     const [visible, setVisible] = useState(false)
     const [section, setSection] = useState<'skills' | 'projects'>('skills')
     const [activeRoadmapId, setActiveRoadmapId] = useState<string | null>(null)
-    const [projectCount, setProjectCount] = useState(0)
+    // null = not fetched yet — badge shows a loading dash instead of a
+    // misleading "0" while the eager fetch is still in flight.
+    const [projectCount, setProjectCount] = useState<number | null>(null)
     const progressMap = useLibraryProgress(summaries)
     const total = summaries.length
 
@@ -2416,7 +2488,7 @@ function LearningHistoryIndex({ summaries }: { summaries: LearningPathSummary[] 
                         onClick={() => setSection('projects')}
                     >
                         Projects
-                        <span className="lib-section-tab-badge">{projectCount}</span>
+                        <span className="lib-section-tab-badge">{projectCount === null ? '·' : projectCount}</span>
                     </button>
                 </div>
 
@@ -2477,7 +2549,12 @@ function LearningHistoryIndex({ summaries }: { summaries: LearningPathSummary[] 
                 </>)}
 
                 {/* ── Projects content ── */}
-                {section === 'projects' && <ProjectsSection onOpen={setActiveRoadmapId} onCount={setProjectCount} />}
+                {/* Always mounted (not conditionally rendered) so its count-fetch
+                    effect runs on page load and the Projects tab badge is correct
+                    even before the user switches to that tab. */}
+                <div style={{ display: section === 'projects' ? undefined : 'none' }}>
+                    <ProjectsSection onOpen={setActiveRoadmapId} onCount={setProjectCount} active={section === 'projects'} />
+                </div>
 
             </div>
         </div>
@@ -2625,16 +2702,19 @@ function PathCard({ s, idx, visible, progress }: { s: LearningPathSummary; idx: 
 /** Joins a build-plan project with its roadmap (if one has been generated yet). */
 type ProjectEntry = { key: string; summary: BuildPlanProjectSummary; roadmap: ProjectRoadmapSummary | null }
 
-function ProjectsSection({ onOpen, onCount }: { onOpen: (roadmapId: string) => void; onCount: (n: number) => void }) {
+function ProjectsSection({ onOpen, onCount, active }: { onOpen: (roadmapId: string) => void; onCount: (n: number) => void; active?: boolean }) {
     const { user } = useAuth()
     const [entries, setEntries] = useState<ProjectEntry[] | null>(null)
     const [generating, setGenerating] = useState<Record<string, boolean>>({})
     const [genError, setGenError] = useState<Record<string, string>>({})
 
     useEffect(() => {
+        // TEMP DIAGNOSTIC — remove once the "Projects badge shows 0 on reload" bug is confirmed fixed.
+        console.log('[ProjectsSection] effect fired', { userId: user?.id, active, t: Date.now() })
         if (!user?.id) return
         let cancelled = false
         Promise.all([fetchBuildPlanProjectSummaries(user.id), fetchProjectRoadmaps()]).then(([summaries, roadmaps]) => {
+            console.log('[ProjectsSection] fetch resolved', { cancelled, summariesLen: summaries.length, roadmapsLen: roadmaps.length, t: Date.now() })
             if (cancelled) return
             const joined = summaries.map(summary => {
                 const roadmap = roadmaps.find(r =>
@@ -2644,10 +2724,16 @@ function ProjectsSection({ onOpen, onCount }: { onOpen: (roadmapId: string) => v
             })
             setEntries(joined)
             onCount(joined.length)
-        }).catch(() => { if (!cancelled) { setEntries([]); onCount(0) } })
+        }).catch((err) => {
+            console.error('[ProjectsSection] fetch REJECTED', err, { cancelled, t: Date.now() })
+            if (!cancelled) { setEntries([]); onCount(0) }
+        })
         return () => { cancelled = true }
+        // Refetches whenever the tab becomes active (not just on mount) so a
+        // failed/empty eager fetch on page load self-heals the moment the
+        // user actually opens the Projects tab, instead of sticking at 0.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id])
+    }, [user?.id, active])
 
     const handleGetRoadmap = async (entry: ProjectEntry) => {
         setGenerating(g => ({ ...g, [entry.key]: true }))
@@ -3250,6 +3336,9 @@ function LearningPage() {
     // ── Mobile state ──
     const [isMobile, setIsMobile] = useState(false)
     const [showAllSkillsSheet, setShowAllSkillsSheet] = useState(false)
+    const [mobileSection, setMobileSection] = useState<'skills' | 'projects'>('skills')
+    const [mobileRoadmapId, setMobileRoadmapId] = useState<string | null>(null)
+    const [mobileProjectCount, setMobileProjectCount] = useState<number | null>(null)
     useEffect(() => {
         const mq = window.matchMedia('(max-width: 767px)')
         setIsMobile(mq.matches)
@@ -3506,14 +3595,46 @@ function LearningPage() {
 
         // ── History (library list) ──
         if (phase === 'history') {
+            if (mobileRoadmapId) {
+                return <MilestoneWorkspace roadmapId={mobileRoadmapId} onBack={() => setMobileRoadmapId(null)} />
+            }
             return (
                 <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+                    <LibraryStyles />
                     {/* Header */}
                     <div style={{ background: '#fff', borderBottom: `1px solid ${T.line}`, padding: '18px 14px 14px', flexShrink: 0 }}>
-                        <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 5 }}>LEARNING PATHS</div>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: T.ink, letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 2 }}>My Learning Paths</div>
-                        <div style={{ fontSize: '12.5px', color: T.muted }}>{summaries.length} path{summaries.length !== 1 ? 's' : ''} · tap one to view your skill gaps</div>
+                        <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 5 }}>LEARNING LIBRARY</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: T.ink, letterSpacing: '-0.03em', lineHeight: 1.2, marginBottom: 2 }}>{mobileSection === 'skills' ? 'My Learning Paths' : 'Your Projects'}</div>
+                        <div style={{ fontSize: '12.5px', color: T.muted, marginBottom: 14 }}>
+                            {mobileSection === 'skills'
+                                ? `${summaries.length} path${summaries.length !== 1 ? 's' : ''} · tap one to view your skill gaps`
+                                : 'Build real projects to close skill gaps — each one generates a GitHub-ready portfolio artifact.'}
+                        </div>
+                        {/* Section tabs */}
+                        <div style={{ display: 'flex', gap: 4, background: T.sand, borderRadius: 10, padding: 4 }}>
+                            {(['skills', 'projects'] as const).map(sec => (
+                                <button key={sec} onClick={() => setMobileSection(sec)} style={{
+                                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                    padding: '9px 0', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+                                    background: mobileSection === sec ? '#fff' : 'transparent',
+                                    boxShadow: mobileSection === sec ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
+                                    fontSize: 13, fontWeight: 700, color: mobileSection === sec ? T.ink : T.muted,
+                                }}>
+                                    {sec === 'skills' ? 'Skills' : 'Projects'}
+                                    <span style={{ padding: '1px 7px', borderRadius: 99, background: mobileSection === sec ? T.sand : '#e2e8f0', fontSize: 11, fontWeight: 700, color: T.muted }}>
+                                        {sec === 'skills' ? summaries.length : (mobileProjectCount === null ? '·' : mobileProjectCount)}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
+                    {/* Always mounted (not conditionally rendered) so its count-fetch
+                        effect runs on page load and the Projects tab badge is correct
+                        even before the user switches to that tab. */}
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px 40px', display: mobileSection === 'projects' ? undefined : 'none' }}>
+                        <ProjectsSection onOpen={setMobileRoadmapId} onCount={setMobileProjectCount} active={mobileSection === 'projects'} />
+                    </div>
+                    {mobileSection === 'skills' && (<>
                     {/* Cards */}
                     <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
                         {summaries.map(s => {
@@ -3566,6 +3687,7 @@ function LearningPage() {
                             <Icon.Sparkles width={13} height={13} />Generate New Path
                         </button>
                     </div>
+                    </>)}
                 </div>
             )
         }

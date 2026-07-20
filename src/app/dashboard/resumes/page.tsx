@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume, ResumeEditorState, ExperienceEntry, EducationEntry, ProjectEntry, LeadershipEntry } from '@/lib/types'
-import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes } from '@/lib/api'
+import { Reorder } from 'framer-motion'
+import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume, ResumeEditorState, ExperienceEntry, EducationEntry, ProjectEntry, LeadershipEntry, UserJobMatch, ProjectEvidence } from '@/lib/types'
+import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes, fetchUserJobMatch, fetchConfirmedProjects } from '@/lib/api'
 import TemplatePickerModal, { type TemplateId } from '@/components/TemplatePickerModal'
+import { TEMPLATES, TEMPLATE_IMAGES } from '@/templates/catalog'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { usePreviewDecorations, decorationKey, PreviewDecorationsProvider } from '@/components/resume-editor/PreviewDecorations'
 import { A } from '@/components/resume-editor/tokens'
@@ -15,6 +17,10 @@ import { CoverLetterView, useCoverLetter } from '@/components/resume-editor/Cove
 import { persistEditorState } from '@/lib/resume-edit/persist'
 import { generateATSText } from '@/lib/resume-edit/atsText'
 import { computeKeywordCoverage } from '@/lib/resume-edit/coverage'
+import { LAYOUT_PRESETS, detectPresetKey } from '@/lib/resume-edit/layoutPresets'
+import { measureBudget, type BudgetResult } from '@/lib/resume-edit/budget'
+import { rankSectionsForTrim, type SectionTrimSuggestion } from '@/lib/resume-edit/budgetOptimizer'
+import { findProjectSwapNudge, type ProjectSwapNudge } from '@/lib/resume-edit/projectNudge'
 import { M } from '@/lib/meridianTokens'
 
 interface SavedResumeEntry {
@@ -543,6 +549,379 @@ function StepsLayout({ state, onOpen, isFilled }: {
     )
 }
 
+// ── Layout Manager (plans/25 Phase 2) — drag-to-reorder + hide/show ──
+// Movable sections = M_SECTION_DEFS minus 'profile' (the header is always
+// fixed at the top of every template, never reorderable).
+const LAYOUT_SECTION_DEFS = M_SECTION_DEFS.filter(s => s.key !== 'profile')
+
+// ── Resume Budget meter (plans/25 Phase 4) — honest fullness % measured
+// from actual PDF pagination (src/lib/resume-edit/budget.ts), never a
+// word-count guess. Crossing the page_target boundary flips to "Needs
+// Optimization" instead of ever reporting a raw over-100% number.
+function ResumeBudgetMeter({
+    pageTarget, onPageTargetChange, budget,
+}: {
+    pageTarget: number
+    onPageTargetChange: (n: number) => void
+    budget: BudgetResult | null
+}) {
+    const overBudget = budget?.overBudget ?? false
+    const fill = budget ? Math.min(100, budget.fullnessPercent) : 0
+    const barColor = !budget ? M.border : overBudget ? M.red : fill >= 90 ? M.amber : M.green
+
+    return (
+        <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, border: `1px solid ${M.border}`, background: M.white }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: M.textFaint, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: M.fontMono }}>
+                    Resume Budget
+                </span>
+                <div style={{ display: 'flex', gap: 4 }}>
+                    {[1, 2].map(n => (
+                        <button
+                            key={n}
+                            onClick={() => onPageTargetChange(n)}
+                            style={{
+                                padding: '3px 10px', borderRadius: 20, fontSize: '0.6875rem', fontWeight: 600,
+                                fontFamily: M.fontBody, cursor: 'pointer',
+                                background: pageTarget === n ? M.accent : M.white,
+                                color: pageTarget === n ? '#fff' : M.textMuted,
+                                border: `1px solid ${pageTarget === n ? M.accent : M.border}`,
+                            }}
+                        >
+                            {n} page{n > 1 ? 's' : ''}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div style={{ height: 8, borderRadius: 4, background: M.surface, overflow: 'hidden', marginBottom: 6 }}>
+                <div style={{ height: '100%', width: `${fill}%`, background: barColor, transition: 'width 0.3s ease' }} />
+            </div>
+
+            <div style={{ fontSize: '0.75rem', color: M.textMuted, fontFamily: M.fontBody }}>
+                {!budget
+                    ? 'Measuring…'
+                    : overBudget
+                        ? `Needs Optimization — spans ${budget.pages} pages (target ${pageTarget})`
+                        : `${budget.fullnessPercent}% full · Target ${pageTarget} page${pageTarget > 1 ? 's' : ''} · ${Math.max(0, 100 - budget.fullnessPercent)}% left`}
+            </div>
+        </div>
+    )
+}
+
+// ── One-Page Optimizer (plans/25 Phase 5) — tailored resumes only. Suggests
+// hiding the section that's contributing least to THIS job's match (ranked
+// by src/lib/resume-edit/budgetOptimizer.ts from existing signals — no new
+// scoring engine). Every action is a hide toggle, reversible via the eye
+// icon in the drag list below; the master resume's structured_data is never
+// read or written by this panel.
+// ── Project-Evidence nudge (plans/25 Phase 6) — a completed AI-coached
+// project that addresses a real gap for this job. Swapping updates the
+// tailored resume's editorState directly (persisted through the existing
+// manual-edit path) — never the master resume.
+function ProjectSwapNudgeCard({
+    nudge, onSwap,
+}: {
+    nudge: ProjectSwapNudge
+    onSwap: () => void
+}) {
+    return (
+        <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, border: `1px solid ${M.green}55`, background: '#f0fdf4' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: M.green, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: M.fontMono, marginBottom: 8 }}>
+                Project Completed
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: M.text, fontFamily: M.fontBody, marginBottom: 6, lineHeight: 1.4 }}>
+                <strong>{nudge.candidate.project_name}</strong> completed
+            </div>
+            <div style={{ fontSize: '0.75rem', color: M.textMuted, fontFamily: M.fontBody, lineHeight: 1.4, marginBottom: 10 }}>
+                {nudge.reason}
+            </div>
+            <button
+                onClick={onSwap}
+                style={{ background: M.green, color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}
+            >
+                {nudge.weakestExisting ? `Swap in for "${nudge.weakestExisting.name}"` : 'Add to Projects'}
+            </button>
+        </div>
+    )
+}
+
+function OnePageOptimizerPanel({
+    suggestions, onHide,
+}: {
+    suggestions: SectionTrimSuggestion[]
+    onHide: (key: string) => void
+}) {
+    if (suggestions.length === 0) return null
+    const top = suggestions[0]
+    const labelFor = (key: string) => LAYOUT_SECTION_DEFS.find(s => s.key === key)?.label ?? key
+
+    return (
+        <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, border: `1px solid ${M.amber}55`, background: '#fffbeb' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: M.amber, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: M.fontMono, marginBottom: 8 }}>
+                One-Page Optimizer
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: M.text, fontFamily: M.fontBody, marginBottom: 6, lineHeight: 1.4 }}>
+                Over budget for this job. Safest section to trim: <strong>{labelFor(top.key)}</strong>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: M.textMuted, fontFamily: M.fontBody, lineHeight: 1.4, marginBottom: 10 }}>
+                {top.reason}
+            </div>
+            <button
+                onClick={() => onHide(top.key)}
+                style={{ background: M.amber, color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}
+            >
+                Hide {labelFor(top.key)}
+            </button>
+            <div style={{ fontSize: '0.6875rem', color: M.textFaint, fontFamily: M.fontBody, marginTop: 8 }}>
+                Reversible any time via the eye icon below. Your master resume is never changed.
+            </div>
+        </div>
+    )
+}
+
+function LayoutManagerPanel({
+    order, hidden, onChange, defaultOrder, saveStatus, unsupported,
+    activePresetKey, onSelectPreset, recommendation, onApplyRecommendation, onDismissRecommendation,
+    pageTarget, onPageTargetChange, budget, optimizer, isMobile,
+}: {
+    order: string[]
+    hidden: string[]
+    onChange: (order: string[], hidden: string[]) => void
+    defaultOrder: string[]
+    saveStatus: 'idle' | 'saving' | 'saved'
+    unsupported?: boolean
+    activePresetKey: string | null
+    onSelectPreset: (key: string) => void
+    recommendation: { preset: string; label: string; reason: string } | null
+    onApplyRecommendation: () => void
+    onDismissRecommendation: () => void
+    pageTarget: number
+    onPageTargetChange: (n: number) => void
+    budget: BudgetResult | null
+    optimizer?: React.ReactNode
+    // Touch dragging fights vertical page scroll, so the mobile tab swaps the
+    // drag handle for tap targets — same order/hidden state either way.
+    isMobile?: boolean
+}) {
+    const labelFor = (key: string) => LAYOUT_SECTION_DEFS.find(s => s.key === key)?.label ?? key
+    const toggleHidden = (key: string) => {
+        const next = hidden.includes(key) ? hidden.filter(k => k !== key) : [...hidden, key]
+        onChange(order, next)
+    }
+    const moveSection = (key: string, dir: -1 | 1) => {
+        const i = order.indexOf(key)
+        const j = i + dir
+        if (i < 0 || j < 0 || j >= order.length) return
+        const next = [...order]
+        ;[next[i], next[j]] = [next[j], next[i]]
+        onChange(next, hidden)
+    }
+
+    const budgetMeter = (
+        <ResumeBudgetMeter pageTarget={pageTarget} onPageTargetChange={onPageTargetChange} budget={budget} />
+    )
+
+    if (unsupported) {
+        return (
+            <div style={{ padding: '16px 18px' }}>
+                {budgetMeter}
+                <div style={{ padding: '4px 0', fontSize: '0.8125rem', color: M.textMuted, fontFamily: M.fontBody, lineHeight: 1.6 }}>
+                    Section reordering isn&apos;t available for two-column templates yet. Switch to a single-column template (e.g. Classic, Cobalt, Onyx) to reorder sections.
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div style={{ padding: '16px 18px' }}>
+            {budgetMeter}
+            {optimizer}
+
+            {recommendation && (
+                <div style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '12px 14px', borderRadius: 10, marginBottom: 14,
+                    background: M.accentTint, border: `1px solid ${M.accentBorder}`,
+                }}>
+                    <span style={{ fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}>💡</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: M.text, fontFamily: M.fontBody, marginBottom: 2 }}>
+                            {recommendation.label}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: M.textMuted, fontFamily: M.fontBody, lineHeight: 1.4, marginBottom: 8 }}>
+                            {recommendation.reason}
+                        </div>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            <button
+                                onClick={onApplyRecommendation}
+                                style={{ background: M.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}
+                            >
+                                Apply
+                            </button>
+                            <button
+                                onClick={onDismissRecommendation}
+                                style={{ background: 'transparent', color: M.textMuted, border: 'none', padding: '5px 4px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: M.fontBody }}
+                            >
+                                Dismiss
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: M.textFaint, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: M.fontMono, marginBottom: 8 }}>
+                    Presets
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {Object.entries(LAYOUT_PRESETS).map(([key, preset]) => (
+                        <button
+                            key={key}
+                            onClick={() => onSelectPreset(key)}
+                            style={{
+                                padding: '5px 11px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 600,
+                                fontFamily: M.fontBody, cursor: 'pointer',
+                                background: activePresetKey === key ? M.accent : M.white,
+                                color: activePresetKey === key ? '#fff' : M.textMuted,
+                                border: `1px solid ${activePresetKey === key ? M.accent : M.border}`,
+                            }}
+                        >
+                            {preset.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div style={{ marginBottom: 12, fontSize: '0.8125rem', color: M.textMuted, fontFamily: M.fontBody, lineHeight: 1.5 }}>
+                {isMobile
+                    ? 'Tap the arrows to reorder. Toggle the eye to hide a section from this resume.'
+                    : 'Drag sections to reorder. Toggle the eye to hide a section from this resume.'}
+            </div>
+
+            {isMobile ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {order.map((key, i) => {
+                        const isHidden = hidden.includes(key)
+                        return (
+                            <div key={key} style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '10px 8px 10px 12px', borderRadius: 10,
+                                background: isHidden ? M.surface : M.white,
+                                border: `1px solid ${M.border}`,
+                                opacity: isHidden ? 0.55 : 1,
+                            }}>
+                                <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: 600, color: M.text, fontFamily: M.fontBody, minWidth: 0 }}>
+                                    {labelFor(key)}
+                                </span>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <button
+                                        onClick={() => moveSection(key, -1)}
+                                        disabled={i === 0}
+                                        aria-label={`Move ${labelFor(key)} up`}
+                                        style={{ background: 'transparent', border: 'none', cursor: i === 0 ? 'default' : 'pointer', padding: '3px 6px', display: 'flex', color: i === 0 ? M.borderLight : M.textMuted }}
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+                                    </button>
+                                    <button
+                                        onClick={() => moveSection(key, 1)}
+                                        disabled={i === order.length - 1}
+                                        aria-label={`Move ${labelFor(key)} down`}
+                                        style={{ background: 'transparent', border: 'none', cursor: i === order.length - 1 ? 'default' : 'pointer', padding: '3px 6px', display: 'flex', color: i === order.length - 1 ? M.borderLight : M.textMuted }}
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={() => toggleHidden(key)}
+                                    title={isHidden ? 'Show section' : 'Hide section'}
+                                    aria-label={isHidden ? `Show ${labelFor(key)}` : `Hide ${labelFor(key)}`}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: isHidden ? M.textFaint : M.accent }}
+                                >
+                                    {isHidden ? (
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                            <path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a19.68 19.68 0 015.06-5.94M9.9 4.24A10.94 10.94 0 0112 4c7 0 11 8 11 8a19.6 19.6 0 01-2.16 3.19M14.12 14.12a3 3 0 11-4.24-4.24" />
+                                            <path d="M1 1l22 22" />
+                                        </svg>
+                                    ) : (
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                            <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                    )}
+                                </button>
+                            </div>
+                        )
+                    })}
+                </div>
+            ) : (
+            <Reorder.Group
+                axis="y"
+                values={order}
+                onReorder={(next) => onChange(next, hidden)}
+                style={{ display: 'flex', flexDirection: 'column', gap: 8, listStyle: 'none', padding: 0, margin: 0 }}
+            >
+                {order.map((key) => {
+                    const isHidden = hidden.includes(key)
+                    return (
+                        <Reorder.Item key={key} value={key} style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 12px', borderRadius: 10,
+                            background: isHidden ? M.surface : M.white,
+                            border: `1px solid ${M.border}`,
+                            cursor: 'grab', opacity: isHidden ? 0.55 : 1,
+                        }}
+                        // The native `cursor: grab` icon is a thin, low-contrast glyph that's
+                        // easy to miss entirely on Windows (especially at 125%/150% display
+                        // scaling) — a hover highlight gives users a second, more reliable
+                        // signal that the row is draggable, without depending on the OS cursor.
+                        whileHover={{ borderColor: M.accent, boxShadow: `0 0 0 2px ${M.accent}26` }}
+                        whileDrag={{ cursor: 'grabbing', boxShadow: '0 6px 16px rgba(15,23,42,.18)' }}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.textMuted} strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                                <path d="M4 8h16M4 16h16" />
+                            </svg>
+                            <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: 600, color: M.text, fontFamily: M.fontBody }}>
+                                {labelFor(key)}
+                            </span>
+                            <button
+                                onClick={() => toggleHidden(key)}
+                                title={isHidden ? 'Show section' : 'Hide section'}
+                                aria-label={isHidden ? `Show ${labelFor(key)}` : `Hide ${labelFor(key)}`}
+                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: isHidden ? M.textFaint : M.accent }}
+                            >
+                                {isHidden ? (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a19.68 19.68 0 015.06-5.94M9.9 4.24A10.94 10.94 0 0112 4c7 0 11 8 11 8a19.6 19.6 0 01-2.16 3.19M14.12 14.12a3 3 0 11-4.24-4.24" />
+                                        <path d="M1 1l22 22" />
+                                    </svg>
+                                ) : (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                        <circle cx="12" cy="12" r="3" />
+                                    </svg>
+                                )}
+                            </button>
+                        </Reorder.Item>
+                    )
+                })}
+            </Reorder.Group>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
+                <button
+                    onClick={() => onChange(defaultOrder, [])}
+                    style={{ background: 'transparent', border: 'none', color: M.accent, fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', fontFamily: M.fontBody, padding: 0 }}
+                >
+                    Reset to default order
+                </button>
+                <span style={{ fontSize: '0.75rem', color: M.textFaint, fontFamily: M.fontMono }}>
+                    {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
+                </span>
+            </div>
+        </div>
+    )
+}
 
 // ── Input helpers (Meridian) ────────────────────────────────
 const inputStyle: React.CSSProperties = {
@@ -633,6 +1012,208 @@ function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
 
     const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
 
+    const order = state.sectionOrder ?? ['summary', 'education', 'experience', 'projects', 'skills', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') {
+                return (
+                    <div style={{ marginBottom: '8pt', position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
+                        <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
+                        <span style={{ fontSize: '10pt', lineHeight: 1.45, color: '#0f6b3a' }}>{deco.text}</span>
+                    </div>
+                )
+            }
+            if (!summary) return null
+            return (
+                <div style={{ marginBottom: '8pt', fontSize: '10pt', lineHeight: 1.45, color: '#111', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                    {summary}
+                </div>
+            )
+        },
+
+        education: () => education.length > 0 && (
+            <section style={{ marginBottom: '8pt' }}>
+                <ClassicSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.school || 'University Name'
+                    const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{eduTop}</span>
+                            <span style={{ fontSize: '9.5pt', color: '#333' }}>{edu.date}</span>
+                        </div>
+                        {showDegree && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ fontStyle: 'italic' }}>{edu.degree}{edu.gpa ? ` — GPA: ${edu.gpa}` : ''}</span>
+                            </div>
+                        )}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '9.5pt', marginTop: '2pt' }}>
+                                <span style={{ fontWeight: 600 }}>Relevant Coursework: </span>
+                                {edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section style={{ marginBottom: '8pt' }}>
+                <ClassicSectionHeader title="Experience" />
+                {experience.map((exp, i) => (
+                    <div key={i} style={{ marginBottom: '8pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{exp.company || 'Company Name'}</span>
+                            <span style={{ fontSize: '9.5pt', color: '#333' }}>
+                                {[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontStyle: 'italic' }}>{exp.title}</span>
+                            {exp.location && <span style={{ fontSize: '9.5pt', color: '#555' }}>{exp.location}</span>}
+                        </div>
+                        <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                            {exp.bullets.map((b, j) => {
+                                const deco = decoFor('experience', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return (
+                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}>
+                                            <div style={{ position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
+                                                <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
+                                                <span style={{ color: '#0f6b3a' }}>{deco.text}</span>
+                                            </div>
+                                        </li>
+                                    )
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section style={{ marginBottom: '8pt' }}>
+                <ClassicSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>
+                                {proj.name}{proj.tech ? <span style={{ fontWeight: 400 }}> | <span style={{ fontStyle: 'italic' }}>{proj.tech}</span></span> : ''}
+                            </span>
+                            <span style={{ fontSize: '9.5pt', color: '#333' }}>{proj.date}</span>
+                        </div>
+                        <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return (
+                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}>
+                                            <div style={{ position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
+                                                <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
+                                                <span style={{ color: '#0f6b3a' }}>{deco.text}</span>
+                                            </div>
+                                        </li>
+                                    )
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        skills: () => hasSkills && (
+            <section style={{ marginBottom: '8pt' }}>
+                <ClassicSectionHeader title="Technical Skills" />
+                <div style={{ fontSize: '10pt' }}>
+                    {([
+                        ['languages', 'Languages'],
+                        ['tools', 'Developer Tools'],
+                        ['frameworks', 'Technologies/Frameworks'],
+                        ['soft', 'Core Competencies'],
+                    ] as const).map(([field, label]) => {
+                        const deco = decoFor('skills', undefined, undefined, field)
+                        if (deco?.kind === 'ghost') {
+                            return (
+                                <div key={field} style={{ marginBottom: '2pt', position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
+                                    <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
+                                    <span style={{ fontWeight: 700 }}>{label}: </span><span style={{ color: '#0f6b3a' }}>{deco.text}</span>
+                                </div>
+                            )
+                        }
+                        if (!skills[field]) return null
+                        return (
+                            <div key={field} style={{ marginBottom: '2pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                <span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}
+                            </div>
+                        )
+                    })}
+                </div>
+            </section>
+        ),
+
+        certifications: () => certifications.length > 0 && (
+            <section style={{ marginBottom: '8pt' }}>
+                <ClassicSectionHeader title="Certifications" />
+                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {certifications.map((cert, i) => (
+                        <li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{cert}</li>
+                    ))}
+                </ul>
+            </section>
+        ),
+
+        achievements: () => achievements.length > 0 && (
+            <section style={{ marginBottom: '8pt' }}>
+                <ClassicSectionHeader title="Achievements" />
+                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {achievements.map((ach, i) => (
+                        <li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{ach}</li>
+                    ))}
+                </ul>
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section style={{ marginBottom: '8pt' }}>
+                <ClassicSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                            <span style={{ fontSize: '9.5pt', color: '#333' }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontStyle: 'italic' }}>{lead.role}</div>}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && (
+                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {lead.bullets.filter(b => b.trim()).map((b, j) => (
+                                    <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{b}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
     return (
         <div style={{
             fontFamily: "'Georgia', 'Times New Roman', serif",
@@ -670,212 +1251,9 @@ function ClassicResumePreview({ state }: { state: ResumeEditorState }) {
             </div>
             <hr style={{ border: 'none', borderTop: '1.5px solid #000', margin: '6pt 0' }} />
 
-            {/* Summary */}
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') {
-                    return (
-                        <div style={{ marginBottom: '8pt', position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
-                            <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
-                            <span style={{ fontSize: '10pt', lineHeight: 1.45, color: '#0f6b3a' }}>{deco.text}</span>
-                        </div>
-                    )
-                }
-                if (!summary) return null
-                return (
-                    <div style={{ marginBottom: '8pt', fontSize: '10pt', lineHeight: 1.45, color: '#111', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                        {summary}
-                    </div>
-                )
-            })()}
-
-            {/* Education */}
-            {education.length > 0 && (
-                <section style={{ marginBottom: '8pt' }}>
-                    <ClassicSectionHeader title="Education" />
-                    {education.map((edu, i) => {
-                        const eduTop = edu.school || 'University Name'
-                        const showDegree = edu.degree && !sameText(edu.degree, eduTop)
-                        return (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
-                                <span style={{ fontSize: '9.5pt', color: '#333' }}>{edu.date}</span>
-                            </div>
-                            {showDegree && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ fontStyle: 'italic' }}>{edu.degree}{edu.gpa ? ` — GPA: ${edu.gpa}` : ''}</span>
-                                </div>
-                            )}
-                            {edu.coursework && (
-                                <div style={{ fontSize: '9.5pt', marginTop: '2pt' }}>
-                                    <span style={{ fontWeight: 600 }}>Relevant Coursework: </span>
-                                    {edu.coursework}
-                                </div>
-                            )}
-                        </div>
-                        )
-                    })}
-                </section>
-            )}
-
-            {/* Experience */}
-            {experience.length > 0 && (
-                <section style={{ marginBottom: '8pt' }}>
-                    <ClassicSectionHeader title="Experience" />
-                    {experience.map((exp, i) => (
-                        <div key={i} style={{ marginBottom: '8pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{exp.company || 'Company Name'}</span>
-                                <span style={{ fontSize: '9.5pt', color: '#333' }}>
-                                    {[exp.startDate, exp.endDate].filter(Boolean).join(' \u2013 ')}
-                                </span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontStyle: 'italic' }}>{exp.title}</span>
-                                {exp.location && <span style={{ fontSize: '9.5pt', color: '#555' }}>{exp.location}</span>}
-                            </div>
-                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                {exp.bullets.map((b, j) => {
-                                    const deco = decoFor('experience', i, j)
-                                    if (!b.trim() && deco?.kind !== 'ghost') return null
-                                    if (deco?.kind === 'ghost') {
-                                        return (
-                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}>
-                                                <div style={{ position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
-                                                    <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
-                                                    <span style={{ color: '#0f6b3a' }}>{deco.text}</span>
-                                                </div>
-                                            </li>
-                                        )
-                                    }
-                                    return (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                            <BoldRender text={b} />
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    ))}
-                </section>
-            )}
-
-            {/* Projects */}
-            {projects.length > 0 && (
-                <section style={{ marginBottom: '8pt' }}>
-                    <ClassicSectionHeader title="Projects" />
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>
-                                    {proj.name}{proj.tech ? <span style={{ fontWeight: 400 }}> | <span style={{ fontStyle: 'italic' }}>{proj.tech}</span></span> : ''}
-                                </span>
-                                <span style={{ fontSize: '9.5pt', color: '#333' }}>{proj.date}</span>
-                            </div>
-                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                {proj.bullets.map((b, j) => {
-                                    const deco = decoFor('projects', i, j)
-                                    if (!b.trim() && deco?.kind !== 'ghost') return null
-                                    if (deco?.kind === 'ghost') {
-                                        return (
-                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}>
-                                                <div style={{ position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
-                                                    <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
-                                                    <span style={{ color: '#0f6b3a' }}>{deco.text}</span>
-                                                </div>
-                                            </li>
-                                        )
-                                    }
-                                    return (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                            <BoldRender text={b} />
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    ))}
-                </section>
-            )}
-
-            {/* Technical Skills */}
-            {hasSkills && (
-                <section style={{ marginBottom: '8pt' }}>
-                    <ClassicSectionHeader title="Technical Skills" />
-                    <div style={{ fontSize: '10pt' }}>
-                        {([
-                            ['languages', 'Languages'],
-                            ['tools', 'Developer Tools'],
-                            ['frameworks', 'Technologies/Frameworks'],
-                            ['soft', 'Core Competencies'],
-                        ] as const).map(([field, label]) => {
-                            const deco = decoFor('skills', undefined, undefined, field)
-                            if (deco?.kind === 'ghost') {
-                                return (
-                                    <div key={field} style={{ marginBottom: '2pt', position: 'relative', background: A.greenGhostBg, borderLeft: '3px solid #16a34a', padding: '3pt 8pt', borderRadius: '0 4px 4px 0' }}>
-                                        <span style={{ position: 'absolute', top: 0, right: 4, background: '#16a34a', color: '#fff', fontSize: '0.4rem', fontWeight: 700, padding: '1px 5px', borderRadius: '0 0 3px 3px', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SUGGESTED</span>
-                                        <span style={{ fontWeight: 700 }}>{label}: </span><span style={{ color: '#0f6b3a' }}>{deco.text}</span>
-                                    </div>
-                                )
-                            }
-                            if (!skills[field]) return null
-                            return (
-                                <div key={field} style={{ marginBottom: '2pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                    <span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </section>
-            )}
-
-            {/* Certifications */}
-            {certifications.length > 0 && (
-                <section style={{ marginBottom: '8pt' }}>
-                    <ClassicSectionHeader title="Certifications" />
-                    <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                        {certifications.map((cert, i) => (
-                            <li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{cert}</li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-
-            {/* Achievements */}
-            {achievements.length > 0 && (
-                <section style={{ marginBottom: '8pt' }}>
-                    <ClassicSectionHeader title="Achievements" />
-                    <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                        {achievements.map((ach, i) => (
-                            <li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{ach}</li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-
-            {/* Leadership */}
-            {leadership.length > 0 && (
-                <section style={{ marginBottom: '8pt' }}>
-                    <ClassicSectionHeader title="Leadership" />
-                    {leadership.map((lead, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
-                                <span style={{ fontSize: '9.5pt', color: '#333' }}>{lead.date}</span>
-                            </div>
-                            {lead.role && <div style={{ fontStyle: 'italic' }}>{lead.role}</div>}
-                            {lead.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {lead.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{b}</li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    ))}
-                </section>
-            )}
+            {order.map((key) => (
+                <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+            ))}
         </div>
     )
 }
@@ -956,6 +1334,178 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
 
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
 
+    const order = state.sectionOrder ?? ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') {
+                return <section><CobaltSectionHeader title="Professional Summary" /><GhostBox text={deco.text} /></section>
+            }
+            if (!summary) return null
+            return (
+                <section>
+                    <CobaltSectionHeader title="Professional Summary" />
+                    <div style={{ fontSize: '10pt', lineHeight: 1.35, color: COBALT_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        <BoldRender text={summary} />
+                    </div>
+                </section>
+            )
+        },
+
+        skills: () => skillRows.length > 0 && (
+            <section>
+                <CobaltSectionHeader title="Skills" />
+                {skillRows.map((row, i) => {
+                    const deco = decoFor('skills', undefined, undefined, row.field)
+                    if (deco?.kind === 'ghost') {
+                        return <div key={i} style={{ marginBottom: '2.5pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}: </span>} /></div>
+                    }
+                    return (
+                        <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                            <span style={{ fontWeight: 700, width: '92pt', flexShrink: 0 }}>{row.label}:</span>
+                            <span style={{ flex: 1 }}>{row.value}</span>
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <CobaltSectionHeader title="Experience" />
+                {experience.map((exp, i) => {
+                    const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
+                    return (
+                        <div key={i} style={{ marginBottom: '7pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
+                                <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                            </div>
+                            {companyLine && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{companyLine}</div>}
+                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                            <BoldRender text={b} />
+                                        </li>
+                                    )
+                                })}
+                            </ul>
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <CobaltSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>
+                                {proj.name}{proj.tech ? <span style={{ fontWeight: 400 }}> | <span style={{ fontStyle: 'italic' }}>{proj.tech}</span></span> : ''}
+                            </span>
+                            <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{proj.date}</span>
+                        </div>
+                        <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        education: () => education.length > 0 && (
+            <section>
+                <CobaltSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.degree || edu.school || 'Degree'
+                    const showSchool = edu.school && !sameText(edu.school, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{eduTop}</span>
+                            <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{edu.date}</span>
+                        </div>
+                        {(showSchool || edu.gpa) && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span>{showSchool ? edu.school : ''}</span>
+                                {edu.gpa && <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{edu.gpa}</span>}
+                            </div>
+                        )}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '9.5pt', marginTop: '1.5pt' }}>
+                                <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        certifications: () => certifications.filter(c => c.trim()).length > 0 && (
+            <section>
+                <CobaltSectionHeader title="Certifications" />
+                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {certifications.filter(c => c.trim()).map((cert, i) => (
+                        <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{cert}</li>
+                    ))}
+                </ul>
+            </section>
+        ),
+
+        achievements: () => achievements.filter(a => a.trim()).length > 0 && (
+            <section>
+                <CobaltSectionHeader title="Achievements" />
+                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {achievements.filter(a => a.trim()).map((ach, i) => (
+                        <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{ach}</li>
+                    ))}
+                </ul>
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <CobaltSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                            <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{lead.role}</div>}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && (
+                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {lead.bullets.filter(b => b.trim()).map((b, j) => (
+                                    <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{b}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
     return (
         <div style={{
             fontFamily: "'Roboto', 'Helvetica Neue', Arial, sans-serif",
@@ -984,182 +1534,9 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
                 )}
             </div>
 
-            {/* Summary */}
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') {
-                    return <section><CobaltSectionHeader title="Professional Summary" /><GhostBox text={deco.text} /></section>
-                }
-                if (!summary) return null
-                return (
-                    <section>
-                        <CobaltSectionHeader title="Professional Summary" />
-                        <div style={{ fontSize: '10pt', lineHeight: 1.35, color: COBALT_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                            <BoldRender text={summary} />
-                        </div>
-                    </section>
-                )
-            })()}
-
-            {/* Skills */}
-            {skillRows.length > 0 && (
-                <section>
-                    <CobaltSectionHeader title="Skills" />
-                    {skillRows.map((row, i) => {
-                        const deco = decoFor('skills', undefined, undefined, row.field)
-                        if (deco?.kind === 'ghost') {
-                            return <div key={i} style={{ marginBottom: '2.5pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}: </span>} /></div>
-                        }
-                        return (
-                            <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                <span style={{ fontWeight: 700, width: '92pt', flexShrink: 0 }}>{row.label}:</span>
-                                <span style={{ flex: 1 }}>{row.value}</span>
-                            </div>
-                        )
-                    })}
-                </section>
-            )}
-
-            {/* Experience */}
-            {experience.length > 0 && (
-                <section>
-                    <CobaltSectionHeader title="Experience" />
-                    {experience.map((exp, i) => {
-                        const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
-                        return (
-                            <div key={i} style={{ marginBottom: '7pt' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
-                                    <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
-                                </div>
-                                {companyLine && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{companyLine}</div>}
-                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {exp.bullets.map((b, j) => {
-                                        const deco = decoFor('experience', i, j)
-                                        if (!b.trim() && deco?.kind !== 'ghost') return null
-                                        if (deco?.kind === 'ghost') {
-                                            return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
-                                        }
-                                        return (
-                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                                <BoldRender text={b} />
-                                            </li>
-                                        )
-                                    })}
-                                </ul>
-                            </div>
-                        )
-                    })}
-                </section>
-            )}
-
-            {/* Projects */}
-            {projects.length > 0 && (
-                <section>
-                    <CobaltSectionHeader title="Projects" />
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>
-                                    {proj.name}{proj.tech ? <span style={{ fontWeight: 400 }}> | <span style={{ fontStyle: 'italic' }}>{proj.tech}</span></span> : ''}
-                                </span>
-                                <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{proj.date}</span>
-                            </div>
-                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                {proj.bullets.map((b, j) => {
-                                    const deco = decoFor('projects', i, j)
-                                    if (!b.trim() && deco?.kind !== 'ghost') return null
-                                    if (deco?.kind === 'ghost') {
-                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
-                                    }
-                                    return (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                            <BoldRender text={b} />
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    ))}
-                </section>
-            )}
-
-            {/* Education (degree-first) */}
-            {education.length > 0 && (
-                <section>
-                    <CobaltSectionHeader title="Education" />
-                    {education.map((edu, i) => {
-                        const eduTop = edu.degree || edu.school || 'Degree'
-                        const showSchool = edu.school && !sameText(edu.school, eduTop)
-                        return (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
-                                <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{edu.date}</span>
-                            </div>
-                            {(showSchool || edu.gpa) && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span>{showSchool ? edu.school : ''}</span>
-                                    {edu.gpa && <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{edu.gpa}</span>}
-                                </div>
-                            )}
-                            {edu.coursework && (
-                                <div style={{ fontSize: '9.5pt', marginTop: '1.5pt' }}>
-                                    <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
-                                </div>
-                            )}
-                        </div>
-                        )
-                    })}
-                </section>
-            )}
-
-            {/* Certifications */}
-            {certifications.filter(c => c.trim()).length > 0 && (
-                <section>
-                    <CobaltSectionHeader title="Certifications" />
-                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                        {certifications.filter(c => c.trim()).map((cert, i) => (
-                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{cert}</li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-
-            {/* Achievements */}
-            {achievements.filter(a => a.trim()).length > 0 && (
-                <section>
-                    <CobaltSectionHeader title="Achievements" />
-                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                        {achievements.filter(a => a.trim()).map((ach, i) => (
-                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{ach}</li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-
-            {/* Leadership */}
-            {leadership.length > 0 && (
-                <section>
-                    <CobaltSectionHeader title="Leadership" />
-                    {leadership.map((lead, i) => (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
-                                <span style={{ fontSize: '9.5pt', color: COBALT_INK }}>{lead.date}</span>
-                            </div>
-                            {lead.role && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{lead.role}</div>}
-                            {lead.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {lead.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{b}</li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    ))}
-                </section>
-            )}
+            {order.map((key) => (
+                <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+            ))}
         </div>
     )
 }
@@ -1209,6 +1586,176 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
 
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
 
+    const order = state.sectionOrder ?? ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') {
+                return <section><OnyxSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+            }
+            if (!summary) return null
+            return (
+                <section>
+                    <OnyxSectionHeader title="Summary" />
+                    <div style={{ fontSize: '10pt', lineHeight: 1.4, color: ONYX_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div>
+                </section>
+            )
+        },
+
+        skills: () => skillRows.length > 0 && (
+            <section>
+                <OnyxSectionHeader title="Technical Skills" />
+                {skillRows.map((row, i) => {
+                    const deco = decoFor('skills', undefined, undefined, row.field)
+                    if (deco?.kind === 'ghost') {
+                        return <div key={i} style={{ marginBottom: '2.5pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}: </span>} /></div>
+                    }
+                    return (
+                        <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                            <span style={{ fontWeight: 700, width: '104pt', flexShrink: 0 }}>{row.label}:</span>
+                            <span style={{ flex: 1 }}>{row.value}</span>
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <OnyxSectionHeader title="Experience" />
+                {experience.map((exp, i) => {
+                    const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
+                    return (
+                        <div key={i} style={{ marginBottom: '7pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
+                                <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                            </div>
+                            {companyLine && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{companyLine}</div>}
+                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                            <BoldRender text={b} />
+                                        </li>
+                                    )
+                                })}
+                            </ul>
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <OnyxSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
+                            {(proj.tech || proj.date) && (
+                                <span style={{ fontSize: '9.5pt', color: ONYX_INK, fontStyle: proj.tech ? 'italic' : 'normal' }}>{proj.tech || proj.date}</span>
+                            )}
+                        </div>
+                        <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        education: () => education.length > 0 && (
+            <section>
+                <OnyxSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.degree || edu.school || 'Degree'
+                    const showSchool = edu.school && !sameText(edu.school, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{eduTop}</span>
+                            <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{edu.date}</span>
+                        </div>
+                        {(showSchool || edu.gpa) && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontStyle: 'italic' }}>{showSchool ? edu.school : ''}</span>
+                                {edu.gpa && <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{edu.gpa}</span>}
+                            </div>
+                        )}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '9.5pt', marginTop: '1.5pt' }}>
+                                <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        certifications: () => certifications.filter(c => c.trim()).length > 0 && (
+            <section>
+                <OnyxSectionHeader title="Certifications" />
+                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {certifications.filter(c => c.trim()).map((cert, i) => (
+                        <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{cert}</li>
+                    ))}
+                </ul>
+            </section>
+        ),
+
+        achievements: () => achievements.filter(a => a.trim()).length > 0 && (
+            <section>
+                <OnyxSectionHeader title="Achievements" />
+                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {achievements.filter(a => a.trim()).map((ach, i) => (
+                        <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{ach}</li>
+                    ))}
+                </ul>
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <OnyxSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                            <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{lead.role}</div>}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && (
+                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {lead.bullets.filter(b => b.trim()).map((b, j) => (
+                                    <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{b}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
     return (
         <div style={{
             fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif",
@@ -1234,189 +1781,19 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
                 )}
             </div>
 
-            {/* Summary */}
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') {
-                    return <section><OnyxSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
-                }
-                if (!summary) return null
-                return (
-                    <section>
-                        <OnyxSectionHeader title="Summary" />
-                        <div style={{ fontSize: '10pt', lineHeight: 1.4, color: ONYX_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div>
-                    </section>
-                )
-            })()}
-
-            {/* Skills */}
-            {skillRows.length > 0 && (
-                <section>
-                    <OnyxSectionHeader title="Technical Skills" />
-                    {skillRows.map((row, i) => {
-                        const deco = decoFor('skills', undefined, undefined, row.field)
-                        if (deco?.kind === 'ghost') {
-                            return <div key={i} style={{ marginBottom: '2.5pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}: </span>} /></div>
-                        }
-                        return (
-                            <div key={i} style={{ display: 'flex', marginBottom: '2.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                <span style={{ fontWeight: 700, width: '104pt', flexShrink: 0 }}>{row.label}:</span>
-                                <span style={{ flex: 1 }}>{row.value}</span>
-                            </div>
-                        )
-                    })}
-                </section>
-            )}
-
-            {/* Experience */}
-            {experience.length > 0 && (
-                <section>
-                    <OnyxSectionHeader title="Experience" />
-                    {experience.map((exp, i) => {
-                        const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
-                        return (
-                            <div key={i} style={{ marginBottom: '7pt' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
-                                    <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
-                                </div>
-                                {companyLine && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{companyLine}</div>}
-                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {exp.bullets.map((b, j) => {
-                                        const deco = decoFor('experience', i, j)
-                                        if (!b.trim() && deco?.kind !== 'ghost') return null
-                                        if (deco?.kind === 'ghost') {
-                                            return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
-                                        }
-                                        return (
-                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                                <BoldRender text={b} />
-                                            </li>
-                                        )
-                                    })}
-                                </ul>
-                            </div>
-                        )
-                    })}
-                </section>
-            )}
-
-            {/* Projects (tech italic on the right) */}
-            {projects.length > 0 && (
-                <section>
-                    <OnyxSectionHeader title="Projects" />
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
-                                {(proj.tech || proj.date) && (
-                                    <span style={{ fontSize: '9.5pt', color: ONYX_INK, fontStyle: proj.tech ? 'italic' : 'normal' }}>{proj.tech || proj.date}</span>
-                                )}
-                            </div>
-                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                {proj.bullets.map((b, j) => {
-                                    const deco = decoFor('projects', i, j)
-                                    if (!b.trim() && deco?.kind !== 'ghost') return null
-                                    if (deco?.kind === 'ghost') {
-                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
-                                    }
-                                    return (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                            <BoldRender text={b} />
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    ))}
-                </section>
-            )}
-
-            {/* Education (degree-first) */}
-            {education.length > 0 && (
-                <section>
-                    <OnyxSectionHeader title="Education" />
-                    {education.map((edu, i) => {
-                        const eduTop = edu.degree || edu.school || 'Degree'
-                        const showSchool = edu.school && !sameText(edu.school, eduTop)
-                        return (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
-                                <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{edu.date}</span>
-                            </div>
-                            {(showSchool || edu.gpa) && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontStyle: 'italic' }}>{showSchool ? edu.school : ''}</span>
-                                    {edu.gpa && <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{edu.gpa}</span>}
-                                </div>
-                            )}
-                            {edu.coursework && (
-                                <div style={{ fontSize: '9.5pt', marginTop: '1.5pt' }}>
-                                    <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
-                                </div>
-                            )}
-                        </div>
-                        )
-                    })}
-                </section>
-            )}
-
-            {/* Certifications */}
-            {certifications.filter(c => c.trim()).length > 0 && (
-                <section>
-                    <OnyxSectionHeader title="Certifications" />
-                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                        {certifications.filter(c => c.trim()).map((cert, i) => (
-                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{cert}</li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-
-            {/* Achievements */}
-            {achievements.filter(a => a.trim()).length > 0 && (
-                <section>
-                    <OnyxSectionHeader title="Achievements" />
-                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                        {achievements.filter(a => a.trim()).map((ach, i) => (
-                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{ach}</li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-
-            {/* Leadership */}
-            {leadership.length > 0 && (
-                <section>
-                    <OnyxSectionHeader title="Leadership" />
-                    {leadership.map((lead, i) => (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
-                                <span style={{ fontSize: '9.5pt', color: ONYX_INK }}>{lead.date}</span>
-                            </div>
-                            {lead.role && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{lead.role}</div>}
-                            {lead.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {lead.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt' }}>{b}</li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    ))}
-                </section>
-            )}
+            {order.map((key) => (
+                <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+            ))}
         </div>
     )
 }
 
 // ── Jade Resume Preview (HTML) ────────────────────────────
-// Two-column Open Sans (left: identity/contact/skills/education, right:
-// summary/experience/projects). Two inks: teal #026857 + black. Section
-// headers are teal with a thin full-column-width teal underline rule.
-// Mirrors JadePdfDocument.tsx (the priya-nair carousel design).
+// Single-column Open Sans (converted from two-column 2026-07-19). Two inks:
+// teal #026857 + black. Section headers are teal with a thin full-width
+// underline rule. Skills keep the original grouped bold-label + bulleted
+// "cloud" format rather than collapsing to a single-line list, same as
+// JadePdfDocument.tsx.
 const JADE_ACCENT = '#026857'
 const JADE_INK = '#1a1a1a'
 
@@ -1429,6 +1806,7 @@ function JadeSectionHeader({ title }: { title: string }) {
             textTransform: 'uppercase',
             color: JADE_ACCENT,
             paddingBottom: '2.5pt',
+            marginTop: '10pt',
             marginBottom: '4pt',
             borderBottom: `1px solid ${JADE_ACCENT}`,
         }}>
@@ -1448,14 +1826,9 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
     const splitItems = (csv: string) => (csv || '').split(/[,•\n]/).map(s => s.trim()).filter(Boolean)
 
-    const contactRows = [
-        { label: 'Email', value: profile.email },
-        { label: 'Phone', value: profile.phone },
-        { label: 'Location', value: profile.location },
-        { label: 'LinkedIn', value: profile.linkedin },
-        { label: 'GitHub', value: profile.github },
-        { label: 'Portfolio', value: profile.portfolio },
-    ].filter(c => c.value && c.value.trim())
+    const contactParts = [
+        profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
+    ].filter(Boolean)
 
     // Skills fields render as a bulleted "cloud" here (each comma-separated
     // item on its own line), but a proposed edit's ghost text is always the
@@ -1478,185 +1851,1401 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
         </ul>
     )
 
+    const order = state.sectionOrder ?? ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') {
+                return <section><JadeSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+            }
+            if (!summary) return null
+            return (
+                <section>
+                    <JadeSectionHeader title="Summary" />
+                    <div style={{ fontSize: '10pt', lineHeight: 1.4, color: JADE_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div>
+                </section>
+            )
+        },
+
+        skills: () => skillGroups.length > 0 && (
+            <section>
+                <JadeSectionHeader title="Skills" />
+                {skillGroups.map((g, i) => {
+                    const deco = decoFor('skills', undefined, undefined, g.field)
+                    if (deco?.kind === 'ghost') {
+                        return <div key={i} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{g.label}: </span>} /></div>
+                    }
+                    return (
+                        <div key={i} style={{ fontSize: '9.7pt', lineHeight: 1.4, marginBottom: '2pt' }}>
+                            <span style={{ fontWeight: 700 }}>{g.label}: </span>{g.items.join(', ')}
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <JadeSectionHeader title="Experience" />
+                {experience.map((exp, i) => {
+                    const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
+                    return (
+                        <div key={i} style={{ marginBottom: '7pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
+                                <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt' }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                            </div>
+                            {companyLine && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{companyLine}</div>}
+                            <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
+                                    }
+                                    return (
+                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.25, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                            <BoldRender text={b} />
+                                        </li>
+                                    )
+                                })}
+                            </ul>
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <JadeSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
+                            {(proj.tech || proj.date) && (
+                                <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt', fontStyle: proj.tech ? 'italic' : 'normal' }}>{proj.tech || proj.date}</span>
+                            )}
+                        </div>
+                        <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.25, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        education: () => education.length > 0 && (
+            <section>
+                <JadeSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.degree || edu.school || 'Degree'
+                    const showSchool = edu.school && !sameText(edu.school, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ fontWeight: 700, fontSize: '10pt', lineHeight: 1.2 }}>{eduTop}</div>
+                        {showSchool && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{edu.school}</div>}
+                        {(edu.date || edu.gpa) && (
+                            <div style={{ fontSize: '9pt', marginTop: '0.5pt' }}>{[edu.date, edu.gpa].filter(Boolean).join('  |  ')}</div>
+                        )}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '8.7pt', marginTop: '1.5pt', lineHeight: 1.25 }}>
+                                <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        certifications: () => certifications.filter(c => c.trim()).length > 0 && (
+            <section>
+                <JadeSectionHeader title="Certifications" />
+                {bullets(certifications, '9.3pt', '1pt', 1.22)}
+            </section>
+        ),
+
+        achievements: () => achievements.filter(a => a.trim()).length > 0 && (
+            <section>
+                <JadeSectionHeader title="Achievements" />
+                {bullets(achievements, '9.3pt', '1pt', 1.22)}
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <JadeSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                            <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt' }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{lead.role}</div>}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && bullets(lead.bullets)}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
     return (
         <div style={{
             fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif",
             fontSize: '10pt',
             lineHeight: 1.4,
             color: JADE_INK,
-            padding: '34pt 40pt',
+            padding: '36pt 44pt',
             minHeight: '100%',
             background: '#fff',
         }}>
             <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '24pt' }}>
-                {/* LEFT COLUMN */}
-                <div style={{ width: '178pt', flexShrink: 0 }}>
-                    <div style={{ fontSize: '21pt', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: JADE_ACCENT, lineHeight: 1.04 }}>
-                        {profile.name || 'Your Name'}
+            {/* Header (left-aligned, teal name) */}
+            <div style={{ marginBottom: '2pt' }}>
+                <div style={{ fontSize: '21pt', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: JADE_ACCENT, lineHeight: 1.04 }}>
+                    {profile.name || 'Your Name'}
+                </div>
+                {roleSubtitle && (
+                    <div style={{ fontSize: '10.5pt', fontWeight: 700, color: JADE_INK, marginTop: '3pt' }}>{roleSubtitle}</div>
+                )}
+                {contactParts.length > 0 && (
+                    <div style={{ fontSize: '9pt', color: JADE_INK, marginTop: '5pt', letterSpacing: '0.1px' }}>
+                        {contactParts.join('  |  ')}
                     </div>
-                    {roleSubtitle && (
-                        <div style={{ fontSize: '10.5pt', fontWeight: 700, color: JADE_INK, marginTop: '3pt' }}>{roleSubtitle}</div>
-                    )}
+                )}
+            </div>
 
-                    {contactRows.length > 0 && (
-                        <div style={{ marginTop: '8pt' }}>
-                            {contactRows.map((c, i) => (
-                                <div key={i} style={{ fontSize: '8.5pt', marginBottom: '2.5pt', lineHeight: 1.25 }}>
-                                    <span style={{ fontWeight: 700 }}>{c.label}: </span>{c.value}
-                                </div>
-                            ))}
+            {order.map(key => <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>)}
+        </div>
+    )
+}
+
+// ── Executive Resume Preview (HTML) ───────────────────────
+// Recreation of the "Executive" card in view-original-7.html — Caladea
+// (Garamond-adjacent) serif, monochrome, diamond bullets. Contact line is a
+// row of independent spans (space-between) framed by a thick top rule + thin
+// bottom rule, rather than one joined separator-delimited string — mirrors
+// ExecutivePdfDocument.tsx.
+const EXEC_INK = '#111111'
+const EXEC_MUTED = '#555555'
+
+function ExecutiveSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{
+            fontSize: '10pt',
+            fontWeight: 700,
+            letterSpacing: '1.5px',
+            textTransform: 'uppercase',
+            color: EXEC_INK,
+            paddingBottom: '2pt',
+            marginTop: '10pt',
+            marginBottom: '4pt',
+            borderBottom: `1.25px solid ${EXEC_INK}`,
+        }}>
+            {title}
+        </div>
+    )
+}
+
+function ExecutiveResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+
+    const contactParts = [
+        profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
+    ].filter(Boolean)
+
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+
+    const skillRows = [
+        { field: 'languages' as const, label: 'Technical', value: skills.languages },
+        { field: 'frameworks' as const, label: 'Frameworks', value: skills.frameworks },
+        { field: 'tools' as const, label: 'Tools', value: skills.tools },
+        { field: 'soft' as const, label: 'Core Competencies', value: skills.soft },
+    ].filter(r => (r.value && r.value.trim()) || decoFor('skills', undefined, undefined, r.field)?.kind === 'ghost')
+
+    // Diamond marker as a rotated square span, not a "◆" character — matches
+    // ExecutivePdfDocument.tsx, which can't rely on the Unicode glyph being in
+    // Caladea's font coverage.
+    const diamond = <span style={{ display: 'inline-block', width: 5, height: 5, background: '#333', transform: 'rotate(45deg)', marginRight: 8, flexShrink: 0 }} />
+    const bullets = (items: string[]) => (
+        <div style={{ marginTop: '2pt' }}>
+            {items.filter(b => b.trim()).map((b, j) => (
+                <div key={j} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.3 }}>
+                    {diamond}<span><BoldRender text={b} /></span>
+                </div>
+            ))}
+        </div>
+    )
+
+    const order = state.sectionOrder ?? ['summary', 'experience', 'projects', 'skills', 'education', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') return <section><ExecutiveSectionHeader title="Professional Summary" /><GhostBox text={deco.text} /></section>
+            if (!summary) return null
+            return (
+                <section>
+                    <ExecutiveSectionHeader title="Professional Summary" />
+                    <div style={{ fontSize: '9.8pt', lineHeight: 1.4, color: EXEC_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        <BoldRender text={summary} />
+                    </div>
+                </section>
+            )
+        },
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <ExecutiveSectionHeader title="Professional Experience" />
+                {experience.map((exp, i) => {
+                    const companyLine = [exp.company, exp.location].filter(Boolean).join(' · ')
+                    return (
+                        <div key={i} style={{ marginBottom: '6pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
+                                <span style={{ fontSize: '9pt', color: EXEC_MUTED, fontStyle: 'italic' }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                            </div>
+                            {companyLine && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: EXEC_MUTED, marginBottom: '1pt' }}>{companyLine}</div>}
+                            <div style={{ marginTop: '2pt' }}>
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <div key={j} style={{ marginBottom: '1.5pt' }}><GhostBox text={deco.text} /></div>
+                                    }
+                                    return (
+                                        <div key={j} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.3, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                            {diamond}<span><BoldRender text={b} /></span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
                         </div>
-                    )}
+                    )
+                })}
+            </section>
+        ),
 
-                    {skillGroups.length > 0 && (
-                        <section style={{ marginTop: '9pt' }}>
-                            <JadeSectionHeader title="Skills" />
-                            {skillGroups.map((g, i) => {
-                                const deco = decoFor('skills', undefined, undefined, g.field)
+        projects: () => projects.length > 0 && (
+            <section>
+                <ExecutiveSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
+                            {(proj.tech || proj.date) && (
+                                <span style={{ fontSize: '9pt', color: EXEC_MUTED, fontStyle: 'italic' }}>{proj.tech || proj.date}</span>
+                            )}
+                        </div>
+                        <div style={{ marginTop: '2pt' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <div key={j} style={{ marginBottom: '1.5pt' }}><GhostBox text={deco.text} /></div>
+                                }
                                 return (
-                                    <div key={i} style={{ marginBottom: '2pt' }}>
-                                        <div style={{ fontWeight: 700, fontSize: '9.5pt', marginTop: i === 0 ? 0 : '1.5pt', marginBottom: '1pt' }}>{g.label}</div>
-                                        {deco?.kind === 'ghost' ? <GhostBox text={deco.text} /> : bullets(g.items, '9.3pt', '1pt', 1.22)}
+                                    <div key={j} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.3, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        {diamond}<span><BoldRender text={b} /></span>
                                     </div>
                                 )
                             })}
-                        </section>
-                    )}
+                        </div>
+                    </div>
+                ))}
+            </section>
+        ),
 
-                    {education.length > 0 && (
-                        <section style={{ marginTop: '11pt' }}>
-                            <JadeSectionHeader title="Education" />
-                            {education.map((edu, i) => {
-                                const eduTop = edu.degree || edu.school || 'Degree'
-                                const showSchool = edu.school && !sameText(edu.school, eduTop)
-                                return (
-                                <div key={i} style={{ marginBottom: '5pt' }}>
-                                    <div style={{ fontWeight: 700, fontSize: '10pt', lineHeight: 1.2 }}>{eduTop}</div>
-                                    {showSchool && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{edu.school}</div>}
-                                    {(edu.date || edu.gpa) && (
-                                        <div style={{ fontSize: '9pt', marginTop: '0.5pt' }}>{[edu.date, edu.gpa].filter(Boolean).join('  |  ')}</div>
-                                    )}
-                                    {edu.coursework && (
-                                        <div style={{ fontSize: '8.7pt', marginTop: '1.5pt', lineHeight: 1.25 }}>
-                                            <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+        skills: () => skillRows.length > 0 && (
+            <section>
+                <ExecutiveSectionHeader title="Technical Skills" />
+                {skillRows.map((row, i) => {
+                    const deco = decoFor('skills', undefined, undefined, row.field)
+                    if (deco?.kind === 'ghost') {
+                        return <div key={i} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}: </span>} /></div>
+                    }
+                    return (
+                        <div key={i} style={{ fontSize: '9.5pt', lineHeight: 1.4, marginBottom: '2pt' }}>
+                            <span style={{ fontWeight: 700 }}>{row.label}: </span>{row.value}
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        education: () => education.length > 0 && (
+            <section>
+                <ExecutiveSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.school || 'University'
+                    const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{eduTop}</span>
+                            <span style={{ fontSize: '9pt', color: EXEC_MUTED, fontStyle: 'italic' }}>{edu.date}</span>
+                        </div>
+                        {showDegree ? (
+                            <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: EXEC_MUTED, marginTop: '0.5pt' }}>
+                                {edu.degree}{edu.gpa ? `  ·  GPA: ${edu.gpa}` : ''}
+                            </div>
+                        ) : edu.gpa ? (
+                            <div style={{ fontSize: '9.5pt', color: EXEC_MUTED, marginTop: '0.5pt' }}>GPA: {edu.gpa}</div>
+                        ) : null}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '9pt', marginTop: '1.5pt', lineHeight: 1.3 }}>
+                                <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        certifications: () => certifications.filter(c => c.trim()).length > 0 && (
+            <section>
+                <ExecutiveSectionHeader title="Certifications" />
+                {bullets(certifications)}
+            </section>
+        ),
+
+        achievements: () => achievements.filter(a => a.trim()).length > 0 && (
+            <section>
+                <ExecutiveSectionHeader title="Achievements" />
+                {bullets(achievements)}
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <ExecutiveSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                            <span style={{ fontSize: '9pt', color: EXEC_MUTED, fontStyle: 'italic' }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: EXEC_MUTED, marginTop: '0.5pt' }}>{lead.role}</div>}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && bullets(lead.bullets)}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
+    return (
+        <div style={{
+            fontFamily: "'Caladea', Cambria, Georgia, serif",
+            fontSize: '10pt',
+            lineHeight: 1.4,
+            color: EXEC_INK,
+            padding: '38pt 48pt',
+            minHeight: '100%',
+            background: '#fff',
+        }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
+            <div style={{ fontWeight: 700, fontSize: '18pt', letterSpacing: '3px', textTransform: 'uppercase', lineHeight: 1.1 }}>
+                {profile.name || 'Your Name'}
+            </div>
+            {contactParts.length > 0 && (
+                <div style={{
+                    display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 10,
+                    fontSize: '8.7pt', color: EXEC_MUTED,
+                    borderTop: `1.5px solid ${EXEC_INK}`, borderBottom: '0.75px solid #ccc',
+                    padding: '3pt 0', marginTop: '3pt',
+                }}>
+                    {contactParts.map((c, i) => <span key={i}>{c}</span>)}
+                </div>
+            )}
+
+            {order.map(key => <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>)}
+        </div>
+    )
+}
+
+// ── Amber Resume Preview (HTML) ───────────────────────────
+// Editorial serif name + sans body, gold accent. Built 2026-07-19 from a
+// karthik-iyer.png reference image. Only active template combining a serif
+// display name with a sans body (Executive is all-serif; every other active
+// template is all-sans) and the only one with a warm/gold accent color.
+// Mirrors AmberPdfDocument.tsx.
+const AMBER_INK = '#1a2942'
+const AMBER_MUTED = '#4a5568'
+const AMBER_GOLD = '#b8912f'
+
+function AmberSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{ marginTop: '11pt', marginBottom: '5pt' }}>
+            <div style={{
+                fontSize: '10.5pt', fontWeight: 700, letterSpacing: '1.2px',
+                textTransform: 'uppercase', color: AMBER_INK, marginBottom: '3pt',
+            }}>
+                {title}
+            </div>
+            <div style={{ borderBottom: `1px solid ${AMBER_GOLD}` }} />
+        </div>
+    )
+}
+
+function AmberResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+
+    const contactParts = [
+        profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio,
+    ].filter(Boolean)
+    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+
+    const skillRows = [
+        { field: 'languages' as const, label: 'Languages', value: skills.languages },
+        { field: 'frameworks' as const, label: 'Frameworks', value: skills.frameworks },
+        { field: 'tools' as const, label: 'Tools & Platforms', value: skills.tools },
+        { field: 'soft' as const, label: 'Core Competencies', value: skills.soft },
+    ].filter(r => (r.value && r.value.trim()) || decoFor('skills', undefined, undefined, r.field)?.kind === 'ghost')
+
+    const bullets = (items: string[]) => (
+        <div style={{ marginTop: '2pt' }}>
+            {items.filter(b => b.trim()).map((b, j) => (
+                <div key={j} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.32 }}>
+                    <span style={{ width: 12, flexShrink: 0 }}>•</span><span><BoldRender text={b} /></span>
+                </div>
+            ))}
+        </div>
+    )
+
+    const order = state.sectionOrder ?? ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') return <section><AmberSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+            if (!summary) return null
+            return (
+                <section>
+                    <AmberSectionHeader title="Summary" />
+                    <div style={{ fontSize: '9.8pt', lineHeight: 1.42, color: AMBER_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        <BoldRender text={summary} />
+                    </div>
+                </section>
+            )
+        },
+
+        skills: () => skillRows.length > 0 && (
+            <section>
+                <AmberSectionHeader title="Core Skills" />
+                {skillRows.map((row, i) => {
+                    const deco = decoFor('skills', undefined, undefined, row.field)
+                    if (deco?.kind === 'ghost') {
+                        return <div key={i} style={{ marginBottom: '2.5pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}:  </span>} /></div>
+                    }
+                    return (
+                        <div key={i} style={{ fontSize: '9.5pt', lineHeight: 1.4, marginBottom: '2.5pt', color: AMBER_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                            <span style={{ fontWeight: 700 }}>{row.label}:  </span>{row.value}
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <AmberSectionHeader title="Experience" />
+                {experience.map((exp, i) => {
+                    const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
+                    return (
+                        <div key={i} style={{ marginBottom: '7pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.3pt', color: AMBER_INK }}>{exp.title || 'Role'}</span>
+                                <span style={{ fontSize: '9pt', color: AMBER_MUTED }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                            </div>
+                            {companyLine && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: AMBER_MUTED, marginTop: '0.5pt' }}>{companyLine}</div>}
+                            <div style={{ marginTop: '2pt' }}>
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <div key={j} style={{ marginBottom: '1.5pt' }}><GhostBox text={deco.text} /></div>
+                                    }
+                                    return (
+                                        <div key={j} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.32, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                            <span style={{ width: 12, flexShrink: 0 }}>•</span><span><BoldRender text={b} /></span>
                                         </div>
-                                    )}
-                                </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <AmberSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.3pt', color: AMBER_INK }}>{proj.name}</span>
+                            <span style={{ fontSize: '9pt', color: AMBER_MUTED }}>{proj.date}</span>
+                        </div>
+                        {proj.tech && (
+                            <div style={{ fontSize: '9pt', marginTop: '1pt' }}>
+                                <span style={{ fontWeight: 700 }}>Technologies: </span>{proj.tech}
+                            </div>
+                        )}
+                        <div style={{ marginTop: '2pt' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <div key={j} style={{ marginBottom: '1.5pt' }}><GhostBox text={deco.text} /></div>
+                                }
+                                return (
+                                    <div key={j} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.32, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <span style={{ width: 12, flexShrink: 0 }}>•</span><span><BoldRender text={b} /></span>
+                                    </div>
                                 )
                             })}
-                        </section>
-                    )}
+                        </div>
+                    </div>
+                ))}
+            </section>
+        ),
 
-                    {certifications.filter(c => c.trim()).length > 0 && (
-                        <section style={{ marginTop: '11pt' }}>
-                            <JadeSectionHeader title="Certifications" />
-                            {bullets(certifications, '9.3pt', '1pt', 1.22)}
-                        </section>
-                    )}
+        education: () => education.length > 0 && (
+            <section>
+                <AmberSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.degree || edu.school || 'Degree'
+                    const showSchool = edu.school && !sameText(edu.school, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, color: AMBER_INK }}>{eduTop}</span>
+                            <span style={{ fontSize: '9pt', color: AMBER_MUTED }}>{edu.date}</span>
+                        </div>
+                        {(showSchool || edu.gpa) && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontStyle: 'italic', fontSize: '9.5pt', color: AMBER_MUTED }}>{showSchool ? edu.school : ''}</span>
+                                {edu.gpa && <span style={{ fontSize: '9pt', color: AMBER_MUTED }}>{`CGPA: ${edu.gpa}`}</span>}
+                            </div>
+                        )}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '9pt', marginTop: '1.5pt', lineHeight: 1.3, color: AMBER_INK }}>
+                                <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
 
-                    {achievements.filter(a => a.trim()).length > 0 && (
-                        <section style={{ marginTop: '11pt' }}>
-                            <JadeSectionHeader title="Achievements" />
-                            {bullets(achievements, '9.3pt', '1pt', 1.22)}
-                        </section>
-                    )}
+        certifications: () => certifications.filter(c => c.trim()).length > 0 && (
+            <section>
+                <AmberSectionHeader title="Certifications" />
+                {bullets(certifications)}
+            </section>
+        ),
+
+        achievements: () => achievements.filter(a => a.trim()).length > 0 && (
+            <section>
+                <AmberSectionHeader title="Achievements" />
+                {bullets(achievements)}
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <AmberSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, color: AMBER_INK }}>{lead.org}</span>
+                            <span style={{ fontSize: '9pt', color: AMBER_MUTED }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: AMBER_MUTED, marginTop: '0.5pt' }}>{lead.role}</div>}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && bullets(lead.bullets)}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
+    return (
+        <div style={{
+            fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif",
+            fontSize: '10pt',
+            lineHeight: 1.4,
+            color: AMBER_INK,
+            padding: '36pt 48pt',
+            minHeight: '100%',
+            background: '#fff',
+        }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
+            <div style={{ textAlign: 'center' }}>
+                <div style={{
+                    fontFamily: "'Playfair Display', Georgia, 'Times New Roman', serif",
+                    fontWeight: 700, fontSize: '27pt', letterSpacing: '2.5px', color: AMBER_INK, lineHeight: 1.1,
+                }}>
+                    {(profile.name || 'Your Name').toUpperCase()}
                 </div>
+                {roleSubtitle && (
+                    <div style={{ fontWeight: 700, fontSize: '10pt', letterSpacing: '1px', textTransform: 'uppercase', color: AMBER_INK, marginTop: '4pt' }}>
+                        {roleSubtitle}
+                    </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', marginTop: '6pt', marginBottom: '6pt' }}>
+                    <div style={{ flex: 1, borderBottom: `1px solid ${AMBER_GOLD}` }} />
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: AMBER_GOLD, margin: '0 6pt', flexShrink: 0 }} />
+                    <div style={{ flex: 1, borderBottom: `1px solid ${AMBER_GOLD}` }} />
+                </div>
+                {contactParts.length > 0 && (
+                    <div style={{ fontSize: '8.7pt', color: AMBER_MUTED }}>
+                        {contactParts.join('  |  ')}
+                    </div>
+                )}
+            </div>
 
-                {/* RIGHT COLUMN */}
-                <div style={{ flex: 1 }}>
-                    {(() => {
-                        const deco = decoFor('summary')
+            {order.map(key => <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>)}
+        </div>
+    )
+}
+
+// ── Athens Resume Preview (HTML) ──────────────────────────
+// Red accent, gray header panel, outlined skill pills. Built 2026-07-19 from
+// the "Resume.io Athens" card in .superpowers/brainstorm/2042-1774507943/
+// view-competitor-10.html. Only active template with a red accent (Amber's
+// gold is the other warm color; everything else is navy/teal/indigo/sky-blue
+// or monochrome) and the only one with a filled gray header panel + colored
+// bottom border rather than a rule/divider treatment. Mirrors
+// AthensPdfDocument.tsx, incl. the source-mockup detail that the bold left
+// column in Experience rows is the COMPANY name (not the job title, unlike
+// every other active template) with title+location as the muted subtitle.
+const ATHENS_RED = '#c0392b'
+const ATHENS_INK = '#1a1a1a'
+const ATHENS_MUTED = '#666666'
+const ATHENS_BODY = '#444444'
+const ATHENS_HR = '#dcdcdc'
+const ATHENS_HEADER_BG = '#f7f7f7'
+
+function AthensSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{ marginTop: '11pt', marginBottom: '4pt' }}>
+            <div style={{
+                fontSize: '10pt', fontWeight: 700, letterSpacing: '1.5px',
+                textTransform: 'uppercase', color: ATHENS_RED, marginBottom: '3pt',
+            }}>
+                {title}
+            </div>
+            <div style={{ borderBottom: `1px solid ${ATHENS_HR}` }} />
+        </div>
+    )
+}
+
+function AthensResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+
+    const contactParts = [
+        profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio,
+    ].filter(Boolean)
+    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+    const splitItems = (csv: string) => (csv || '').split(/,(?![^(]*\))|[•\n]/).map(s => s.trim()).filter(Boolean)
+
+    const skillFields = [
+        { field: 'languages' as const, csv: skills.languages },
+        { field: 'frameworks' as const, csv: skills.frameworks },
+        { field: 'tools' as const, csv: skills.tools },
+        { field: 'soft' as const, csv: skills.soft },
+    ]
+    const hasAnySkills = skillFields.some(f => splitItems(f.csv).length > 0 || decoFor('skills', undefined, undefined, f.field)?.kind === 'ghost')
+
+    const triangle = <span style={{ display: 'inline-block', width: 0, height: 0, borderTop: '3px solid transparent', borderBottom: '3px solid transparent', borderLeft: `5px solid ${ATHENS_RED}`, marginRight: 8, marginTop: 4, flexShrink: 0 }} />
+    const bullets = (items: string[]) => (
+        <div style={{ marginTop: '2pt' }}>
+            {items.filter(b => b.trim()).map((b, j) => (
+                <div key={j} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '1.5pt', fontSize: '9.5pt', lineHeight: 1.32, color: ATHENS_BODY }}>
+                    {triangle}<span><BoldRender text={b} /></span>
+                </div>
+            ))}
+        </div>
+    )
+
+    const order = state.sectionOrder ?? ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') return <section><AthensSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+            if (!summary) return null
+            return (
+                <section>
+                    <AthensSectionHeader title="Summary" />
+                    <div style={{ fontSize: '9.7pt', lineHeight: 1.45, color: ATHENS_BODY, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        <BoldRender text={summary} />
+                    </div>
+                </section>
+            )
+        },
+
+        skills: () => hasAnySkills && (
+            <section>
+                <AthensSectionHeader title="Technical Skills" />
+                <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '2pt' }}>
+                    {skillFields.map(f => {
+                        const deco = decoFor('skills', undefined, undefined, f.field)
                         if (deco?.kind === 'ghost') {
-                            return <section><JadeSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+                            return <div key={f.field} style={{ marginRight: '5pt', marginBottom: '5pt' }}><GhostBox text={deco.text} /></div>
                         }
-                        if (!summary) return null
-                        return (
-                            <section>
-                                <JadeSectionHeader title="Summary" />
-                                <div style={{ fontSize: '10pt', lineHeight: 1.4, color: JADE_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div>
-                            </section>
-                        )
-                    })()}
+                        return splitItems(f.csv).map((s, i) => (
+                            <span key={`${f.field}-${i}`} style={{ border: `0.8px solid ${ATHENS_RED}`, borderRadius: 2, padding: '2pt 6pt', marginRight: '5pt', marginBottom: '5pt', fontSize: '8.5pt', color: ATHENS_RED, whiteSpace: 'nowrap' }}>{s}</span>
+                        ))
+                    })}
+                </div>
+            </section>
+        ),
 
-                    {experience.length > 0 && (
-                        <section style={{ marginTop: summary ? '11pt' : 0 }}>
-                            <JadeSectionHeader title="Experience" />
-                            {experience.map((exp, i) => {
-                                const companyLine = [exp.company, exp.location].filter(Boolean).join(', ')
-                                return (
-                                    <div key={i} style={{ marginBottom: '7pt' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                            <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
-                                            <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt' }}>{dateRange(exp.startDate, exp.endDate)}</span>
+        experience: () => experience.length > 0 && (
+            <section>
+                <AthensSectionHeader title="Experience" />
+                {experience.map((exp, i) => {
+                    const companyLine = [exp.title, exp.location].filter(Boolean).join(' · ')
+                    return (
+                        <div key={i} style={{ marginBottom: '7pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.5pt', color: ATHENS_INK }}>{exp.company || 'Company'}</span>
+                                <span style={{ fontWeight: 700, fontSize: '9pt', color: ATHENS_RED }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                            </div>
+                            {companyLine && <div style={{ fontSize: '9pt', color: ATHENS_MUTED, marginTop: '0.5pt', marginBottom: '1pt' }}>{companyLine}</div>}
+                            <div style={{ marginTop: '2pt' }}>
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
+                                    if (!b.trim() && deco?.kind !== 'ghost') return null
+                                    if (deco?.kind === 'ghost') {
+                                        return <div key={j} style={{ marginBottom: '1.5pt' }}><GhostBox text={deco.text} /></div>
+                                    }
+                                    return (
+                                        <div key={j} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '1.5pt', fontSize: '9.5pt', lineHeight: 1.32, color: ATHENS_BODY, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                            {triangle}<span><BoldRender text={b} /></span>
                                         </div>
-                                        {companyLine && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{companyLine}</div>}
-                                        <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
-                                            {exp.bullets.map((b, j) => {
-                                                const deco = decoFor('experience', i, j)
-                                                if (!b.trim() && deco?.kind !== 'ghost') return null
-                                                if (deco?.kind === 'ghost') {
-                                                    return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
-                                                }
-                                                return (
-                                                    <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.25, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                                        <BoldRender text={b} />
-                                                    </li>
-                                                )
-                                            })}
-                                        </ul>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <AthensSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.5pt', color: ATHENS_INK }}>{proj.name}</span>
+                            <span style={{ fontWeight: 700, fontSize: '9pt', color: ATHENS_RED }}>{proj.date}</span>
+                        </div>
+                        {proj.tech && <div style={{ fontSize: '9pt', color: ATHENS_MUTED, marginTop: '1pt' }}>{proj.tech}</div>}
+                        <div style={{ marginTop: '2pt' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <div key={j} style={{ marginBottom: '1.5pt' }}><GhostBox text={deco.text} /></div>
+                                }
+                                return (
+                                    <div key={j} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '1.5pt', fontSize: '9.5pt', lineHeight: 1.32, color: ATHENS_BODY, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        {triangle}<span><BoldRender text={b} /></span>
                                     </div>
                                 )
                             })}
-                        </section>
-                    )}
+                        </div>
+                    </div>
+                ))}
+            </section>
+        ),
 
-                    {projects.length > 0 && (
-                        <section style={{ marginTop: '11pt' }}>
-                            <JadeSectionHeader title="Projects" />
-                            {projects.map((proj, i) => (
-                                <div key={i} style={{ marginBottom: '6pt' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                        <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
-                                        {(proj.tech || proj.date) && (
-                                            <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt', fontStyle: proj.tech ? 'italic' : 'normal' }}>{proj.tech || proj.date}</span>
-                                        )}
-                                    </div>
-                                    <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
-                                        {proj.bullets.map((b, j) => {
-                                            const deco = decoFor('projects', i, j)
-                                            if (!b.trim() && deco?.kind !== 'ghost') return null
-                                            if (deco?.kind === 'ghost') {
-                                                return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
-                                            }
-                                            return (
-                                                <li key={j} style={{ marginBottom: '1.5pt', fontSize: '9.7pt', lineHeight: 1.25, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                                    <BoldRender text={b} />
-                                                </li>
-                                            )
-                                        })}
-                                    </ul>
-                                </div>
-                            ))}
-                        </section>
-                    )}
+        education: () => education.length > 0 && (
+            <section>
+                <AthensSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.school || 'University'
+                    const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, color: ATHENS_INK }}>{eduTop}</span>
+                            <span style={{ fontWeight: 700, fontSize: '9pt', color: ATHENS_RED }}>{edu.date}</span>
+                        </div>
+                        {showDegree ? (
+                            <div style={{ fontSize: '9pt', color: ATHENS_MUTED, marginTop: '0.5pt' }}>
+                                {edu.degree}{edu.gpa ? `  ·  GPA: ${edu.gpa}` : ''}
+                            </div>
+                        ) : edu.gpa ? (
+                            <div style={{ fontSize: '9pt', color: ATHENS_MUTED, marginTop: '0.5pt' }}>GPA: {edu.gpa}</div>
+                        ) : null}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '9pt', marginTop: '1.5pt', lineHeight: 1.3, color: ATHENS_BODY }}>
+                                <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
 
-                    {leadership.length > 0 && (
-                        <section style={{ marginTop: '11pt' }}>
-                            <JadeSectionHeader title="Leadership" />
-                            {leadership.map((lead, i) => (
-                                <div key={i} style={{ marginBottom: '6pt' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                        <span style={{ fontWeight: 700 }}>{lead.org}</span>
-                                        <span style={{ fontSize: '9pt', color: JADE_INK, marginLeft: '8pt' }}>{lead.date}</span>
-                                    </div>
-                                    {lead.role && <div style={{ fontSize: '9.5pt', marginTop: '0.5pt' }}>{lead.role}</div>}
-                                    {lead.bullets.filter(b => b.trim()).length > 0 && bullets(lead.bullets)}
-                                </div>
-                            ))}
-                        </section>
-                    )}
+        certifications: () => certifications.filter(c => c.trim()).length > 0 && (
+            <section>
+                <AthensSectionHeader title="Certifications" />
+                {certifications.filter(c => c.trim()).map((c, i) => (
+                    <div key={i} style={{ fontSize: '9.5pt', color: ATHENS_INK, marginTop: '2pt' }}>{c}</div>
+                ))}
+            </section>
+        ),
+
+        achievements: () => achievements.filter(a => a.trim()).length > 0 && (
+            <section>
+                <AthensSectionHeader title="Achievements" />
+                {bullets(achievements)}
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <AthensSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, color: ATHENS_INK }}>{lead.org}</span>
+                            <span style={{ fontWeight: 700, fontSize: '9pt', color: ATHENS_RED }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontSize: '9pt', color: ATHENS_MUTED, marginTop: '0.5pt' }}>{lead.role}</div>}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && bullets(lead.bullets)}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
+    return (
+        <div style={{
+            fontFamily: "Arial, Helvetica, 'Segoe UI', sans-serif",
+            fontSize: '10pt',
+            lineHeight: 1.4,
+            color: ATHENS_INK,
+            minHeight: '100%',
+            background: '#fff',
+        }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
+            <div style={{ background: ATHENS_HEADER_BG, borderBottom: `3px solid ${ATHENS_RED}`, padding: '22pt 42pt 14pt' }}>
+                <div style={{ fontWeight: 700, fontSize: '20pt', letterSpacing: '0.5px', color: ATHENS_INK }}>
+                    {profile.name || 'Your Name'}
                 </div>
+                {roleSubtitle && (
+                    <div style={{ fontWeight: 700, fontSize: '10pt', letterSpacing: '1px', textTransform: 'uppercase', color: ATHENS_RED, marginTop: '3pt' }}>
+                        {roleSubtitle}
+                    </div>
+                )}
+                {contactParts.length > 0 && (
+                    <div style={{ fontSize: '9pt', color: ATHENS_MUTED, marginTop: '3pt' }}>
+                        {contactParts.join('  ·  ')}
+                    </div>
+                )}
+            </div>
+
+            <div style={{ padding: '10pt 42pt 36pt' }}>
+                {order.map(key => <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>)}
+            </div>
+        </div>
+    )
+}
+
+// ── Axis Resume Preview (HTML) ────────────────────────────
+// Original design, built 2026-07-19 to fill a structural gap: every active
+// template is flat rules/panels/pills. Axis is the only one with a vertical
+// "career timeline" rail — a violet node per dated entry, connected by a thin
+// line segment spanning that entry's height. Verified via research that this
+// stays fully single-column/ATS-safe: the rail is pure decoration (borders +
+// circles), not a layout mechanism — no reading-order ambiguity for any
+// parser. Mirrors AxisPdfDocument.tsx. Font: Roboto (already registered).
+const AXIS_INK = '#1c1c26'
+const AXIS_MUTED = '#5b5b6b'
+const AXIS_ACCENT = '#7c3aed'
+const AXIS_RAIL = '#ddd2fb'
+
+function AxisSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', marginTop: '12pt', marginBottom: '5pt' }}>
+            <div style={{ width: 6, height: 6, background: AXIS_ACCENT, marginRight: 6, flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, fontSize: '10.5pt', letterSpacing: '1px', textTransform: 'uppercase', color: AXIS_INK }}>{title}</span>
+        </div>
+    )
+}
+
+function AxisTimelineEntry({ last = false, children }: { last?: boolean; children: React.ReactNode }) {
+    return (
+        <div style={{ display: 'flex' }}>
+            <div style={{ width: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                <div style={{ width: 6, height: 6, borderRadius: 3, background: AXIS_ACCENT, marginTop: 3, flexShrink: 0 }} />
+                {!last && <div style={{ flex: 1, width: 1, background: AXIS_RAIL, marginTop: 2 }} />}
+            </div>
+            <div style={{ flex: 1, paddingLeft: 10, paddingBottom: 9, minWidth: 0 }}>{children}</div>
+        </div>
+    )
+}
+
+function AxisResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+
+    const contactParts = [
+        profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio,
+    ].filter(Boolean)
+    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+
+    const skillRows = [
+        { field: 'languages' as const, label: 'Languages', value: skills.languages },
+        { field: 'frameworks' as const, label: 'Frameworks', value: skills.frameworks },
+        { field: 'tools' as const, label: 'Tools & Platforms', value: skills.tools },
+        { field: 'soft' as const, label: 'Core Competencies', value: skills.soft },
+    ].filter(r => (r.value && r.value.trim()) || decoFor('skills', undefined, undefined, r.field)?.kind === 'ghost')
+
+    const bullets = (items: string[], sectionKey: string, entryIdx: number) => (
+        <div style={{ marginTop: '2pt' }}>
+            {items.map((b, j) => {
+                const deco = decoFor(sectionKey, entryIdx, j)
+                if (!b.trim() && deco?.kind !== 'ghost') return null
+                if (deco?.kind === 'ghost') {
+                    return <div key={j} style={{ marginBottom: '1.5pt' }}><GhostBox text={deco.text} /></div>
+                }
+                return (
+                    <div key={j} style={{ display: 'flex', marginBottom: '1.5pt', fontSize: '9.5pt', lineHeight: 1.32, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        <span style={{ width: 10, flexShrink: 0, color: AXIS_MUTED }}>•</span><span style={{ color: AXIS_INK }}><BoldRender text={b} /></span>
+                    </div>
+                )
+            })}
+        </div>
+    )
+
+    const order = state.sectionOrder ?? ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') return <section><AxisSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+            if (!summary) return null
+            return (
+                <section>
+                    <AxisSectionHeader title="Summary" />
+                    <div style={{ fontSize: '9.7pt', lineHeight: 1.42, color: AXIS_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        <BoldRender text={summary} />
+                    </div>
+                </section>
+            )
+        },
+
+        skills: () => skillRows.length > 0 && (
+            <section>
+                <AxisSectionHeader title="Skills" />
+                {skillRows.map((row, i) => {
+                    const deco = decoFor('skills', undefined, undefined, row.field)
+                    if (deco?.kind === 'ghost') {
+                        return <div key={i} style={{ marginBottom: '2.5pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}:  </span>} /></div>
+                    }
+                    return (
+                        <div key={i} style={{ fontSize: '9.5pt', lineHeight: 1.4, marginBottom: '2.5pt', color: AXIS_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                            <span style={{ fontWeight: 700 }}>{row.label}:  </span>{row.value}
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <AxisSectionHeader title="Experience" />
+                {experience.map((exp, i) => {
+                    const companyLine = [exp.company, exp.location].filter(Boolean).join(' · ')
+                    return (
+                        <AxisTimelineEntry key={i} last={i === experience.length - 1}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.3pt', color: AXIS_INK }}>{exp.title || 'Role'}</span>
+                                <span style={{ fontSize: '8.7pt', fontWeight: 700, color: AXIS_ACCENT, marginLeft: 8 }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                            </div>
+                            {companyLine && <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: AXIS_MUTED, marginTop: '0.5pt', marginBottom: '1pt' }}>{companyLine}</div>}
+                            {bullets(exp.bullets, 'experience', i)}
+                        </AxisTimelineEntry>
+                    )
+                })}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <AxisSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <AxisTimelineEntry key={i} last={i === projects.length - 1}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.3pt', color: AXIS_INK }}>{proj.name}</span>
+                            <span style={{ fontSize: '8.7pt', fontWeight: 700, color: AXIS_ACCENT, marginLeft: 8 }}>{proj.date}</span>
+                        </div>
+                        {proj.tech && <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: AXIS_MUTED, marginTop: '0.5pt' }}>{proj.tech}</div>}
+                        {bullets(proj.bullets, 'projects', i)}
+                    </AxisTimelineEntry>
+                ))}
+            </section>
+        ),
+
+        education: () => education.length > 0 && (
+            <section>
+                <AxisSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.school || 'University'
+                    const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                    return (
+                        <AxisTimelineEntry key={i} last={i === education.length - 1}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, color: AXIS_INK }}>{eduTop}</span>
+                                <span style={{ fontSize: '8.7pt', fontWeight: 700, color: AXIS_ACCENT, marginLeft: 8 }}>{edu.date}</span>
+                            </div>
+                            {showDegree ? (
+                                <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: AXIS_MUTED, marginTop: '0.5pt' }}>
+                                    {edu.degree}{edu.gpa ? `  ·  GPA: ${edu.gpa}` : ''}
+                                </div>
+                            ) : edu.gpa ? (
+                                <div style={{ fontSize: '9.3pt', color: AXIS_MUTED, marginTop: '0.5pt' }}>GPA: {edu.gpa}</div>
+                            ) : null}
+                            {edu.coursework && (
+                                <div style={{ fontSize: '8.8pt', marginTop: '1.5pt', lineHeight: 1.3, color: AXIS_INK }}>
+                                    <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                                </div>
+                            )}
+                        </AxisTimelineEntry>
+                    )
+                })}
+            </section>
+        ),
+
+        certifications: () => {
+            const items = certifications.filter(c => c.trim())
+            return items.length > 0 && (
+                <section>
+                    <AxisSectionHeader title="Certifications" />
+                    {items.map((c, i) => (
+                        <AxisTimelineEntry key={i} last={i === items.length - 1}>
+                            <span style={{ fontSize: '9.5pt', color: AXIS_INK }}>{c}</span>
+                        </AxisTimelineEntry>
+                    ))}
+                </section>
+            )
+        },
+
+        achievements: () => {
+            const items = achievements.filter(a => a.trim())
+            return items.length > 0 && (
+                <section>
+                    <AxisSectionHeader title="Achievements" />
+                    {items.map((a, i) => (
+                        <AxisTimelineEntry key={i} last={i === items.length - 1}>
+                            <span style={{ fontSize: '9.5pt', color: AXIS_INK }}>{a}</span>
+                        </AxisTimelineEntry>
+                    ))}
+                </section>
+            )
+        },
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <AxisSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <AxisTimelineEntry key={i} last={i === leadership.length - 1}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, color: AXIS_INK }}>{lead.org}</span>
+                            <span style={{ fontSize: '8.7pt', fontWeight: 700, color: AXIS_ACCENT, marginLeft: 8 }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: AXIS_MUTED, marginTop: '0.5pt' }}>{lead.role}</div>}
+                        {bullets(lead.bullets, 'leadership', i)}
+                    </AxisTimelineEntry>
+                ))}
+            </section>
+        ),
+    }
+
+    return (
+        <div style={{
+            fontFamily: "'Roboto', Arial, sans-serif",
+            fontSize: '10pt',
+            lineHeight: 1.4,
+            color: AXIS_INK,
+            padding: '38pt 46pt',
+            minHeight: '100%',
+            background: '#fff',
+        }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
+            <div style={{ fontWeight: 700, fontSize: '22pt', color: AXIS_INK, lineHeight: 1.05 }}>
+                {profile.name || 'Your Name'}
+            </div>
+            {roleSubtitle && (
+                <div style={{ fontSize: '11pt', fontWeight: 700, color: AXIS_ACCENT, marginTop: '2pt' }}>
+                    {roleSubtitle}
+                </div>
+            )}
+            {contactParts.length > 0 && (
+                <div style={{ fontSize: '9pt', color: AXIS_MUTED, marginTop: '5pt' }}>
+                    {contactParts.join('  ·  ')}
+                </div>
+            )}
+            <div style={{ borderBottom: `1.2px solid ${AXIS_ACCENT}`, marginTop: '7pt' }} />
+
+            {order.map(key => <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>)}
+        </div>
+    )
+}
+
+// ── Beacon Resume Preview (HTML) ──────────────────────────
+// Solid navy banner header with reversed (white) name/contact text, promoted
+// from the pending "Kickresume Gradient" catalog entry. Built 2026-07-19 —
+// research-driven pick: the colored-banner-header archetype is the most
+// common "modern professional" resume style across every major builder, and
+// none of the other 13 active templates use reversed text on a solid color
+// block. Mirrors BeaconPdfDocument.tsx. Font: Open Sans (already registered).
+const BEACON_NAVY = '#0f3460'
+const BEACON_INK = '#1a1a2e'
+const BEACON_MUTED = '#5c5c6e'
+const BEACON_BANNER_TEXT = '#f4f6fb'
+const BEACON_BANNER_MUTED = '#c3cbe0'
+
+function BeaconSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{ marginTop: '11pt', marginBottom: '5pt' }}>
+            <div style={{ fontSize: '10.5pt', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: BEACON_NAVY, marginBottom: '3pt' }}>
+                {title}
+            </div>
+            <div style={{ borderBottom: `1px solid ${BEACON_NAVY}` }} />
+        </div>
+    )
+}
+
+function BeaconResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+
+    const contactParts = [profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
+    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+
+    const skillRows = [
+        { field: 'languages' as const, label: 'Languages', value: skills.languages },
+        { field: 'frameworks' as const, label: 'Frameworks', value: skills.frameworks },
+        { field: 'tools' as const, label: 'Tools & Platforms', value: skills.tools },
+        { field: 'soft' as const, label: 'Core Competencies', value: skills.soft },
+    ].filter(r => (r.value && r.value.trim()) || decoFor('skills', undefined, undefined, r.field)?.kind === 'ghost')
+
+    const bullets = (items: string[], sectionKey: string, entryIdx: number) => (
+        <div style={{ marginTop: '2pt' }}>
+            {items.map((b, j) => {
+                const deco = decoFor(sectionKey, entryIdx, j)
+                if (!b.trim() && deco?.kind !== 'ghost') return null
+                if (deco?.kind === 'ghost') {
+                    return <div key={j} style={{ marginBottom: '1.5pt' }}><GhostBox text={deco.text} /></div>
+                }
+                return (
+                    <div key={j} style={{ display: 'flex', marginBottom: '1.5pt', fontSize: '9.5pt', lineHeight: 1.32, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        <span style={{ width: 10, flexShrink: 0, color: BEACON_MUTED }}>•</span><span style={{ color: BEACON_INK }}><BoldRender text={b} /></span>
+                    </div>
+                )
+            })}
+        </div>
+    )
+
+    const order = state.sectionOrder ?? ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') return <section><BeaconSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+            if (!summary) return null
+            return (
+                <section>
+                    <BeaconSectionHeader title="Summary" />
+                    <div style={{ fontSize: '9.7pt', lineHeight: 1.42, color: BEACON_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        <BoldRender text={summary} />
+                    </div>
+                </section>
+            )
+        },
+
+        skills: () => skillRows.length > 0 && (
+            <section>
+                <BeaconSectionHeader title="Skills" />
+                {skillRows.map((row, i) => {
+                    const deco = decoFor('skills', undefined, undefined, row.field)
+                    if (deco?.kind === 'ghost') {
+                        return <div key={i} style={{ marginBottom: '2.5pt' }}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}:  </span>} /></div>
+                    }
+                    return (
+                        <div key={i} style={{ fontSize: '9.5pt', lineHeight: 1.4, marginBottom: '2.5pt', color: BEACON_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                            <span style={{ fontWeight: 700 }}>{row.label}:  </span>{row.value}
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <BeaconSectionHeader title="Experience" />
+                {experience.map((exp, i) => {
+                    const companyLine = [exp.company, exp.location].filter(Boolean).join(' · ')
+                    return (
+                        <div key={i} style={{ marginBottom: '7pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, fontSize: '10.3pt', color: BEACON_INK }}>{exp.title || 'Role'}</span>
+                                <span style={{ fontSize: '8.7pt', fontWeight: 700, color: BEACON_NAVY, marginLeft: 8 }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                            </div>
+                            {companyLine && <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: BEACON_MUTED, marginTop: '0.5pt', marginBottom: '1pt' }}>{companyLine}</div>}
+                            {bullets(exp.bullets, 'experience', i)}
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <BeaconSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.3pt', color: BEACON_INK }}>{proj.name}</span>
+                            <span style={{ fontSize: '8.7pt', fontWeight: 700, color: BEACON_NAVY, marginLeft: 8 }}>{proj.date}</span>
+                        </div>
+                        {proj.tech && <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: BEACON_MUTED, marginTop: '0.5pt' }}>{proj.tech}</div>}
+                        {bullets(proj.bullets, 'projects', i)}
+                    </div>
+                ))}
+            </section>
+        ),
+
+        education: () => education.length > 0 && (
+            <section>
+                <BeaconSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.school || 'University'
+                    const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                    return (
+                        <div key={i} style={{ marginBottom: '5pt' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontWeight: 700, color: BEACON_INK }}>{eduTop}</span>
+                                <span style={{ fontSize: '8.7pt', fontWeight: 700, color: BEACON_NAVY, marginLeft: 8 }}>{edu.date}</span>
+                            </div>
+                            {showDegree ? (
+                                <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: BEACON_MUTED, marginTop: '0.5pt' }}>
+                                    {edu.degree}{edu.gpa ? `  ·  GPA: ${edu.gpa}` : ''}
+                                </div>
+                            ) : edu.gpa ? (
+                                <div style={{ fontSize: '9.3pt', color: BEACON_MUTED, marginTop: '0.5pt' }}>GPA: {edu.gpa}</div>
+                            ) : null}
+                            {edu.coursework && (
+                                <div style={{ fontSize: '8.8pt', marginTop: '1.5pt', lineHeight: 1.3, color: BEACON_INK }}>
+                                    <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                                </div>
+                            )}
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        certifications: () => certifications.filter(c => c.trim()).length > 0 && (
+            <section>
+                <BeaconSectionHeader title="Certifications" />
+                {bullets(certifications, 'certifications', 0)}
+            </section>
+        ),
+
+        achievements: () => achievements.filter(a => a.trim()).length > 0 && (
+            <section>
+                <BeaconSectionHeader title="Achievements" />
+                {bullets(achievements, 'achievements', 0)}
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <BeaconSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, color: BEACON_INK }}>{lead.org}</span>
+                            <span style={{ fontSize: '8.7pt', fontWeight: 700, color: BEACON_NAVY, marginLeft: 8 }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: BEACON_MUTED, marginTop: '0.5pt' }}>{lead.role}</div>}
+                        {bullets(lead.bullets, 'leadership', i)}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
+    return (
+        <div style={{
+            fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif",
+            fontSize: '10pt',
+            lineHeight: 1.4,
+            color: BEACON_INK,
+            minHeight: '100%',
+            background: '#fff',
+        }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
+            <div style={{ background: BEACON_NAVY, padding: '26pt 44pt 16pt' }}>
+                <div style={{ fontWeight: 700, fontSize: '21pt', color: BEACON_BANNER_TEXT, lineHeight: 1.08 }}>
+                    {profile.name || 'Your Name'}
+                </div>
+                {roleSubtitle && (
+                    <div style={{ fontWeight: 700, fontSize: '10.5pt', letterSpacing: '0.8px', textTransform: 'uppercase', color: BEACON_BANNER_MUTED, marginTop: '3pt' }}>
+                        {roleSubtitle}
+                    </div>
+                )}
+                {contactParts.length > 0 && (
+                    <div style={{ fontSize: '8.8pt', color: BEACON_BANNER_MUTED, marginTop: '6pt' }}>
+                        {contactParts.join('  ·  ')}
+                    </div>
+                )}
+            </div>
+
+            <div style={{ padding: '10pt 44pt 36pt' }}>
+                {order.map(key => <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>)}
             </div>
         </div>
     )
@@ -1714,92 +3303,54 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
     )
     const companyLine = (t: string) => <div style={{ fontStyle: 'italic', fontSize: '10pt', color: LAPIS_ACCENT, marginTop: '0.5pt' }}>{t}</div>
 
-    return (
-        <div style={{ fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif", fontSize: '10pt', lineHeight: 1.4, color: LAPIS_INK, padding: '36pt 42pt', minHeight: '100%', background: '#fff' }}>
-            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
-            {/* Header */}
-            <div>
-                <div style={{ fontSize: '22pt', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: LAPIS_ACCENT, lineHeight: 1.05 }}>{profile.name || 'Your Name'}</div>
-                {roleSubtitle && <div style={{ fontSize: '11.5pt', fontWeight: 700, color: LAPIS_ACCENT, marginTop: '2pt' }}>{roleSubtitle}</div>}
-                {contactParts.length > 0 && <div style={{ fontSize: '9pt', color: LAPIS_INK, marginTop: '5pt' }}>{contactParts.join('   |   ')}</div>}
-            </div>
-
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') {
-                    return <section><LapisSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
-                }
-                if (!summary) return null
-                return (
-                    <section>
-                        <LapisSectionHeader title="Summary" />
-                        <div style={{ fontSize: '10pt', lineHeight: 1.4, color: LAPIS_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div>
-                    </section>
-                )
-            })()}
-
-            {hasAnySkills && (
+    const order = state.sectionOrder ?? ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') {
+                return <section><LapisSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+            }
+            if (!summary) return null
+            return (
                 <section>
-                    <LapisSectionHeader title="Skills" />
-                    <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '3pt' }}>
-                        {skillFields.map(f => {
-                            const deco = decoFor('skills', undefined, undefined, f.field)
-                            if (deco?.kind === 'ghost') {
-                                return <div key={f.field} style={{ marginRight: '5pt', marginBottom: '5pt' }}><GhostBox text={deco.text} /></div>
-                            }
-                            return splitItems(f.csv).map((s, i) => (
-                                <span key={`${f.field}-${i}`} style={{ border: '0.8px solid #cdcdde', borderRadius: 4, padding: '2pt 6pt', marginRight: '5pt', marginBottom: '5pt', fontSize: '9pt', color: LAPIS_INK, whiteSpace: 'nowrap' }}>{s}</span>
-                            ))
-                        })}
-                    </div>
+                    <LapisSectionHeader title="Summary" />
+                    <div style={{ fontSize: '10pt', lineHeight: 1.4, color: LAPIS_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div>
                 </section>
-            )}
+            )
+        },
 
-            {experience.length > 0 && (
-                <section>
-                    <LapisSectionHeader title="Work Experience" />
-                    {experience.map((exp, i) => {
-                        const cl = [exp.company, exp.location].filter(Boolean).join(', ')
-                        return (
-                            <div key={i} style={{ marginBottom: '6pt' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
-                                    <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
-                                </div>
-                                {cl && companyLine(cl)}
-                                <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
-                                    {exp.bullets.map((b, j) => {
-                                        const deco = decoFor('experience', i, j)
-                                        if (!b.trim() && deco?.kind !== 'ghost') return null
-                                        if (deco?.kind === 'ghost') {
-                                            return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
-                                        }
-                                        return (
-                                            <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.3, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                                <BoldRender text={b} />
-                                            </li>
-                                        )
-                                    })}
-                                </ul>
-                            </div>
-                        )
+        skills: () => hasAnySkills && (
+            <section>
+                <LapisSectionHeader title="Skills" />
+                <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: '3pt' }}>
+                    {skillFields.map(f => {
+                        const deco = decoFor('skills', undefined, undefined, f.field)
+                        if (deco?.kind === 'ghost') {
+                            return <div key={f.field} style={{ marginRight: '5pt', marginBottom: '5pt' }}><GhostBox text={deco.text} /></div>
+                        }
+                        return splitItems(f.csv).map((s, i) => (
+                            <span key={`${f.field}-${i}`} style={{ border: '0.8px solid #cdcdde', borderRadius: 4, padding: '2pt 6pt', marginRight: '5pt', marginBottom: '5pt', fontSize: '9pt', color: LAPIS_INK, whiteSpace: 'nowrap' }}>{s}</span>
+                        ))
                     })}
-                </section>
-            )}
+                </div>
+            </section>
+        ),
 
-            {projects.length > 0 && (
-                <section>
-                    <LapisSectionHeader title="Projects" />
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
+        experience: () => experience.length > 0 && (
+            <section>
+                <LapisSectionHeader title="Work Experience" />
+                {experience.map((exp, i) => {
+                    const cl = [exp.company, exp.location].filter(Boolean).join(', ')
+                    return (
+                        <div key={i} style={{ marginBottom: '6pt' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
-                                {proj.date && <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{proj.date}</span>}
+                                <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{exp.title || 'Role'}</span>
+                                <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{dateRange(exp.startDate, exp.endDate)}</span>
                             </div>
-                            {proj.tech && companyLine(proj.tech)}
+                            {cl && companyLine(cl)}
                             <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
-                                {proj.bullets.map((b, j) => {
-                                    const deco = decoFor('projects', i, j)
+                                {exp.bullets.map((b, j) => {
+                                    const deco = decoFor('experience', i, j)
                                     if (!b.trim() && deco?.kind !== 'ghost') return null
                                     if (deco?.kind === 'ghost') {
                                         return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
@@ -1812,60 +3363,105 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
                                 })}
                             </ul>
                         </div>
-                    ))}
-                </section>
-            )}
+                    )
+                })}
+            </section>
+        ),
 
-            {education.length > 0 && (
-                <section>
-                    <LapisSectionHeader title="Education" />
-                    {education.map((edu, i) => {
-                        const eduTop = edu.degree || edu.school || 'Degree'
-                        const showSchool = edu.school && !sameText(edu.school, eduTop)
-                        return (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
-                                <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{edu.date}</span>
-                            </div>
-                            {(showSchool || edu.gpa) && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontStyle: 'italic', color: LAPIS_ACCENT }}>{showSchool ? edu.school : ''}</span>
-                                    {edu.gpa && <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{edu.gpa}</span>}
-                                </div>
-                            )}
-                            {edu.coursework && (
-                                <div style={{ fontSize: '9.5pt', marginTop: '1.5pt' }}>
-                                    <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
-                                </div>
-                            )}
+        projects: () => projects.length > 0 && (
+            <section>
+                <LapisSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.5pt' }}>{proj.name}</span>
+                            {proj.date && <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{proj.date}</span>}
                         </div>
-                        )
-                    })}
-                </section>
-            )}
+                        {proj.tech && companyLine(proj.tech)}
+                        <ul style={{ margin: '2pt 0 0 0', paddingLeft: '14pt', listStyle: 'disc' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-14pt' }}><GhostBox text={deco.text} /></li>
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.3, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
 
-            {certifications.filter(c => c.trim()).length > 0 && (
-                <section><LapisSectionHeader title="Certifications" />{bullets(certifications)}</section>
-            )}
-            {achievements.filter(a => a.trim()).length > 0 && (
-                <section><LapisSectionHeader title="Achievements" />{bullets(achievements)}</section>
-            )}
-            {leadership.length > 0 && (
-                <section>
-                    <LapisSectionHeader title="Leadership" />
-                    {leadership.map((lead, i) => (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
-                                <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{lead.date}</span>
-                            </div>
-                            {lead.role && companyLine(lead.role)}
-                            {lead.bullets.filter(b => b.trim()).length > 0 && bullets(lead.bullets)}
+        education: () => education.length > 0 && (
+            <section>
+                <LapisSectionHeader title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.degree || edu.school || 'Degree'
+                    const showSchool = edu.school && !sameText(edu.school, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{eduTop}</span>
+                            <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{edu.date}</span>
                         </div>
-                    ))}
-                </section>
-            )}
+                        {(showSchool || edu.gpa) && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ fontStyle: 'italic', color: LAPIS_ACCENT }}>{showSchool ? edu.school : ''}</span>
+                                {edu.gpa && <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{edu.gpa}</span>}
+                            </div>
+                        )}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '9.5pt', marginTop: '1.5pt' }}>
+                                <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        certifications: () => certifications.filter(c => c.trim()).length > 0 && (
+            <section><LapisSectionHeader title="Certifications" />{bullets(certifications)}</section>
+        ),
+        achievements: () => achievements.filter(a => a.trim()).length > 0 && (
+            <section><LapisSectionHeader title="Achievements" />{bullets(achievements)}</section>
+        ),
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <LapisSectionHeader title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                            <span style={{ fontSize: '9.5pt', color: LAPIS_INK }}>{lead.date}</span>
+                        </div>
+                        {lead.role && companyLine(lead.role)}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && bullets(lead.bullets)}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
+    return (
+        <div style={{ fontFamily: "'Open Sans', 'Segoe UI', Arial, sans-serif", fontSize: '10pt', lineHeight: 1.4, color: LAPIS_INK, padding: '36pt 42pt', minHeight: '100%', background: '#fff' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
+            {/* Header */}
+            <div>
+                <div style={{ fontSize: '22pt', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: LAPIS_ACCENT, lineHeight: 1.05 }}>{profile.name || 'Your Name'}</div>
+                {roleSubtitle && <div style={{ fontSize: '11.5pt', fontWeight: 700, color: LAPIS_ACCENT, marginTop: '2pt' }}>{roleSubtitle}</div>}
+                {contactParts.length > 0 && <div style={{ fontSize: '9pt', color: LAPIS_INK, marginTop: '5pt' }}>{contactParts.join('   |   ')}</div>}
+            </div>
+
+            {order.map((key) => (
+                <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+            ))}
         </div>
     )
 }
@@ -1883,6 +3479,126 @@ function ReziResumePreview({ state }: { state: ResumeEditorState }) {
         ['languages', 'Languages'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Core Competencies'],
     ] as const
 
+    // Note: this preview has no Leadership block (pre-existing gap vs the PDF
+    // renderer, unrelated to the layout-order refactor) — 'leadership' has no
+    // entry in `sections`, so order.map safely skips it via `sections[key]?.()`.
+    const order = state.sectionOrder ?? ['summary', 'education', 'experience', 'projects', 'skills', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') return <div style={{ marginBottom: '10pt' }}><GhostBox text={deco.text} /></div>
+            if (!summary) return null
+            return <div style={{ marginBottom: '10pt', fontSize: '10pt', lineHeight: 1.55, color: '#222', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+        },
+
+        education: () => education.length > 0 && (
+            <section style={{ marginBottom: '10pt' }}>
+                <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Education</div>
+                {education.map((edu, i) => {
+                    const showDegree = edu.degree && !sameText(edu.degree, edu.school)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontWeight: 700 }}>{edu.school}</span>
+                            <span style={{ fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>{edu.date}</span>
+                        </div>
+                        {showDegree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555' }}>{edu.degree}</div>}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section style={{ marginBottom: '10pt' }}>
+                <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Experience</div>
+                {experience.map((exp, i) => (
+                    <div key={i} style={{ marginBottom: '8pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontWeight: 700 }}>{exp.company}</span>
+                            <span style={{ fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
+                        </div>
+                        <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
+                        {exp.bullets.map((b, j) => {
+                            const deco = decoFor('experience', i, j)
+                            if (!b.trim() && deco?.kind !== 'ghost') return null
+                            if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                            return (
+                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                    <span style={{ color: '#888', flexShrink: 0 }}>—</span>
+                                    <BoldRender text={b} />
+                                </div>
+                            )
+                        })}
+                    </div>
+                ))}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section style={{ marginBottom: '10pt' }}>
+                <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Projects</div>
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontWeight: 700 }}>{proj.name}</span>
+                            <span style={{ fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>{proj.date}</span>
+                        </div>
+                        {proj.bullets.map((b, j) => {
+                            const deco = decoFor('projects', i, j)
+                            if (!b.trim() && deco?.kind !== 'ghost') return null
+                            if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                            return (
+                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                    <span style={{ color: '#888', flexShrink: 0 }}>—</span>
+                                    <BoldRender text={b} />
+                                </div>
+                            )
+                        })}
+                    </div>
+                ))}
+            </section>
+        ),
+
+        skills: () => (hasSkills || reziSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
+            <section style={{ marginBottom: '10pt' }}>
+                <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Technical Skills</div>
+                <div style={{ fontSize: '10pt', lineHeight: 1.8 }}>
+                    {reziSkillFields.map(([field, label]) => {
+                        const deco = decoFor('skills', undefined, undefined, field)
+                        if (deco?.kind === 'ghost') {
+                            return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
+                        }
+                        if (!skills[field]) return null
+                        return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
+                    })}
+                </div>
+            </section>
+        ),
+
+        certifications: () => certifications.length > 0 && (
+            <section style={{ marginBottom: '10pt' }}>
+                <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Certifications</div>
+                {certifications.map((cert, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
+                        <span style={{ color: '#888', flexShrink: 0 }}>—</span><span>{cert}</span>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        achievements: () => achievements.length > 0 && (
+            <section style={{ marginBottom: '10pt' }}>
+                <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Achievements</div>
+                {achievements.map((ach, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
+                        <span style={{ color: '#888', flexShrink: 0 }}>—</span><span>{ach}</span>
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
     return (
         <div style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: '10.5pt', lineHeight: 1.5, color: '#1a1a1a', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
             <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
@@ -1895,255 +3611,9 @@ function ReziResumePreview({ state }: { state: ResumeEditorState }) {
                 </div>
             )}
             <hr style={{ border: 'none', borderTop: '0.75px solid #ccc', margin: '4pt 0 12pt' }} />
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') return <div style={{ marginBottom: '10pt' }}><GhostBox text={deco.text} /></div>
-                if (!summary) return null
-                return <div style={{ marginBottom: '10pt', fontSize: '10pt', lineHeight: 1.55, color: '#222', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
-            })()}
-            {education.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Education</div>
-                    {education.map((edu, i) => {
-                        const showDegree = edu.degree && !sameText(edu.degree, edu.school)
-                        return (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{edu.school}</span>
-                                <span style={{ fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>{edu.date}</span>
-                            </div>
-                            {showDegree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555' }}>{edu.degree}</div>}
-                        </div>
-                        )
-                    })}
-                </section>
-            )}
-            {experience.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Experience</div>
-                    {experience.map((exp, i) => (
-                        <div key={i} style={{ marginBottom: '8pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{exp.company}</span>
-                                <span style={{ fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
-                            </div>
-                            <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
-                            {exp.bullets.map((b, j) => {
-                                const deco = decoFor('experience', i, j)
-                                if (!b.trim() && deco?.kind !== 'ghost') return null
-                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
-                                return (
-                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                        <span style={{ color: '#888', flexShrink: 0 }}>—</span>
-                                        <BoldRender text={b} />
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {projects.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Projects</div>
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{proj.name}</span>
-                                <span style={{ fontSize: '9pt', color: '#666', fontStyle: 'italic' }}>{proj.date}</span>
-                            </div>
-                            {proj.bullets.map((b, j) => {
-                                const deco = decoFor('projects', i, j)
-                                if (!b.trim() && deco?.kind !== 'ghost') return null
-                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
-                                return (
-                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                        <span style={{ color: '#888', flexShrink: 0 }}>—</span>
-                                        <BoldRender text={b} />
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {(hasSkills || reziSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Technical Skills</div>
-                    <div style={{ fontSize: '10pt', lineHeight: 1.8 }}>
-                        {reziSkillFields.map(([field, label]) => {
-                            const deco = decoFor('skills', undefined, undefined, field)
-                            if (deco?.kind === 'ghost') {
-                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
-                            }
-                            if (!skills[field]) return null
-                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
-                        })}
-                    </div>
-                </section>
-            )}
-            {certifications.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Certifications</div>
-                    {certifications.map((cert, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                            <span style={{ color: '#888', flexShrink: 0 }}>—</span><span>{cert}</span>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {achievements.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', borderBottom: '0.5px solid #ccc', paddingBottom: '2pt', marginBottom: '6pt', color: '#222' }}>Achievements</div>
-                    {achievements.map((ach, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                            <span style={{ color: '#888', flexShrink: 0 }}>—</span><span>{ach}</span>
-                        </div>
-                    ))}
-                </section>
-            )}
-        </div>
-    )
-}
-
-// ── Rezi Standard Resume Preview (HTML) ──────────────────
-function ReziStandardSectionHeader({ title }: { title: string }) {
-    return (
-        <div style={{ fontSize: '9pt', fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', borderBottom: '0.5px solid #e2e8f0', paddingBottom: '2pt', marginBottom: '6pt', color: '#374151' }}>{title}</div>
-    )
-}
-
-function ReziStandardResumePreview({ state }: { state: ResumeEditorState }) {
-    const { profile, summary, education, experience, projects, skills, certifications, achievements } = state
-    const decorations = usePreviewDecorations()
-    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
-    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
-        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
-    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
-    const reziStdSkillFields = [
-        ['languages', 'Technical'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Core Competencies'],
-    ] as const
-
-    return (
-        <div style={{ fontFamily: "'Helvetica Neue', Arial, sans-serif", fontSize: '10.5pt', lineHeight: 1.4, color: '#111', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
-            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
-            <div style={{ textAlign: 'center', fontWeight: 300, fontSize: '17pt', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '3pt' }}>
-                {profile.name || 'Your Name'}
-            </div>
-            {contactParts.length > 0 && (
-                <div style={{ textAlign: 'center', fontSize: '9pt', color: '#666', marginBottom: '5pt', letterSpacing: '0.03em' }}>
-                    {contactParts.join(' · ')}
-                </div>
-            )}
-            <hr style={{ border: 'none', borderTop: '0.5px solid #bbb', margin: '4pt 0 10pt' }} />
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') return <div style={{ marginBottom: '10pt' }}><GhostBox text={deco.text} /></div>
-                if (!summary) return null
-                return <div style={{ marginBottom: '10pt', fontSize: '10pt', lineHeight: 1.5, color: '#333', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
-            })()}
-            {education.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <ReziStandardSectionHeader title="Education" />
-                    {education.map((edu, i) => {
-                        const showDegree = edu.degree && !sameText(edu.degree, edu.school)
-                        return (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 600 }}>{edu.school}</span>
-                                <span style={{ fontSize: '9pt', color: '#888' }}>{edu.date}</span>
-                            </div>
-                            {showDegree && <div style={{ fontSize: '9.5pt', color: '#555' }}>{edu.degree}</div>}
-                        </div>
-                        )
-                    })}
-                </section>
-            )}
-            {experience.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <ReziStandardSectionHeader title="Experience" />
-                    {experience.map((exp, i) => (
-                        <div key={i} style={{ marginBottom: '8pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 600 }}>{exp.company}</span>
-                                <span style={{ fontSize: '9pt', color: '#888' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
-                            </div>
-                            <div style={{ fontSize: '9.5pt', color: '#666', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
-                            {exp.bullets.map((b, j) => {
-                                const deco = decoFor('experience', i, j)
-                                if (!b.trim() && deco?.kind !== 'ghost') return null
-                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
-                                return (
-                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                        <span style={{ color: '#bbb', flexShrink: 0 }}>–</span>
-                                        <BoldRender text={b} />
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {projects.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <ReziStandardSectionHeader title="Projects" />
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 600 }}>{proj.name}</span>
-                                <span style={{ fontSize: '9pt', color: '#888' }}>{proj.date}</span>
-                            </div>
-                            {proj.bullets.map((b, j) => {
-                                const deco = decoFor('projects', i, j)
-                                if (!b.trim() && deco?.kind !== 'ghost') return null
-                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
-                                return (
-                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                        <span style={{ color: '#bbb', flexShrink: 0 }}>–</span>
-                                        <BoldRender text={b} />
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {(hasSkills || reziStdSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <ReziStandardSectionHeader title="Technical Skills" />
-                    <div style={{ fontSize: '10pt', lineHeight: 1.7, color: '#333' }}>
-                        {reziStdSkillFields.map(([field, label]) => {
-                            const deco = decoFor('skills', undefined, undefined, field)
-                            if (deco?.kind === 'ghost') {
-                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 600 }}>{label}: </span>} />
-                            }
-                            if (!skills[field]) return null
-                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 600 }}>{label}: </span>{skills[field]}</div>
-                        })}
-                    </div>
-                </section>
-            )}
-            {certifications.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <ReziStandardSectionHeader title="Certifications" />
-                    {certifications.map((cert, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                            <span style={{ color: '#bbb', flexShrink: 0 }}>–</span><span>{cert}</span>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {achievements.length > 0 && (
-                <section style={{ marginBottom: '10pt' }}>
-                    <ReziStandardSectionHeader title="Achievements" />
-                    {achievements.map((ach, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                            <span style={{ color: '#bbb', flexShrink: 0 }}>–</span><span>{ach}</span>
-                        </div>
-                    ))}
-                </section>
-            )}
+            {order.map((key) => (
+                <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+            ))}
         </div>
     )
 }
@@ -2171,6 +3641,132 @@ function LondonResumePreview({ state }: { state: ResumeEditorState }) {
         ['languages', 'Technical'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Core Competencies'],
     ] as const
 
+    // Note: no Leadership block in this preview (pre-existing gap vs the PDF
+    // renderer) — 'leadership' has no `sections` entry, safely skipped.
+    const order = state.sectionOrder ?? ['summary', 'education', 'experience', 'projects', 'skills', 'certifications', 'achievements', 'leadership']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') {
+                return <><LondonExtendingHeader title="Profile" /><GhostBox text={deco.text} /></>
+            }
+            if (!summary) return null
+            return (
+                <>
+                    <LondonExtendingHeader title="Profile" />
+                    <div style={{ fontSize: '10pt', lineHeight: 1.55, color: '#333', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+                </>
+            )
+        },
+
+        education: () => education.length > 0 && (
+            <section>
+                <LondonExtendingHeader title="Education" />
+                {education.map((edu, i) => {
+                    const showDegree = edu.degree && !sameText(edu.degree, edu.school)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontWeight: 700 }}>{edu.school}</span>
+                            <span style={{ fontSize: '9pt', color: '#777', fontStyle: 'italic' }}>{edu.date}</span>
+                        </div>
+                        {showDegree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#666' }}>{edu.degree}</div>}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <LondonExtendingHeader title="Experience" />
+                {experience.map((exp, i) => (
+                    <div key={i} style={{ marginBottom: '8pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontWeight: 700 }}>{exp.company}</span>
+                            <span style={{ fontSize: '9pt', color: '#777', fontStyle: 'italic' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
+                        </div>
+                        <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#666', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
+                        {exp.bullets.map((b, j) => {
+                            const deco = decoFor('experience', i, j)
+                            if (!b.trim() && deco?.kind !== 'ghost') return null
+                            if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                            return (
+                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                    <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span>
+                                    <BoldRender text={b} />
+                                </div>
+                            )
+                        })}
+                    </div>
+                ))}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <LondonExtendingHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontWeight: 700 }}>{proj.name}</span>
+                            <span style={{ fontSize: '9pt', color: '#777', fontStyle: 'italic' }}>{proj.date}</span>
+                        </div>
+                        {proj.bullets.map((b, j) => {
+                            const deco = decoFor('projects', i, j)
+                            if (!b.trim() && deco?.kind !== 'ghost') return null
+                            if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
+                            return (
+                                <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                    <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span>
+                                    <BoldRender text={b} />
+                                </div>
+                            )
+                        })}
+                    </div>
+                ))}
+            </section>
+        ),
+
+        skills: () => (hasSkills || londonSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
+            <section>
+                <LondonExtendingHeader title="Skills" />
+                <div style={{ fontSize: '10pt', lineHeight: 1.7, color: '#444' }}>
+                    {londonSkillFields.map(([field, label]) => {
+                        const deco = decoFor('skills', undefined, undefined, field)
+                        if (deco?.kind === 'ghost') {
+                            return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
+                        }
+                        if (!skills[field]) return null
+                        return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
+                    })}
+                </div>
+            </section>
+        ),
+
+        certifications: () => certifications.length > 0 && (
+            <section>
+                <LondonExtendingHeader title="Certifications" />
+                {certifications.map((cert, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
+                        <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span><span>{cert}</span>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        achievements: () => achievements.length > 0 && (
+            <section>
+                <LondonExtendingHeader title="Achievements" />
+                {achievements.map((ach, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
+                        <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span><span>{ach}</span>
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
     return (
         <div style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: '10.5pt', lineHeight: 1.45, color: '#1a1a1a', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
             <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
@@ -2182,289 +3778,9 @@ function LondonResumePreview({ state }: { state: ResumeEditorState }) {
                     {contactParts.join(' · ')}
                 </div>
             )}
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') {
-                    return <><LondonExtendingHeader title="Profile" /><GhostBox text={deco.text} /></>
-                }
-                if (!summary) return null
-                return (
-                    <>
-                        <LondonExtendingHeader title="Profile" />
-                        <div style={{ fontSize: '10pt', lineHeight: 1.55, color: '#333', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
-                    </>
-                )
-            })()}
-            {education.length > 0 && (
-                <section>
-                    <LondonExtendingHeader title="Education" />
-                    {education.map((edu, i) => {
-                        const showDegree = edu.degree && !sameText(edu.degree, edu.school)
-                        return (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{edu.school}</span>
-                                <span style={{ fontSize: '9pt', color: '#777', fontStyle: 'italic' }}>{edu.date}</span>
-                            </div>
-                            {showDegree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#666' }}>{edu.degree}</div>}
-                        </div>
-                        )
-                    })}
-                </section>
-            )}
-            {experience.length > 0 && (
-                <section>
-                    <LondonExtendingHeader title="Experience" />
-                    {experience.map((exp, i) => (
-                        <div key={i} style={{ marginBottom: '8pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{exp.company}</span>
-                                <span style={{ fontSize: '9pt', color: '#777', fontStyle: 'italic' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
-                            </div>
-                            <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#666', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
-                            {exp.bullets.map((b, j) => {
-                                const deco = decoFor('experience', i, j)
-                                if (!b.trim() && deco?.kind !== 'ghost') return null
-                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
-                                return (
-                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                        <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span>
-                                        <BoldRender text={b} />
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {projects.length > 0 && (
-                <section>
-                    <LondonExtendingHeader title="Projects" />
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{proj.name}</span>
-                                <span style={{ fontSize: '9pt', color: '#777', fontStyle: 'italic' }}>{proj.date}</span>
-                            </div>
-                            {proj.bullets.map((b, j) => {
-                                const deco = decoFor('projects', i, j)
-                                if (!b.trim() && deco?.kind !== 'ghost') return null
-                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
-                                return (
-                                    <div key={j} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                        <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span>
-                                        <BoldRender text={b} />
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {(hasSkills || londonSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
-                <section>
-                    <LondonExtendingHeader title="Skills" />
-                    <div style={{ fontSize: '10pt', lineHeight: 1.7, color: '#444' }}>
-                        {londonSkillFields.map(([field, label]) => {
-                            const deco = decoFor('skills', undefined, undefined, field)
-                            if (deco?.kind === 'ghost') {
-                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
-                            }
-                            if (!skills[field]) return null
-                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
-                        })}
-                    </div>
-                </section>
-            )}
-            {certifications.length > 0 && (
-                <section>
-                    <LondonExtendingHeader title="Certifications" />
-                    {certifications.map((cert, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                            <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span><span>{cert}</span>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {achievements.length > 0 && (
-                <section>
-                    <LondonExtendingHeader title="Achievements" />
-                    {achievements.map((ach, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '6pt', marginBottom: '2pt', fontSize: '10pt' }}>
-                            <span style={{ color: '#bbb', fontStyle: 'italic', flexShrink: 0 }}>·</span><span>{ach}</span>
-                        </div>
-                    ))}
-                </section>
-            )}
-        </div>
-    )
-}
-
-// ── Stitch Resume Preview (HTML) ──────────────────────────
-const STITCH_NAVY = '#1e3a5f'
-
-function StitchSectionHead({ title }: { title: string }) {
-    return (
-        <div style={{ marginTop: '12pt', marginBottom: '5pt' }}>
-            <div style={{ fontSize: '8.5pt', fontWeight: 700, letterSpacing: '1.5pt', textTransform: 'uppercase' as const, color: STITCH_NAVY, paddingBottom: '2pt', borderBottom: `0.75px solid ${STITCH_NAVY}` }}>
-                {title}
-            </div>
-        </div>
-    )
-}
-
-function StitchResumePreview({ state }: { state: ResumeEditorState }) {
-    const { profile, summary, education, experience, projects, skills, certifications, achievements, leadership } = state
-    const decorations = usePreviewDecorations()
-    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
-    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
-        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
-    const contactParts = [profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
-    const stitchSkillFields = [
-        ['languages', 'Technical'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Core Competencies'],
-    ] as const
-
-    return (
-        <div style={{ fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: '10pt', lineHeight: 1.5, color: '#222', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
-            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
-            <div style={{ textAlign: 'center', fontSize: '20pt', fontWeight: 400, color: STITCH_NAVY, letterSpacing: '0.5pt', marginBottom: '4pt' }}>
-                {profile.name || 'Your Name'}
-            </div>
-            {contactParts.length > 0 && (
-                <div style={{ textAlign: 'center', fontSize: '8.5pt', color: '#555', marginBottom: '4pt' }}>
-                    {contactParts.join('  |  ')}
-                </div>
-            )}
-            <div style={{ borderTop: `1px solid ${STITCH_NAVY}`, marginBottom: '2pt' }} />
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') return <div style={{ marginTop: '8pt' }}><GhostBox text={deco.text} /></div>
-                if (!summary) return null
-                return <div style={{ fontSize: '9.5pt', lineHeight: 1.55, color: '#333', fontStyle: 'italic', marginTop: '8pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
-            })()}
-            {education.length > 0 && (
-                <section>
-                    <StitchSectionHead title="Education" />
-                    {education.map((edu, i) => {
-                        const showDegree = edu.degree && !sameText(edu.degree, edu.school)
-                        return (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{edu.school}</span>
-                                <span style={{ fontSize: '8.5pt', color: '#666' }}>{edu.date}</span>
-                            </div>
-                            {showDegree && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555' }}>{edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}</div>}
-                            {edu.coursework && <div style={{ fontSize: '9pt', color: '#444' }}><strong>Relevant Coursework: </strong>{edu.coursework}</div>}
-                        </div>
-                        )
-                    })}
-                </section>
-            )}
-            {experience.length > 0 && (
-                <section>
-                    <StitchSectionHead title="Experience" />
-                    {experience.map((exp, i) => (
-                        <div key={i} style={{ marginBottom: '8pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{exp.company}</span>
-                                <span style={{ fontSize: '8.5pt', color: '#666' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
-                            </div>
-                            <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555', marginBottom: '3pt' }}>{exp.title}{exp.location ? ` · ${exp.location}` : ''}</div>
-                            {exp.bullets.map((b, j) => {
-                                const deco = decoFor('experience', i, j)
-                                if (!b.trim() && deco?.kind !== 'ghost') return null
-                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
-                                return (
-                                    <div key={j} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                        <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span>
-                                        <BoldRender text={b} />
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {projects.length > 0 && (
-                <section>
-                    <StitchSectionHead title="Projects" />
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{proj.name}{proj.tech ? <span style={{ fontWeight: 400, fontStyle: 'italic', color: '#666' }}>{'  |  '}{proj.tech}</span> : ''}</span>
-                                <span style={{ fontSize: '8.5pt', color: '#666' }}>{proj.date}</span>
-                            </div>
-                            {proj.bullets.map((b, j) => {
-                                const deco = decoFor('projects', i, j)
-                                if (!b.trim() && deco?.kind !== 'ghost') return null
-                                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '2pt' }}><GhostBox text={deco.text} /></div>
-                                return (
-                                    <div key={j} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt', background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                        <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span>
-                                        <BoldRender text={b} />
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {(hasSkills || stitchSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
-                <section>
-                    <StitchSectionHead title="Skills" />
-                    <div style={{ fontSize: '9.5pt', lineHeight: 1.6, color: '#333' }}>
-                        {stitchSkillFields.map(([field, label]) => {
-                            const deco = decoFor('skills', undefined, undefined, field)
-                            if (deco?.kind === 'ghost') {
-                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700, color: STITCH_NAVY }}>{label}: </span>} />
-                            }
-                            if (!skills[field]) return null
-                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700, color: STITCH_NAVY }}>{label}: </span>{skills[field]}</div>
-                        })}
-                    </div>
-                </section>
-            )}
-            {certifications.length > 0 && (
-                <section>
-                    <StitchSectionHead title="Certifications" />
-                    {certifications.map((cert, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt' }}>
-                            <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span><span>{cert}</span>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {achievements.length > 0 && (
-                <section>
-                    <StitchSectionHead title="Achievements" />
-                    {achievements.map((ach, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt' }}>
-                            <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span><span>{ach}</span>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {leadership.length > 0 && (
-                <section>
-                    <StitchSectionHead title="Leadership" />
-                    {leadership.map((lead, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
-                                <span style={{ fontSize: '8.5pt', color: '#666' }}>{lead.date}</span>
-                            </div>
-                            {lead.role && <div style={{ fontStyle: 'italic', fontSize: '9.5pt', color: '#555' }}>{lead.role}</div>}
-                            {lead.bullets.filter(b => b.trim()).map((b, j) => (
-                                <div key={j} style={{ display: 'flex', gap: '4pt', marginBottom: '2pt', fontSize: '9.5pt' }}>
-                                    <span style={{ color: STITCH_NAVY, flexShrink: 0, fontWeight: 700 }}>—</span>
-                                    <BoldRender text={b} />
-                                </div>
-                            ))}
-                        </div>
-                    ))}
-                </section>
-            )}
+            {order.map((key) => (
+                <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+            ))}
         </div>
     )
 }
@@ -2490,6 +3806,164 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
         ['languages', 'Technical'], ['tools', 'Tools'], ['frameworks', 'Frameworks'], ['soft', 'Interests'],
     ] as const
 
+    const order = state.sectionOrder ?? ['summary', 'education', 'experience', 'projects', 'leadership', 'skills', 'certifications', 'achievements']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') return <div style={{ marginTop: '8pt' }}><GhostBox text={deco.text} /></div>
+            if (!summary) return null
+            return <div style={{ marginTop: '8pt', fontSize: '10pt', lineHeight: 1.5, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
+        },
+
+        education: () => education.length > 0 && (
+            <section>
+                <HarvardSectionHead title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.school || 'University'
+                    const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{eduTop}</span>
+                            <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>{edu.date}</span>
+                        </div>
+                        {showDegree && (
+                            <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>
+                                {edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}
+                            </div>
+                        )}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '9.5pt', marginTop: '1pt' }}>
+                                <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <HarvardSectionHead title="Experience" />
+                {experience.map((exp, i) => (
+                    <div key={i} style={{ marginBottom: '8pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{exp.company || 'Company'}</span>
+                            <span style={{ fontSize: '10pt', color: '#222' }}>{exp.location}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontStyle: 'italic', fontSize: '10pt' }}>{exp.title}</span>
+                            <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>
+                                {[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}
+                            </span>
+                        </div>
+                        <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                            {exp.bullets.map((b, j) => {
+                                const deco = decoFor('experience', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <HarvardSectionHead title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>
+                                {proj.name}{proj.tech ? <span style={{ fontWeight: 400, fontStyle: 'italic' }}>{'  —  '}{proj.tech}</span> : ''}
+                            </span>
+                            <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>{proj.date}</span>
+                        </div>
+                        <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <HarvardSectionHead title="Leadership & Activities" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                            <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{lead.role}</div>}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && (
+                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {lead.bullets.filter(b => b.trim()).map((b, j) => (
+                                    <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{b}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ))}
+            </section>
+        ),
+
+        skills: () => (hasSkills || harvardSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
+            <section>
+                <HarvardSectionHead title="Skills & Interests" />
+                <div style={{ fontSize: '10pt', lineHeight: 1.5 }}>
+                    {harvardSkillFields.map(([field, label]) => {
+                        const deco = decoFor('skills', undefined, undefined, field)
+                        if (deco?.kind === 'ghost') {
+                            return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
+                        }
+                        if (!skills[field]) return null
+                        return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
+                    })}
+                </div>
+            </section>
+        ),
+
+        certifications: () => certifications.length > 0 && (
+            <section>
+                <HarvardSectionHead title="Certifications" />
+                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {certifications.map((c, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{c}</li>))}
+                </ul>
+            </section>
+        ),
+
+        achievements: () => achievements.length > 0 && (
+            <section>
+                <HarvardSectionHead title="Honors & Awards" />
+                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {achievements.map((a, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{a}</li>))}
+                </ul>
+            </section>
+        ),
+    }
+
     return (
         <div style={{ fontFamily: "'Georgia', 'Merriweather', 'Times New Roman', serif", fontSize: '10.5pt', lineHeight: 1.4, color: '#000', padding: '42pt 54pt', minHeight: '100%', background: '#fff' }}>
             <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
@@ -2502,338 +3976,9 @@ function HarvardResumePreview({ state }: { state: ResumeEditorState }) {
                 </div>
             )}
             <hr style={{ border: 'none', borderTop: '0.75px solid #000', margin: '6pt 0 2pt' }} />
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') return <div style={{ marginTop: '8pt' }}><GhostBox text={deco.text} /></div>
-                if (!summary) return null
-                return <div style={{ marginTop: '8pt', fontSize: '10pt', lineHeight: 1.5, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
-            })()}
-            {education.length > 0 && (
-                <section>
-                    <HarvardSectionHead title="Education" />
-                    {education.map((edu, i) => {
-                        const eduTop = edu.school || 'University'
-                        const showDegree = edu.degree && !sameText(edu.degree, eduTop)
-                        return (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
-                                <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>{edu.date}</span>
-                            </div>
-                            {showDegree && (
-                                <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>
-                                    {edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}
-                                </div>
-                            )}
-                            {edu.coursework && (
-                                <div style={{ fontSize: '9.5pt', marginTop: '1pt' }}>
-                                    <span style={{ fontWeight: 700 }}>Relevant Coursework: </span>{edu.coursework}
-                                </div>
-                            )}
-                        </div>
-                        )
-                    })}
-                </section>
-            )}
-            {experience.length > 0 && (
-                <section>
-                    <HarvardSectionHead title="Experience" />
-                    {experience.map((exp, i) => (
-                        <div key={i} style={{ marginBottom: '8pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>{exp.company || 'Company'}</span>
-                                <span style={{ fontSize: '10pt', color: '#222' }}>{exp.location}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontStyle: 'italic', fontSize: '10pt' }}>{exp.title}</span>
-                                <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>
-                                    {[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}
-                                </span>
-                            </div>
-                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                {exp.bullets.map((b, j) => {
-                                    const deco = decoFor('experience', i, j)
-                                    if (!b.trim() && deco?.kind !== 'ghost') return null
-                                    if (deco?.kind === 'ghost') {
-                                        return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
-                                    }
-                                    return (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                            <BoldRender text={b} />
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {projects.length > 0 && (
-                <section>
-                    <HarvardSectionHead title="Projects" />
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                <span style={{ fontWeight: 700 }}>
-                                    {proj.name}{proj.tech ? <span style={{ fontWeight: 400, fontStyle: 'italic' }}>{'  —  '}{proj.tech}</span> : ''}
-                                </span>
-                                <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>{proj.date}</span>
-                            </div>
-                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                {proj.bullets.map((b, j) => {
-                                    const deco = decoFor('projects', i, j)
-                                    if (!b.trim() && deco?.kind !== 'ghost') return null
-                                    if (deco?.kind === 'ghost') {
-                                        return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
-                                    }
-                                    return (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                            <BoldRender text={b} />
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {leadership.length > 0 && (
-                <section>
-                    <HarvardSectionHead title="Leadership & Activities" />
-                    {leadership.map((lead, i) => (
-                        <div key={i} style={{ marginBottom: '6pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
-                                <span style={{ fontSize: '10pt', color: '#222', fontStyle: 'italic' }}>{lead.date}</span>
-                            </div>
-                            {lead.role && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{lead.role}</div>}
-                            {lead.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {lead.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{b}</li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {(hasSkills || harvardSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
-                <section>
-                    <HarvardSectionHead title="Skills & Interests" />
-                    <div style={{ fontSize: '10pt', lineHeight: 1.5 }}>
-                        {harvardSkillFields.map(([field, label]) => {
-                            const deco = decoFor('skills', undefined, undefined, field)
-                            if (deco?.kind === 'ghost') {
-                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
-                            }
-                            if (!skills[field]) return null
-                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
-                        })}
-                    </div>
-                </section>
-            )}
-            {certifications.length > 0 && (
-                <section>
-                    <HarvardSectionHead title="Certifications" />
-                    <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                        {certifications.map((c, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{c}</li>))}
-                    </ul>
-                </section>
-            )}
-            {achievements.length > 0 && (
-                <section>
-                    <HarvardSectionHead title="Honors & Awards" />
-                    <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                        {achievements.map((a, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{a}</li>))}
-                    </ul>
-                </section>
-            )}
-        </div>
-    )
-}
-
-// ── sb2nov Resume Preview (HTML) ──────────────────────────
-function Sb2novSectionHead({ title }: { title: string }) {
-    return (
-        <div style={{ marginTop: '10pt', marginBottom: '3pt' }}>
-            <div style={{ fontSize: '11pt', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, borderBottom: '0.6px solid #000', paddingBottom: '1pt' }}>{title}</div>
-        </div>
-    )
-}
-
-function Sb2novResumePreview({ state }: { state: ResumeEditorState }) {
-    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
-    const decorations = usePreviewDecorations()
-    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
-    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
-        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
-    const contactParts = [profile.phone, profile.email, profile.linkedin, profile.github, profile.location, profile.portfolio].filter(Boolean)
-    const hasSkills = skills.languages || skills.tools || skills.frameworks || skills.soft
-    const sb2novSkillFields = [
-        ['languages', 'Languages'], ['frameworks', 'Frameworks'], ['tools', 'Tools'], ['soft', 'Other'],
-    ] as const
-
-    return (
-        <div style={{ fontFamily: "'Lora', 'Georgia', serif", fontSize: '10.5pt', lineHeight: 1.4, color: '#000', padding: '36pt 48pt', minHeight: '100%', background: '#fff' }}>
-            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
-            <div style={{ textAlign: 'center', fontSize: '22pt', fontWeight: 700, letterSpacing: '0.04em', lineHeight: 1.15 }}>
-                {profile.name || 'Your Name'}
-            </div>
-            {contactParts.length > 0 && (
-                <div style={{ textAlign: 'center', fontSize: '9.5pt', color: '#222', marginTop: '4pt' }}>
-                    {contactParts.join('  |  ')}
-                </div>
-            )}
-            {(() => {
-                const deco = decoFor('summary')
-                if (deco?.kind === 'ghost') return <div style={{ marginTop: '6pt' }}><GhostBox text={deco.text} /></div>
-                if (!summary) return null
-                return <div style={{ marginTop: '6pt', fontSize: '10pt', lineHeight: 1.45, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>{summary}</div>
-            })()}
-            {education.length > 0 && (
-                <section>
-                    <Sb2novSectionHead title="Education" />
-                    {education.map((edu, i) => {
-                        const eduTop = edu.school || 'University'
-                        const showDegree = edu.degree && !sameText(edu.degree, eduTop)
-                        return (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{eduTop}</span>
-                                <span style={{ fontSize: '10pt', color: '#222' }}>{edu.date}</span>
-                            </div>
-                            {showDegree && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}</div>}
-                            {edu.coursework && <div style={{ fontSize: '9.5pt', marginTop: '1pt' }}><span style={{ fontWeight: 700 }}>Coursework: </span>{edu.coursework}</div>}
-                        </div>
-                        )
-                    })}
-                </section>
-            )}
-            {experience.length > 0 && (
-                <section>
-                    <Sb2novSectionHead title="Experience" />
-                    {experience.map((exp, i) => (
-                        <div key={i} style={{ marginBottom: '7pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{exp.company || 'Company'}</span>
-                                <span style={{ fontSize: '10pt', color: '#222' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontStyle: 'italic', fontSize: '10pt' }}>{exp.title}</span>
-                                {exp.location && <span style={{ fontStyle: 'italic', fontSize: '10pt', color: '#333' }}>{exp.location}</span>}
-                            </div>
-                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
-                                {exp.bullets.map((b, j) => {
-                                    const deco = decoFor('experience', i, j)
-                                    if (!b.trim() && deco?.kind !== 'ghost') return null
-                                    if (deco?.kind === 'ghost') {
-                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', marginLeft: '-18pt' }}><GhostBox text={deco.text} /></li>
-                                    }
-                                    return (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.4, position: 'relative' as const, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                            <span style={{ position: 'absolute' as const, left: '-12pt' }}>◦</span>
-                                            <BoldRender text={b} />
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {projects.length > 0 && (
-                <section>
-                    <Sb2novSectionHead title="Projects" />
-                    {projects.map((proj, i) => (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>
-                                    {proj.name}{proj.tech ? <span style={{ fontWeight: 400, fontStyle: 'italic' }}>{' | '}{proj.tech}</span> : ''}
-                                </span>
-                                <span style={{ fontSize: '10pt', color: '#222' }}>{proj.date}</span>
-                            </div>
-                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
-                                {proj.bullets.map((b, j) => {
-                                    const deco = decoFor('projects', i, j)
-                                    if (!b.trim() && deco?.kind !== 'ghost') return null
-                                    if (deco?.kind === 'ghost') {
-                                        return <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', marginLeft: '-18pt' }}><GhostBox text={deco.text} /></li>
-                                    }
-                                    return (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', lineHeight: 1.4, position: 'relative' as const, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                            <span style={{ position: 'absolute' as const, left: '-12pt' }}>◦</span>
-                                            <BoldRender text={b} />
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    ))}
-                </section>
-            )}
-            {(hasSkills || sb2novSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
-                <section>
-                    <Sb2novSectionHead title="Technical Skills" />
-                    <div style={{ fontSize: '10pt', lineHeight: 1.5 }}>
-                        {sb2novSkillFields.map(([field, label]) => {
-                            const deco = decoFor('skills', undefined, undefined, field)
-                            if (deco?.kind === 'ghost') {
-                                return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
-                            }
-                            if (!skills[field]) return null
-                            return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
-                        })}
-                    </div>
-                </section>
-            )}
-            {leadership.length > 0 && (
-                <section>
-                    <Sb2novSectionHead title="Leadership" />
-                    {leadership.map((lead, i) => (
-                        <div key={i} style={{ marginBottom: '5pt' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 700 }}>{lead.org}</span>
-                                <span style={{ fontSize: '10pt', color: '#222' }}>{lead.date}</span>
-                            </div>
-                            {lead.role && <div style={{ fontStyle: 'italic', fontSize: '10pt' }}>{lead.role}</div>}
-                            {lead.bullets.filter(b => b.trim()).length > 0 && (
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
-                                    {lead.bullets.filter(b => b.trim()).map((b, j) => (
-                                        <li key={j} style={{ marginBottom: '1.5pt', fontSize: '10pt', position: 'relative' as const }}>
-                                            <span style={{ position: 'absolute' as const, left: '-12pt' }}>◦</span>{b}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    ))}
-                </section>
-            )}
-            {certifications.length > 0 && (
-                <section>
-                    <Sb2novSectionHead title="Certifications" />
-                    <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
-                        {certifications.map((c, i) => (
-                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt', position: 'relative' as const }}>
-                                <span style={{ position: 'absolute' as const, left: '-12pt' }}>◦</span>{c}
-                            </li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-            {achievements.length > 0 && (
-                <section>
-                    <Sb2novSectionHead title="Honors & Awards" />
-                    <ul style={{ margin: '3pt 0 0 0', paddingLeft: '18pt', listStyle: 'none' }}>
-                        {achievements.map((a, i) => (
-                            <li key={i} style={{ marginBottom: '1.5pt', fontSize: '10pt', position: 'relative' as const }}>
-                                <span style={{ position: 'absolute' as const, left: '-12pt' }}>◦</span>{a}
-                            </li>
-                        ))}
-                    </ul>
-                </section>
-            )}
+            {order.map((key) => (
+                <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+            ))}
         </div>
     )
 }
@@ -2863,6 +4008,155 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
         ['languages', 'Languages'], ['frameworks', 'Frameworks'], ['tools', 'Tools'], ['soft', 'Other'],
     ] as const
 
+    // 'summary' is intentionally excluded from `order` — it renders fixed
+    // between the name and contact line, matching the PDF renderer.
+    const order = state.sectionOrder ?? ['experience', 'education', 'projects', 'skills', 'leadership', 'certifications', 'achievements']
+    const sections: Record<string, () => React.ReactNode> = {
+        experience: () => experience.length > 0 && (
+            <section>
+                <OpenResumeSectionHead title="Work Experience" />
+                {experience.map((exp, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{exp.company || 'Company'}</span>
+                            <span style={{ fontSize: '10pt', color: '#404040' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1pt' }}>
+                            <span style={{ fontSize: '10pt' }}>{exp.title}</span>
+                            {exp.location && <span style={{ fontSize: '9.5pt', color: '#525252' }}>{exp.location}</span>}
+                        </div>
+                        <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                            {exp.bullets.map((b, j) => {
+                                const deco = decoFor('experience', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        education: () => education.length > 0 && (
+            <section>
+                <OpenResumeSectionHead title="Education" />
+                {education.map((edu, i) => {
+                    const eduTop = edu.school || 'University'
+                    const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                    return (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>{eduTop}</span>
+                            <span style={{ fontSize: '10pt', color: '#404040' }}>{edu.date}</span>
+                        </div>
+                        {showDegree && (
+                            <div style={{ fontSize: '10pt', marginTop: '1pt' }}>{edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}</div>
+                        )}
+                        {edu.coursework && (
+                            <div style={{ fontSize: '9.5pt', color: '#404040', marginTop: '1pt' }}>
+                                <span style={{ fontWeight: 700 }}>Coursework: </span>{edu.coursework}
+                            </div>
+                        )}
+                    </div>
+                    )
+                })}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <OpenResumeSectionHead title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700 }}>
+                                {proj.name}{proj.tech ? <span style={{ fontWeight: 400, color: '#525252' }}>{'  —  '}{proj.tech}</span> : ''}
+                            </span>
+                            <span style={{ fontSize: '10pt', color: '#404040' }}>{proj.date}</span>
+                        </div>
+                        <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                            {proj.bullets.map((b, j) => {
+                                const deco = decoFor('projects', i, j)
+                                if (!b.trim() && deco?.kind !== 'ghost') return null
+                                if (deco?.kind === 'ghost') {
+                                    return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
+                                }
+                                return (
+                                    <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                                        <BoldRender text={b} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </section>
+        ),
+
+        skills: () => (hasSkills || openResumeSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
+            <section>
+                <OpenResumeSectionHead title="Skills" />
+                <div style={{ fontSize: '10pt', lineHeight: 1.5 }}>
+                    {openResumeSkillFields.map(([field, label]) => {
+                        const deco = decoFor('skills', undefined, undefined, field)
+                        if (deco?.kind === 'ghost') {
+                            return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
+                        }
+                        if (!skills[field]) return null
+                        return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
+                    })}
+                </div>
+            </section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <OpenResumeSectionHead title="Leadership" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '5pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ fontWeight: 700 }}>{lead.org}</span>
+                            <span style={{ fontSize: '10pt', color: '#404040' }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontSize: '10pt' }}>{lead.role}</div>}
+                        {lead.bullets.filter(b => b.trim()).length > 0 && (
+                            <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                                {lead.bullets.filter(b => b.trim()).map((b, j) => (
+                                    <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{b}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ))}
+            </section>
+        ),
+
+        certifications: () => certifications.length > 0 && (
+            <section>
+                <OpenResumeSectionHead title="Certifications" />
+                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {certifications.map((c, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{c}</li>))}
+                </ul>
+            </section>
+        ),
+
+        achievements: () => achievements.length > 0 && (
+            <section>
+                <OpenResumeSectionHead title="Achievements" />
+                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
+                    {achievements.map((a, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{a}</li>))}
+                </ul>
+            </section>
+        ),
+    }
+
     return (
         <div style={{ fontFamily: "'Roboto', 'Helvetica Neue', Arial, sans-serif", fontSize: '10.5pt', lineHeight: 1.4, color: OPENRESUME_TEXT, background: '#fff', minHeight: '100%' }}>
             <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
@@ -2882,143 +4176,9 @@ function OpenResumePreview({ state }: { state: ResumeEditorState }) {
                         {contactParts.join('   ·   ')}
                     </div>
                 )}
-                {experience.length > 0 && (
-                    <section>
-                        <OpenResumeSectionHead title="Work Experience" />
-                        {experience.map((exp, i) => (
-                            <div key={i} style={{ marginBottom: '6pt' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700 }}>{exp.company || 'Company'}</span>
-                                    <span style={{ fontSize: '10pt', color: '#404040' }}>{[exp.startDate, exp.endDate].filter(Boolean).join(' – ')}</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1pt' }}>
-                                    <span style={{ fontSize: '10pt' }}>{exp.title}</span>
-                                    {exp.location && <span style={{ fontSize: '9.5pt', color: '#525252' }}>{exp.location}</span>}
-                                </div>
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {exp.bullets.map((b, j) => {
-                                        const deco = decoFor('experience', i, j)
-                                        if (!b.trim() && deco?.kind !== 'ghost') return null
-                                        if (deco?.kind === 'ghost') {
-                                            return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
-                                        }
-                                        return (
-                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                                <BoldRender text={b} />
-                                            </li>
-                                        )
-                                    })}
-                                </ul>
-                            </div>
-                        ))}
-                    </section>
-                )}
-                {education.length > 0 && (
-                    <section>
-                        <OpenResumeSectionHead title="Education" />
-                        {education.map((edu, i) => {
-                            const eduTop = edu.school || 'University'
-                            const showDegree = edu.degree && !sameText(edu.degree, eduTop)
-                            return (
-                            <div key={i} style={{ marginBottom: '5pt' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700 }}>{eduTop}</span>
-                                    <span style={{ fontSize: '10pt', color: '#404040' }}>{edu.date}</span>
-                                </div>
-                                {showDegree && (
-                                    <div style={{ fontSize: '10pt', marginTop: '1pt' }}>{edu.degree}{edu.gpa ? `  —  GPA: ${edu.gpa}` : ''}</div>
-                                )}
-                                {edu.coursework && (
-                                    <div style={{ fontSize: '9.5pt', color: '#404040', marginTop: '1pt' }}>
-                                        <span style={{ fontWeight: 700 }}>Coursework: </span>{edu.coursework}
-                                    </div>
-                                )}
-                            </div>
-                            )
-                        })}
-                    </section>
-                )}
-                {projects.length > 0 && (
-                    <section>
-                        <OpenResumeSectionHead title="Projects" />
-                        {projects.map((proj, i) => (
-                            <div key={i} style={{ marginBottom: '5pt' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                                    <span style={{ fontWeight: 700 }}>
-                                        {proj.name}{proj.tech ? <span style={{ fontWeight: 400, color: '#525252' }}>{'  —  '}{proj.tech}</span> : ''}
-                                    </span>
-                                    <span style={{ fontSize: '10pt', color: '#404040' }}>{proj.date}</span>
-                                </div>
-                                <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                    {proj.bullets.map((b, j) => {
-                                        const deco = decoFor('projects', i, j)
-                                        if (!b.trim() && deco?.kind !== 'ghost') return null
-                                        if (deco?.kind === 'ghost') {
-                                            return <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', listStyle: 'none', marginLeft: '-16pt' }}><GhostBox text={deco.text} /></li>
-                                        }
-                                        return (
-                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt', lineHeight: 1.4, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
-                                                <BoldRender text={b} />
-                                            </li>
-                                        )
-                                    })}
-                                </ul>
-                            </div>
-                        ))}
-                    </section>
-                )}
-                {(hasSkills || openResumeSkillFields.some(([f]) => decoFor('skills', undefined, undefined, f)?.kind === 'ghost')) && (
-                    <section>
-                        <OpenResumeSectionHead title="Skills" />
-                        <div style={{ fontSize: '10pt', lineHeight: 1.5 }}>
-                            {openResumeSkillFields.map(([field, label]) => {
-                                const deco = decoFor('skills', undefined, undefined, field)
-                                if (deco?.kind === 'ghost') {
-                                    return <GhostBox key={field} text={deco.text} inline={<span style={{ fontWeight: 700 }}>{label}: </span>} />
-                                }
-                                if (!skills[field]) return null
-                                return <div key={field} style={{ background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><span style={{ fontWeight: 700 }}>{label}: </span>{skills[field]}</div>
-                            })}
-                        </div>
-                    </section>
-                )}
-                {leadership.length > 0 && (
-                    <section>
-                        <OpenResumeSectionHead title="Leadership" />
-                        {leadership.map((lead, i) => (
-                            <div key={i} style={{ marginBottom: '5pt' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{ fontWeight: 700 }}>{lead.org}</span>
-                                    <span style={{ fontSize: '10pt', color: '#404040' }}>{lead.date}</span>
-                                </div>
-                                {lead.role && <div style={{ fontSize: '10pt' }}>{lead.role}</div>}
-                                {lead.bullets.filter(b => b.trim()).length > 0 && (
-                                    <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                                        {lead.bullets.filter(b => b.trim()).map((b, j) => (
-                                            <li key={j} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{b}</li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        ))}
-                    </section>
-                )}
-                {certifications.length > 0 && (
-                    <section>
-                        <OpenResumeSectionHead title="Certifications" />
-                        <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                            {certifications.map((c, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{c}</li>))}
-                        </ul>
-                    </section>
-                )}
-                {achievements.length > 0 && (
-                    <section>
-                        <OpenResumeSectionHead title="Achievements" />
-                        <ul style={{ margin: '3pt 0 0 0', paddingLeft: '16pt', listStyle: 'disc' }}>
-                            {achievements.map((a, i) => (<li key={i} style={{ marginBottom: '2pt', fontSize: '10pt' }}>{a}</li>))}
-                        </ul>
-                    </section>
-                )}
+                {order.map((key) => (
+                    <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+                ))}
             </div>
         </div>
     )
@@ -3427,27 +4587,18 @@ function AchievementsSection({ state, update }: { state: ResumeEditorState; upda
 const TEMPLATE_LABELS: Record<string, string> = {
     classic: 'Classic',
     rezi: 'Rezi',
-    'rezi-standard': 'Rezi Standard',
     london: 'London',
-    stitch: 'Stitch',
     harvard: 'Harvard',
-    sb2nov: 'sb2nov',
     'open-resume': 'Open Resume',
     cobalt: 'Cobalt',
     onyx: 'Onyx',
     jade: 'Jade',
     lapis: 'Lapis',
-}
-
-const TEMPLATE_IMAGES: Record<string, string> = {
-    'classic':       '/templates/aarav-sharma.png',
-    'cobalt':        '/templates/ananya-reddy.png',
-    'rezi':          '/templates/rohan-mehta.png',
-    'rezi-standard': '/templates/sneha-gupta.png',
-    'london':        '/templates/karthik-iyer.png',
-    'onyx':          '/templates/ishaan-verma.png',
-    'jade':          '/templates/priya-nair.png',
-    'lapis':         '/templates/vivek-menon.png',
+    executive: 'Executive',
+    amber: 'Amber',
+    athens: 'Athens',
+    axis: 'Axis',
+    beacon: 'Beacon',
 }
 
 async function loadPdfRenderer(templateId: string) {
@@ -3455,6 +4606,16 @@ async function loadPdfRenderer(templateId: string) {
         import('@react-pdf/renderer'),
         templateId === 'lapis'
             ? import('@/components/ResumeRenderer/LapisPdfDocument')
+            : templateId === 'executive'
+            ? import('@/components/ResumeRenderer/ExecutivePdfDocument')
+            : templateId === 'amber'
+            ? import('@/components/ResumeRenderer/AmberPdfDocument')
+            : templateId === 'athens'
+            ? import('@/components/ResumeRenderer/AthensPdfDocument')
+            : templateId === 'axis'
+            ? import('@/components/ResumeRenderer/AxisPdfDocument')
+            : templateId === 'beacon'
+            ? import('@/components/ResumeRenderer/BeaconPdfDocument')
             : templateId === 'jade'
             ? import('@/components/ResumeRenderer/JadePdfDocument')
             : templateId === 'onyx'
@@ -3463,16 +4624,10 @@ async function loadPdfRenderer(templateId: string) {
             ? import('@/components/ResumeRenderer/CobaltPdfDocument')
             : templateId === 'rezi'
             ? import('@/components/ResumeRenderer/ReziPdfDocument')
-            : templateId === 'rezi-standard'
-            ? import('@/components/ResumeRenderer/ReziStandardPdfDocument')
             : templateId === 'london'
             ? import('@/components/ResumeRenderer/LondonPdfDocument')
-            : templateId === 'stitch'
-            ? import('@/components/ResumeRenderer/StitchPdfDocument')
             : templateId === 'harvard'
             ? import('@/components/ResumeRenderer/HarvardPdfDocument')
-            : templateId === 'sb2nov'
-            ? import('@/components/ResumeRenderer/Sb2novPdfDocument')
             : templateId === 'open-resume'
             ? import('@/components/ResumeRenderer/OpenResumePdfDocument')
             : import('@/components/ResumeRenderer/ClassicPdfDocument'),
@@ -4610,7 +5765,6 @@ const MERIDIAN_TEMPLATES: Array<{ id: string; label: string }> = [
     { id: 'classic', label: 'Classic' },
     { id: 'london', label: 'London' },
     { id: 'rezi', label: 'Rezi' },
-    { id: 'rezi-standard', label: 'Rezi Std' },
 ]
 
 // Segmented pill switcher — Meridian v2
@@ -4691,12 +5845,14 @@ function MeridianPreviewPanel({
             case 'onyx': return <OnyxResumePreview state={state} />
             case 'jade': return <JadeResumePreview state={state} />
             case 'lapis': return <LapisResumePreview state={state} />
+            case 'executive': return <ExecutiveResumePreview state={state} />
+            case 'amber': return <AmberResumePreview state={state} />
+            case 'athens': return <AthensResumePreview state={state} />
+            case 'axis': return <AxisResumePreview state={state} />
+            case 'beacon': return <BeaconResumePreview state={state} />
             case 'rezi': return <ReziResumePreview state={state} />
-            case 'rezi-standard': return <ReziStandardResumePreview state={state} />
             case 'london': return <LondonResumePreview state={state} />
-            case 'stitch': return <StitchResumePreview state={state} />
             case 'harvard': return <HarvardResumePreview state={state} />
-            case 'sb2nov': return <Sb2novResumePreview state={state} />
             case 'open-resume': return <OpenResumePreview state={state} />
             default: return <ClassicResumePreview state={state} />
         }
@@ -5162,9 +6318,154 @@ export default function ResumesPage() {
     // ── Modal-based editor state ──
     const [openModalSection, setOpenModalSection] = useState<string | null>(null)
     // ── Studio tab (desktop) ──
-    const [studioTab, setStudioTab] = useState<'sections' | 'assistant'>('sections')
+    const [studioTab, setStudioTab] = useState<'sections' | 'assistant' | 'layout'>('sections')
     // ── Sidebar collapse (desktop) — frees width for the editor/assistant + preview ──
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+    // ── Layout Manager (plans/25 Phase 2 + 5) — section order/hidden, keyed on
+    // the MASTER resume_id plus an optional job_id. job_id is null while
+    // editing the master resume (Resume Sections tab, no job selected), and
+    // set to the tailored entry's job when one is selected — giving that
+    // job its own override row, never touching the master's (job_id null) row.
+    const masterResumeId = selectedEntry?.resume_id ?? sourceResumeId
+    const layoutJobId = selectedEntry?.job_id ?? null
+    const [layout, setLayout] = useState<{ sectionOrder: string[]; hiddenSections: string[]; pageTarget: number } | null>(null)
+    const [layoutSaveStatus, setLayoutSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+    const suppressNextLayoutSaveRef = useRef(false)
+
+    const templateDefaultOrder = useMemo(() => {
+        return TEMPLATES.find(t => t.id === templateId)?.sectionOrder
+            ?? TEMPLATES.find(t => t.id === 'classic')!.sectionOrder!
+    }, [templateId])
+
+    useEffect(() => {
+        if (!masterResumeId) { setLayout(null); return }
+        let cancelled = false
+        const qs = layoutJobId ? `resume_id=${masterResumeId}&job_id=${layoutJobId}` : `resume_id=${masterResumeId}`
+        fetch(`/api/resume-layout?${qs}`)
+            .then(r => r.json())
+            .then((res) => {
+                if (cancelled) return
+                suppressNextLayoutSaveRef.current = true
+                if (res.layout) {
+                    setLayout({
+                        sectionOrder: res.layout.section_order,
+                        hiddenSections: res.layout.hidden_sections ?? [],
+                        pageTarget: res.layout.page_target ?? 1,
+                    })
+                } else {
+                    setLayout({ sectionOrder: templateDefaultOrder, hiddenSections: [], pageTarget: 1 })
+                }
+            })
+            .catch(() => {
+                if (cancelled) return
+                suppressNextLayoutSaveRef.current = true
+                setLayout({ sectionOrder: templateDefaultOrder, hiddenSections: [], pageTarget: 1 })
+            })
+        return () => { cancelled = true }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [masterResumeId, layoutJobId])
+
+    const updateLayout = useCallback((sectionOrder: string[], hiddenSections: string[]) => {
+        setLayout(prev => ({ sectionOrder, hiddenSections, pageTarget: prev?.pageTarget ?? 1 }))
+    }, [])
+
+    // Debounced autosave — skipped once right after a server-load sets `layout`,
+    // so loading a resume doesn't immediately re-PUT what it just fetched.
+    useEffect(() => {
+        if (!layout || !masterResumeId) return
+        if (suppressNextLayoutSaveRef.current) {
+            suppressNextLayoutSaveRef.current = false
+            return
+        }
+        setLayoutSaveStatus('saving')
+        const t = setTimeout(() => {
+            fetch('/api/resume-layout', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    resume_id: masterResumeId,
+                    job_id: layoutJobId,
+                    section_order: layout.sectionOrder,
+                    hidden_sections: layout.hiddenSections,
+                    page_target: layout.pageTarget,
+                }),
+            }).then(() => setLayoutSaveStatus('saved')).catch(() => setLayoutSaveStatus('idle'))
+        }, 600)
+        return () => clearTimeout(t)
+    }, [layout, masterResumeId, layoutJobId])
+
+    // Sections outside `sectionOrder` (hidden ones) are simply filtered out of
+    // the array the renderers iterate — Phase 1's `order.map(...)` plumbing
+    // already treats a missing key as "don't render", so no renderer changes
+    // are needed to support hiding.
+    const effectiveState = useMemo<ResumeEditorState>(() => {
+        if (!layout) return editorState
+        return {
+            ...editorState,
+            sectionOrder: layout.sectionOrder.filter(k => !layout.hiddenSections.includes(k)),
+        }
+    }, [editorState, layout])
+
+    // ── Layout presets (plans/25 Phase 3) ──
+    const activePresetKey = useMemo(() => layout ? detectPresetKey(layout.sectionOrder) : null, [layout])
+    const selectPreset = useCallback((key: string) => {
+        const preset = LAYOUT_PRESETS[key]
+        if (preset) updateLayout(preset.order, layout?.hiddenSections ?? [])
+    }, [layout, updateLayout])
+
+    // ── AI-recommended layout (plans/25 Phase 3) — fetched once per resume,
+    // never auto-applied; the banner only writes anything if the user clicks
+    // Apply. Dismissing just clears it for this session (not persisted).
+    const [recommendation, setRecommendation] = useState<{ preset: string; label: string; order: string[]; reason: string } | null>(null)
+    useEffect(() => {
+        setRecommendation(null)
+        if (!masterResumeId) return
+        let cancelled = false
+        fetch('/api/resume-layout/recommend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resume_id: masterResumeId }),
+        })
+            .then(r => r.json())
+            .then((res) => {
+                if (cancelled || !res.recommended_preset) return
+                setRecommendation({ preset: res.recommended_preset, label: res.label, order: res.order, reason: res.reason })
+            })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [masterResumeId])
+    const applyRecommendation = useCallback(() => {
+        if (!recommendation) return
+        updateLayout(recommendation.order, layout?.hiddenSections ?? [])
+        setRecommendation(null)
+    }, [recommendation, layout, updateLayout])
+    // Don't show the banner if its suggestion is already the applied preset.
+    const visibleRecommendation = recommendation && recommendation.preset !== activePresetKey ? recommendation : null
+
+    // ── Resume Budget (plans/25 Phase 4) ──
+    const updatePageTarget = useCallback((n: number) => {
+        setLayout(prev => prev ? { ...prev, pageTarget: n } : prev)
+    }, [])
+    const [budget, setBudget] = useState<BudgetResult | null>(null)
+    useEffect(() => {
+        if (!layout) return
+        setBudget(null)
+        let cancelled = false
+        const t = setTimeout(async () => {
+            try {
+                const { renderer, PdfComp } = await loadPdfRenderer(templateId)
+                const doc = React.createElement(PdfComp, { state: effectiveState })
+                const blob = await renderer.pdf(doc as any).toBlob()
+                const result = await measureBudget(blob, layout.pageTarget)
+                if (!cancelled) setBudget(result)
+            } catch {
+                if (!cancelled) setBudget(null)
+            }
+        }, 900)
+        return () => { cancelled = true; clearTimeout(t) }
+    }, [effectiveState, templateId, layout])
+
     // useAssistant is a hook — must be called unconditionally, before the `!loaded`
     // early return below, so it stays alongside the other top-level state hooks.
     const assistant = useAssistant(
@@ -5191,9 +6492,67 @@ export default function ResumesPage() {
             }
         })
     }, [selectedEntry, assistant.atsKeywords])
+
+    // ── One-Page Optimizer (plans/25 Phase 5) — tailored resumes only. Fetches
+    // the scored match for this (resume, job) pair once per selected entry, so
+    // rankSectionsForTrim can weight sections by matched-skill evidence and
+    // gap score_impact instead of just keyword coverage.
+    const [jobMatch, setJobMatch] = useState<UserJobMatch | null>(null)
+    useEffect(() => {
+        setJobMatch(null)
+        if (!selectedEntry || !user?.id) return
+        let cancelled = false
+        fetchUserJobMatch(user.id, selectedEntry.resume_id, selectedEntry.job_id)
+            .then(m => { if (!cancelled) setJobMatch(m) })
+            .catch(() => { if (!cancelled) setJobMatch(null) })
+        return () => { cancelled = true }
+    }, [selectedEntry, user?.id])
+
+    const trimSuggestions = useMemo(() => {
+        if (!selectedEntry || !layout) return []
+        return rankSectionsForTrim(
+            effectiveState, layout.sectionOrder, layout.hiddenSections,
+            assistant.atsKeywords, jobMatch?.matched_skills, jobMatch?.gaps,
+        )
+    }, [selectedEntry, layout, effectiveState, assistant.atsKeywords, jobMatch])
+
+    // ── Project-Evidence Integration (plans/25 Phase 6) — completed AI
+    // projects surfaced as a resume swap-in. Fetched once per user (a
+    // "confirmed projects" list is shared across all resumes/jobs), then
+    // ranked per-job in the memo below.
+    const [confirmedProjects, setConfirmedProjects] = useState<ProjectEvidence[]>([])
+    useEffect(() => {
+        if (!user?.id) { setConfirmedProjects([]); return }
+        let cancelled = false
+        fetchConfirmedProjects(user.id).then(rows => { if (!cancelled) setConfirmedProjects(rows) }).catch(() => {})
+        return () => { cancelled = true }
+    }, [user?.id])
+
+    const projectNudge = useMemo(() => {
+        if (!selectedEntry) return null
+        return findProjectSwapNudge(effectiveState, confirmedProjects, jobMatch?.gaps, assistant.atsKeywords, jobMatch?.matched_skills)
+    }, [selectedEntry, effectiveState, confirmedProjects, jobMatch, assistant.atsKeywords])
+
+    const applyProjectSwap = useCallback(() => {
+        if (!projectNudge) return
+        const before = editorState.projects
+        const newEntry: ProjectEntry = {
+            name: projectNudge.candidate.project_name,
+            tech: projectNudge.candidate.tech_used.join(', '),
+            date: 'Recently completed',
+            bullets: [projectNudge.candidate.resume_bullet ?? ''],
+        }
+        const after = projectNudge.weakestExisting
+            ? editorState.projects.map((p, i) => i === projectNudge.weakestExisting!.index ? newEntry : p)
+            : [...editorState.projects, newEntry]
+        const nextState = { ...editorState, projects: after }
+        setEditorState(nextState)
+        saveManualEdit('projects', before, after, nextState)
+    }, [projectNudge, editorState, saveManualEdit])
+
     // ── Mobile state ──
     const [isMobile, setIsMobile] = useState(false)
-    const [mobileTab, setMobileTab] = useState<'sections' | 'templates' | 'assistant'>('sections')
+    const [mobileTab, setMobileTab] = useState<'sections' | 'templates' | 'assistant' | 'layout'>('sections')
     const [showAllResumesSheet, setShowAllResumesSheet] = useState(false)
     const [showMobilePreview, setShowMobilePreview] = useState(false)
     const [previewTab, setPreviewTab] = useState<'recruiters' | 'cover-letter'>('recruiters')
@@ -5413,25 +6772,31 @@ export default function ResumesPage() {
 
         // Template color accent for mini preview
         const TMPL_ACCENT: Record<string, string> = {
-            classic: '#0f1e40', london: '#1d6af5', rezi: '#1e1e3f', 'rezi-standard': '#18181b',
-            stitch: '#166534', harvard: '#9b1c1c', sb2nov: '#1e3a5f', 'open-resume': '#374151',
-            cobalt: '#1d4ed8', onyx: '#18181b', jade: '#6d28d9', lapis: '#c2410c',
+            classic: '#0f1e40', london: '#1d6af5', rezi: '#1e1e3f',
+            harvard: '#9b1c1c', 'open-resume': '#374151',
+            cobalt: '#1d4ed8', onyx: '#18181b', jade: '#6d28d9', lapis: '#c2410c', executive: '#292524',
+            amber: '#b8912f', athens: '#c0392b', axis: '#7c3aed', beacon: '#0f3460',
         }
 
+        // Uses effectiveState (editorState + the Layout tab's live order/hidden
+        // sections merged in), matching the desktop preview panel — otherwise
+        // mobile previews/downloads silently ignore Layout tab changes.
         const renderPreviewForTemplate = (tid: string): React.ReactNode => {
             switch (tid) {
-                case 'cobalt':       return <CobaltResumePreview state={editorState} />
-                case 'onyx':         return <OnyxResumePreview state={editorState} />
-                case 'jade':         return <JadeResumePreview state={editorState} />
-                case 'lapis':        return <LapisResumePreview state={editorState} />
-                case 'rezi':         return <ReziResumePreview state={editorState} />
-                case 'rezi-standard':return <ReziStandardResumePreview state={editorState} />
-                case 'london':       return <LondonResumePreview state={editorState} />
-                case 'stitch':       return <StitchResumePreview state={editorState} />
-                case 'harvard':      return <HarvardResumePreview state={editorState} />
-                case 'sb2nov':       return <Sb2novResumePreview state={editorState} />
-                case 'open-resume':  return <OpenResumePreview state={editorState} />
-                default:             return <ClassicResumePreview state={editorState} />
+                case 'cobalt':       return <CobaltResumePreview state={effectiveState} />
+                case 'onyx':         return <OnyxResumePreview state={effectiveState} />
+                case 'jade':         return <JadeResumePreview state={effectiveState} />
+                case 'lapis':        return <LapisResumePreview state={effectiveState} />
+                case 'executive':    return <ExecutiveResumePreview state={effectiveState} />
+                case 'amber':        return <AmberResumePreview state={effectiveState} />
+                case 'athens':       return <AthensResumePreview state={effectiveState} />
+                case 'axis':         return <AxisResumePreview state={effectiveState} />
+                case 'beacon':       return <BeaconResumePreview state={effectiveState} />
+                case 'rezi':         return <ReziResumePreview state={effectiveState} />
+                case 'london':       return <LondonResumePreview state={effectiveState} />
+                case 'harvard':      return <HarvardResumePreview state={effectiveState} />
+                case 'open-resume':  return <OpenResumePreview state={effectiveState} />
+                default:             return <ClassicResumePreview state={effectiveState} />
             }
         }
 
@@ -5491,7 +6856,7 @@ export default function ResumesPage() {
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                             Preview
                         </button>
-                        <DownloadPdf state={editorState} templateId={templateId} companyName={meridianJob?.company ?? null} compact />
+                        <DownloadPdf state={effectiveState} templateId={templateId} companyName={meridianJob?.company ?? null} compact />
                     </div>
                 </div>
 
@@ -5585,9 +6950,10 @@ export default function ResumesPage() {
                 <div style={{ background: M.white, borderBottom: `1.5px solid ${M.border}`, padding: '0 13px', display: 'flex', gap: 0, flexShrink: 0 }}>
                     {([
                         { id: 'sections', label: 'Sections', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg> },
+                        { id: 'layout', label: 'Layout', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
                         { id: 'assistant', label: 'Assistant', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/></svg> },
                         { id: 'templates', label: 'Templates', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
-                    ] as { id: 'sections' | 'assistant' | 'templates'; label: string; icon: React.ReactNode }[]).map(tab => (
+                    ] as { id: 'sections' | 'assistant' | 'templates' | 'layout'; label: string; icon: React.ReactNode }[]).map(tab => (
                         <div key={tab.id} onClick={() => setMobileTab(tab.id)} style={{ padding: '10px 11px 8px', fontSize: '12.5px', fontWeight: mobileTab === tab.id ? 700 : 600, color: mobileTab === tab.id ? M.accent : M.textMuted, cursor: 'pointer', borderBottom: `2.5px solid ${mobileTab === tab.id ? M.accent : 'transparent'}`, marginBottom: '-1.5px', display: 'flex', alignItems: 'center', gap: 5, userSelect: 'none' as const }}>
                             {tab.icon}{tab.label}
                         </div>
@@ -5648,6 +7014,47 @@ export default function ResumesPage() {
                                     + Optimise New Job
                                 </button>
                             </div>
+                        </div>
+                    )}
+
+                    {/* ─ Layout pane ─ */}
+                    {mobileTab === 'layout' && (
+                        <div style={{ flex: 1 }}>
+                            {layout ? (
+                                <LayoutManagerPanel
+                                    isMobile
+                                    order={layout.sectionOrder}
+                                    hidden={layout.hiddenSections}
+                                    onChange={updateLayout}
+                                    defaultOrder={templateDefaultOrder}
+                                    saveStatus={layoutSaveStatus}
+                                    activePresetKey={activePresetKey}
+                                    onSelectPreset={selectPreset}
+                                    recommendation={visibleRecommendation}
+                                    onApplyRecommendation={applyRecommendation}
+                                    onDismissRecommendation={() => setRecommendation(null)}
+                                    pageTarget={layout.pageTarget}
+                                    onPageTargetChange={updatePageTarget}
+                                    budget={budget}
+                                    optimizer={selectedEntry && (projectNudge || budget?.overBudget) ? (
+                                        <>
+                                            {projectNudge && (
+                                                <ProjectSwapNudgeCard nudge={projectNudge} onSwap={applyProjectSwap} />
+                                            )}
+                                            {budget?.overBudget && (
+                                                <OnePageOptimizerPanel
+                                                    suggestions={trimSuggestions}
+                                                    onHide={(key) => updateLayout(layout.sectionOrder, [...layout.hiddenSections, key])}
+                                                />
+                                            )}
+                                        </>
+                                    ) : null}
+                                />
+                            ) : (
+                                <div style={{ padding: '20px 18px', fontSize: '0.8125rem', color: M.textFaint, fontFamily: M.fontBody }}>
+                                    Loading layout…
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -5806,7 +7213,7 @@ export default function ResumesPage() {
                             )}
                             <div style={{ padding: '10px 14px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: 8, flexShrink: 0 }}>
                                 <button onClick={() => { setShowMobilePreview(false); setShowTemplatePicker(true) }} style={{ flex: 1, padding: 10, border: `1.5px solid ${M.border}`, borderRadius: 9, background: '#fff', fontSize: '12.5px', fontWeight: 600, color: M.textMuted, cursor: 'pointer', fontFamily: M.fontBody }}>Change Template</button>
-                                <DownloadPdf state={editorState} templateId={templateId} companyName={meridianJob?.company ?? null} compact />
+                                <DownloadPdf state={effectiveState} templateId={templateId} companyName={meridianJob?.company ?? null} compact />
                             </div>
                         </div>
                     </div>
@@ -5926,7 +7333,7 @@ export default function ResumesPage() {
                 )}
 
                 <div style={{ width: 1, height: 18, background: M.border }} />
-                <DownloadPdf state={editorState} templateId={templateId} companyName={meridianJob?.company ?? null} />
+                <DownloadPdf state={effectiveState} templateId={templateId} companyName={meridianJob?.company ?? null} />
             </div>
 
             {/* ── Studio body ── */}
@@ -5964,7 +7371,7 @@ export default function ResumesPage() {
                 }}>
                     {/* Tab switcher */}
                     <div style={{ display: 'flex', borderBottom: `1px solid ${M.border}`, background: M.white, flexShrink: 0 }}>
-                        {([{ id: 'sections' as const, label: 'Resume Sections' }, { id: 'assistant' as const, label: '✦ Assistant' }]).map(t => (
+                        {([{ id: 'sections' as const, label: 'Resume Sections' }, { id: 'layout' as const, label: '⇅ Layout' }, { id: 'assistant' as const, label: '✦ Assistant' }]).map(t => (
                             <button key={t.id} onClick={() => setStudioTab(t.id)} style={{
                                 flex: 1, padding: '13px 8px', border: 'none', background: 'transparent', cursor: 'pointer',
                                 fontSize: '0.875rem', fontWeight: studioTab === t.id ? 700 : 500,
@@ -6035,6 +7442,45 @@ export default function ResumesPage() {
                         </>
                     )}
 
+                    {studioTab === 'layout' && (
+                        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                            {layout ? (
+                                <LayoutManagerPanel
+                                    order={layout.sectionOrder}
+                                    hidden={layout.hiddenSections}
+                                    onChange={updateLayout}
+                                    defaultOrder={templateDefaultOrder}
+                                    saveStatus={layoutSaveStatus}
+                                    activePresetKey={activePresetKey}
+                                    onSelectPreset={selectPreset}
+                                    recommendation={visibleRecommendation}
+                                    onApplyRecommendation={applyRecommendation}
+                                    onDismissRecommendation={() => setRecommendation(null)}
+                                    pageTarget={layout.pageTarget}
+                                    onPageTargetChange={updatePageTarget}
+                                    budget={budget}
+                                    optimizer={selectedEntry && (projectNudge || budget?.overBudget) ? (
+                                        <>
+                                            {projectNudge && (
+                                                <ProjectSwapNudgeCard nudge={projectNudge} onSwap={applyProjectSwap} />
+                                            )}
+                                            {budget?.overBudget && (
+                                                <OnePageOptimizerPanel
+                                                    suggestions={trimSuggestions}
+                                                    onHide={(key) => updateLayout(layout.sectionOrder, [...layout.hiddenSections, key])}
+                                                />
+                                            )}
+                                        </>
+                                    ) : null}
+                                />
+                            ) : (
+                                <div style={{ padding: '20px 18px', fontSize: '0.8125rem', color: M.textFaint, fontFamily: M.fontBody }}>
+                                    Loading layout…
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {studioTab === 'assistant' && (
                         <AssistantPanel controller={assistant} />
                     )}
@@ -6043,7 +7489,7 @@ export default function ResumesPage() {
                 {/* Preview column */}
                 <PreviewDecorationsProvider decorations={assistant.decorations}>
                     <MeridianPreviewPanel
-                        state={editorState}
+                        state={effectiveState}
                         templateId={templateId}
                         onTemplateChange={(t) => {
                             setTemplateId(t)

@@ -906,4 +906,24 @@ export interface ResumeEditorState {
     leadership: LeadershipEntry[]
     certifications: string[]
     achievements: string[]
+    // Resume Layout Manager (plans/25) — order of the 8 movable sections
+    // (everything except 'profile', which is always a fixed header).
+    // Undefined = fall back to the active template's default order.
+    sectionOrder?: string[]
+    hiddenSections?: string[]
+}
+
+// Resume Layout Manager (plans/25) — persisted per (resume_id, job_id|null).
+// job_id null = the master resume's default layout; job_id set = a
+// per-job override on a tailored (optimized_resumes) copy.
+export interface ResumeLayout {
+    id: string
+    user_id: string
+    resume_id: string
+    job_id: string | null
+    section_order: string[]
+    hidden_sections: string[]
+    page_target: number
+    created_at: string
+    updated_at: string
 }

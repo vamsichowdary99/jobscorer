@@ -311,6 +311,26 @@ export async function deleteResume(id: string): Promise<boolean> {
 
 // ── Match Queries ────────────────────────────────────────────
 
+/**
+ * Fetch the single scored match for one (resume, job) pair — used by the
+ * One-Page Optimizer (plans/25 Phase 5) to read matched_skills[].evidence
+ * and gaps[].score_impact when ranking which section is safest to trim.
+ * Returns null if this resume/job pair was never scored (no matched_skills
+ * or gaps to weight by — the caller falls back to keyword-only ranking).
+ */
+export async function fetchUserJobMatch(userId: string, resumeId: string, jobId: string): Promise<UserJobMatch | null> {
+    const { data, error } = await supabase
+        .from('user_job_matches')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('resume_id', resumeId)
+        .eq('job_id', jobId)
+        .maybeSingle()
+
+    if (error) throw new Error(`Failed to fetch user_job_match: ${error.message}`)
+    return (data ?? null) as UserJobMatch | null
+}
+
 export async function fetchMatches(userId: string): Promise<(UserJobMatch & { job: Job })[]> {
     const { data, error } = await supabase
         .from('user_job_matches')
@@ -427,7 +447,7 @@ export async function triggerJobIngestion(payload: {
 }
 
 /** Convert a File object to a base64 string. */
-function fileToBase64(file: File): Promise<string> {
+export function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => {
@@ -899,6 +919,8 @@ export async function fetchBuildPlanProjectSummaries(userId: string): Promise<Bu
         .select('resume_id, job_id, recommendations')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
+    // TEMP DIAGNOSTIC — remove once the "Projects badge shows 0 on reload" bug is confirmed fixed.
+    console.log('[fetchBuildPlanProjectSummaries]', { userId, error, recsLen: recs?.length ?? null })
     if (error || !recs?.length) return []
 
     const rows = recs as unknown as { resume_id: string; job_id: string; recommendations: BuildPlan }[]
@@ -951,6 +973,8 @@ export interface ProjectRoadmapSummary {
 /** All roadmaps for the authenticated user (Roadmap Library / Projects tab status). */
 export async function fetchProjectRoadmaps(): Promise<ProjectRoadmapSummary[]> {
     const res = await fetch('/api/project-roadmap')
+    // TEMP DIAGNOSTIC — remove once the "Projects badge shows 0 on reload" bug is confirmed fixed.
+    console.log('[fetchProjectRoadmaps]', { status: res.status, ok: res.ok })
     if (!res.ok) return []
     const json = await res.json()
     return json.roadmaps ?? []
@@ -1273,6 +1297,10 @@ export type UserSettings = {
     full_name: string | null
     email: string | null
     avatar_url: string | null
+    phone: string | null
+    headline: string | null
+    linkedin_url: string | null
+    github_url: string | null
     target_roles: string[]
     target_locations: string[]
     experience_level: string | null
@@ -1299,6 +1327,7 @@ export async function fetchUserSettings(userId: string, email: string | null): P
     if (!userId) {
         return {
             full_name: null, email, avatar_url: null,
+            phone: null, headline: null, linkedin_url: null, github_url: null,
             target_roles: [], target_locations: [],
             experience_level: null, remote_preference: null,
             default_template: null, email_frequency: 'daily',
@@ -1308,7 +1337,7 @@ export async function fetchUserSettings(userId: string, email: string | null): P
     }
     const { data, error } = await supabase
         .from('profiles' as any)
-        .select('full_name, email, avatar_url, target_roles, target_locations, experience_level, remote_preference, default_template, email_frequency, notification_prefs, created_at')
+        .select('full_name, email, avatar_url, phone, headline, linkedin_url, github_url, target_roles, target_locations, experience_level, remote_preference, default_template, email_frequency, notification_prefs, created_at')
         .eq('id', userId)
         .maybeSingle()
 
@@ -1317,6 +1346,7 @@ export async function fetchUserSettings(userId: string, email: string | null): P
         await supabase.from('profiles' as any).upsert({ id: userId, email } as any)
         return {
             full_name: null, email, avatar_url: null,
+            phone: null, headline: null, linkedin_url: null, github_url: null,
             target_roles: [], target_locations: [],
             experience_level: null, remote_preference: null,
             default_template: null, email_frequency: 'daily',
@@ -1329,6 +1359,10 @@ export async function fetchUserSettings(userId: string, email: string | null): P
         full_name: row.full_name ?? null,
         email: row.email ?? email,
         avatar_url: row.avatar_url ?? null,
+        phone: row.phone ?? null,
+        headline: row.headline ?? null,
+        linkedin_url: row.linkedin_url ?? null,
+        github_url: row.github_url ?? null,
         target_roles: Array.isArray(row.target_roles) ? row.target_roles : [],
         target_locations: Array.isArray(row.target_locations) ? row.target_locations : [],
         experience_level: row.experience_level ?? null,
@@ -1352,6 +1386,10 @@ export async function updateUserSettings(
     const dbPatch: Record<string, unknown> = { id: userId, updated_at: new Date().toISOString() }
     if (patch.full_name !== undefined) dbPatch.full_name = patch.full_name
     if (patch.avatar_url !== undefined) dbPatch.avatar_url = patch.avatar_url
+    if (patch.phone !== undefined) dbPatch.phone = patch.phone
+    if (patch.headline !== undefined) dbPatch.headline = patch.headline
+    if (patch.linkedin_url !== undefined) dbPatch.linkedin_url = patch.linkedin_url
+    if (patch.github_url !== undefined) dbPatch.github_url = patch.github_url
     if (patch.target_roles !== undefined) dbPatch.target_roles = patch.target_roles
     if (patch.target_locations !== undefined) dbPatch.target_locations = patch.target_locations
     if (patch.experience_level !== undefined) dbPatch.experience_level = patch.experience_level

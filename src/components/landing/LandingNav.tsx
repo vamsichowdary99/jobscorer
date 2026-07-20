@@ -1,13 +1,55 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { C, SANS } from './tokens';
+import { useEffect, useRef, useState } from 'react';
+import { C, SANS, MONO } from './tokens';
+
+type ProductItem = { label: string; desc: string; href: string };
+type ProductColumn = { heading: string; items: ProductItem[] };
+
+const PRODUCT_COLUMNS: ProductColumn[] = [
+  {
+    heading: 'Match & Score',
+    items: [
+      { label: 'AI Job Matching', desc: 'Fit score for every job, explained in plain terms', href: '#how' },
+      { label: 'Company Intelligence', desc: 'Tech stack, salary, culture, hiring signals', href: '#how' },
+      { label: 'Paste Any Job', desc: 'Score any JD in 10 seconds', href: '#how' },
+      { label: 'Browse Jobs', desc: 'Explore live roles without signing up', href: '/browse' },
+    ],
+  },
+  {
+    heading: 'Tailor & Apply',
+    items: [
+      { label: 'Resume Optimizer', desc: 'Before/after rewrite tuned to the company', href: '#how' },
+      { label: 'Resume Studio Assistant', desc: 'Chat-edit, audit, and ATS keyword coverage', href: '/signup' },
+      { label: 'Cover Letter Generator', desc: 'A matching cover letter, generated with your resume', href: '/signup' },
+      { label: 'ATS-Safe Templates', desc: '4 templates, no tables or text boxes scanners choke on', href: '#how' },
+    ],
+  },
+  {
+    heading: 'Track & Grow',
+    items: [
+      { label: 'Application Tracker', desc: 'Applied → Interview → Offer, one board', href: '#how' },
+      { label: 'Learning Path', desc: 'Courses and projects that close your specific gaps', href: '#how' },
+      { label: 'Project Roadmap & AI Coach', desc: 'Build a real project, milestone by milestone, with an AI mentor', href: '#how' },
+    ],
+  },
+];
 
 export default function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [stickyCta, setStickyCta] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [productOpen, setProductOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openProduct = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setProductOpen(true);
+  };
+  const scheduleCloseProduct = () => {
+    closeTimer.current = setTimeout(() => setProductOpen(false), 150);
+  };
 
   useEffect(() => {
     const fn = () => {
@@ -26,6 +68,19 @@ export default function LandingNav() {
     window.addEventListener('scroll', close, { once: true, passive: true });
     return () => window.removeEventListener('scroll', close);
   }, [mobileOpen]);
+
+  // Close the Product mega menu on hash-link navigation or Escape
+  useEffect(() => {
+    if (!productOpen) return;
+    const close = () => setProductOpen(false);
+    window.addEventListener('scroll', close, { once: true, passive: true });
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [productOpen]);
 
   const navLinks: Array<[string, string]> = [
     ['Browse Jobs', '/browse'],
@@ -134,13 +189,69 @@ export default function LandingNav() {
 
           {/* Desktop center nav */}
           <div className="ln-center">
-            {navLinks.map(([label, href]) =>
-              href.startsWith('#') ? (
-                <a key={label} href={href} style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>{label}</a>
-              ) : (
-                <Link key={label} href={href} style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>{label}</Link>
-              )
-            )}
+            <Link href="/browse" style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>Browse Jobs</Link>
+
+            <div style={{ position: 'relative' }} onMouseEnter={openProduct} onMouseLeave={scheduleCloseProduct}>
+              <button
+                type="button"
+                onClick={() => setProductOpen(o => !o)}
+                aria-expanded={productOpen}
+                style={{
+                  ...linkStyle,
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: productOpen ? 'rgba(15,23,42,.05)' : 'transparent',
+                  color: productOpen ? C.text : C.textSec,
+                  border: 'none', cursor: 'pointer', font: 'inherit',
+                }}
+              >
+                Product
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: productOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s ease' }}>
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+
+              {productOpen && (
+                <div
+                  role="menu"
+                  aria-label="Product"
+                  style={{
+                    position: 'absolute', top: 'calc(100% + 10px)', left: 0,
+                    background: '#fff', border: `1px solid ${C.border}`, borderRadius: 16,
+                    boxShadow: '0 24px 56px -16px rgba(15,23,42,0.22)',
+                    padding: '24px 28px',
+                    display: 'grid', gridTemplateColumns: 'repeat(3, 200px)', gap: 28,
+                    zIndex: 210,
+                  }}
+                >
+                  {PRODUCT_COLUMNS.map(col => (
+                    <div key={col.heading}>
+                      <div style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.textTer, marginBottom: 14 }}>
+                        {col.heading}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+                        {col.items.map(item => {
+                          const content = (
+                            <>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{item.label}</div>
+                              <div style={{ fontSize: 12, color: C.textSec, marginTop: 2, lineHeight: 1.4 }}>{item.desc}</div>
+                            </>
+                          );
+                          const itemStyle: React.CSSProperties = { display: 'block', textDecoration: 'none', padding: '2px 0' };
+                          return item.href.startsWith('#') ? (
+                            <a key={item.label} href={item.href} style={itemStyle} onClick={() => setProductOpen(false)}>{content}</a>
+                          ) : (
+                            <Link key={item.label} href={item.href} style={itemStyle} onClick={() => setProductOpen(false)}>{content}</Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <a href="#how" style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>How it works</a>
+            <a href="#pricing" style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>Pricing</a>
           </div>
 
           {/* Desktop right */}

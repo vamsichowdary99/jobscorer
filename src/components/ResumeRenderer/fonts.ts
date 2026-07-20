@@ -61,6 +61,21 @@ Font.register({
     ],
 })
 
+// Caladea — used by the Executive template. Metric-compatible open-source
+// substitute for Garamond/Cambria. No true italic face available; the
+// Regular file is reused for the italic slot (same fallback already used
+// for Lora/Lato above) — fontStyle:'italic' renders upright, not slanted,
+// but stays safe/registered rather than silently falling back to Helvetica.
+Font.register({
+    family: 'Caladea',
+    fonts: [
+        { src: _FONT('Caladea-Regular.ttf'), fontWeight: 'normal' },
+        { src: _FONT('Caladea-Bold.ttf'), fontWeight: 'bold' },
+        { src: _FONT('Caladea-Regular.ttf'), fontWeight: 'normal', fontStyle: 'italic' },
+        { src: _FONT('Caladea-Bold.ttf'), fontWeight: 'bold', fontStyle: 'italic' },
+    ],
+})
+
 // Open Sans — used by the Onyx template (minimalist). Includes true italic
 // (OpenSans-Italic.ttf) for the company·location line.
 Font.register({
@@ -86,6 +101,19 @@ Font.register({
         { src: _FONT('Merriweather-Bold.ttf'), fontWeight: 'bold' },
         { src: _FONT('Merriweather-Regular.ttf'), fontWeight: 'normal', fontStyle: 'italic' },
         { src: _FONT('Merriweather-Bold.ttf'), fontWeight: 'bold', fontStyle: 'italic' },
+    ],
+})
+
+// Playfair Display — used by the Amber template for the name only (body text
+// stays in Open Sans, already registered above, so Amber doesn't need a
+// second sans-serif font added to the pipeline). No true italic face
+// registered here since the name is the only place this family is used and
+// it's never rendered italic.
+Font.register({
+    family: 'Playfair Display',
+    fonts: [
+        { src: _FONT('PlayfairDisplay-Regular.ttf'), fontWeight: 'normal' },
+        { src: _FONT('PlayfairDisplay-Bold.ttf'), fontWeight: 'bold' },
     ],
 })
 

@@ -20,6 +20,8 @@ import { createClient } from '@/lib/supabase/client'
 import { INDIA_LOCATIONS } from '@/lib/locations'
 import BillingPanel from '@/components/billing/BillingPanel'
 
+const SANS = "'Plus Jakarta Sans', system-ui, sans-serif"
+
 type SectionId = 'profile' | 'prefs' | 'resumes' | 'notifications' | 'plan' | 'usage' | 'security' | 'danger'
 
 const ROLE_SUGGESTIONS = ['Full Stack Developer', 'SDE 1', 'Data Engineer', 'Site Reliability Engineer']
@@ -102,19 +104,64 @@ function firstInitial(s: string | null | undefined) {
     return (c ?? 'U').toUpperCase()
 }
 
-// Plan-aware usage meters: feature keys (from PLAN_QUOTAS) → display labels.
-const USAGE_FEATURE_LABELS: Record<string, string> = {
-    job_search: 'Job Searches',
-    score: 'AI Match Runs',
-    optimize: 'Tailored Resumes',
-    company_research: 'Company Research',
-    build_plan: 'Build Plans',
-    chat: 'AI Chat Messages',
-    learning_path: 'Learning Paths',
-    cover_letter: 'Cover Letters',
+// Plan-aware usage meters: feature keys (from PLAN_QUOTAS) → display labels + icon.
+const USAGE_FEATURE_META: Record<string, { label: string; icon: IconName }> = {
+    job_search: { label: 'Job Searches', icon: 'search' },
+    score: { label: 'AI Match Runs', icon: 'target' },
+    optimize: { label: 'Tailored Resumes', icon: 'doc' },
+    company_research: { label: 'Company Research', icon: 'book' },
+    build_plan: { label: 'Build Plans', icon: 'monitor' },
+    chat: { label: 'AI Chat Messages', icon: 'sparkles' },
+    learning_path: { label: 'Learning Paths', icon: 'link' },
+    cover_letter: { label: 'Cover Letters', icon: 'doc' },
 }
 
 type PlanUsage = { plan: 'free' | 'pro' | 'max'; usage: { feature: string; used: number; limit: number }[] }
+
+// ── Icons (paths lifted 1:1 from the approved design) ── //
+const ICONS = {
+    user: ['M12 12a4 4 0 100-8 4 4 0 000 8z', 'M4 20c0-4 3.5-6 8-6s8 2 8 6'],
+    target: ['M12 22a10 10 0 100-20 10 10 0 000 20z', 'M12 16a4 4 0 100-8 4 4 0 000 8z'],
+    doc: ['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z', 'M14 2v6h6'],
+    bell: ['M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9', 'M13.73 21a2 2 0 01-3.46 0'],
+    card: ['M2 7a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2z', 'M2 10h20'],
+    chart: ['M3 3v18h18', 'M7 15l4-4 3 3 5-6'],
+    lock: ['M5 11h14v10H5z', 'M8 11V7a4 4 0 018 0v4'],
+    trash: ['M3 6h18', 'M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6h14z'],
+    sparkles: ['M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z', 'M19 14l.9 2.3L22 17l-2.1.7L19 20l-.9-2.3L16 17l2.1-.7z'],
+    book: ['M4 19.5A2.5 2.5 0 016.5 17H20', 'M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z'],
+    monitor: ['M3 4h18v12H3z', 'M8 20h8M12 16v4'],
+    link: ['M10 13a5 5 0 007.07 0l1.93-1.93a5 5 0 00-7.07-7.07L10 5', 'M14 11a5 5 0 00-7.07 0L5 12.93a5 5 0 007.07 7.07L14 19'],
+    search: ['M11 19a8 8 0 100-16 8 8 0 000 16z', 'M21 21l-4.3-4.3'],
+    chevronLeft: ['M15 18l-6-6 6-6', ''],
+    chevronRight: ['M9 18l6-6-6-6', ''],
+    check: ['M20 6L9 17l-5-5', ''],
+    x: ['M18 6L6 18M6 6l12 12', ''],
+    download: ['M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3', ''],
+    warning: ['M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z', 'M12 9v4M12 17h.01'],
+} as const
+type IconName = keyof typeof ICONS
+
+function Icon({ name, size = 16, stroke = 'currentColor', strokeWidth = 1.8 }: { name: IconName; size?: number; stroke?: string; strokeWidth?: number }) {
+    const [d1, d2] = ICONS[name]
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+            <path d={d1} />
+            {d2 && <path d={d2} />}
+        </svg>
+    )
+}
+
+const NAV_ITEMS: { id: SectionId; label: string; icon: IconName; danger?: boolean }[] = [
+    { id: 'profile', label: 'Profile', icon: 'user' },
+    { id: 'prefs', label: 'Job Preferences', icon: 'target' },
+    { id: 'resumes', label: 'Resumes', icon: 'doc' },
+    { id: 'notifications', label: 'Notifications', icon: 'bell' },
+    { id: 'plan', label: 'Plan & Billing', icon: 'card' },
+    { id: 'usage', label: 'Usage & Limits', icon: 'chart' },
+    { id: 'security', label: 'Security', icon: 'lock' },
+    { id: 'danger', label: 'Danger Zone', icon: 'trash', danger: true },
+]
 
 export default function SettingsPage() {
     const { user, signOut } = useAuth()
@@ -122,24 +169,19 @@ export default function SettingsPage() {
     const supabase = createClient()
 
     const [activeSection, setActiveSection] = useState<SectionId>('profile')
+    const [mobileOpen, setMobileOpen] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
     const [settings, setSettings] = useState<UserSettings | null>(null)
     const [original, setOriginal] = useState<UserSettings | null>(null)
     const [resumes, setResumes] = useState<Resume[]>([])
     const [usage, setUsage] = useState<UsageStats | null>(null)
     const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null)
     const [loading, setLoading] = useState(true)
-    const [showSecSheet, setShowSecSheet] = useState(false)
-    const [savedPills, setSavedPills] = useState<Record<string, boolean>>({})
+    const [toastVisible, setToastVisible] = useState(false)
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
     const [deleteConfirmText, setDeleteConfirmText] = useState('')
     const [signOutAllPending, setSignOutAllPending] = useState(false)
-    const sectionRefs = useRef<Record<SectionId, HTMLElement | null>>({
-        profile: null, prefs: null, resumes: null,
-        notifications: null, plan: null, usage: null, security: null, danger: null,
-    })
-    // Refs to chip inputs so Try/Suggested clicks can refocus them — without
-    // this, clicking a Try chip steals focus away and the dropdown never reopens
-    // when the user starts typing the next role.
+    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const rolesInputRef = useRef<HTMLInputElement | null>(null)
     const locationsInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -174,25 +216,9 @@ export default function SettingsPage() {
         return () => { cancelled = true }
     }, [user?.id])
 
-    // Scroll-spy: update active nav based on which section is in view.
-    useEffect(() => {
-        const observer = new IntersectionObserver(
-            (entries) => {
-                const visible = entries.filter(e => e.isIntersecting)
-                if (visible.length === 0) return
-                visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
-                const id = visible[0].target.id as SectionId
-                if (id) setActiveSection(id)
-            },
-            { rootMargin: '-100px 0px -60% 0px', threshold: 0 }
-        )
-        Object.values(sectionRefs.current).forEach(el => { if (el) observer.observe(el) })
-        return () => observer.disconnect()
-    }, [loading])
-
-    const scrollTo = (id: SectionId) => {
-        const el = sectionRefs.current[id]
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const selectSection = (id: SectionId) => {
+        setActiveSection(id)
+        setMobileOpen(true)
     }
 
     // Deep-link: /dashboard/settings#plan (e.g. redirected from the old /billing
@@ -201,15 +227,26 @@ export default function SettingsPage() {
         if (loading) return
         if (typeof window !== 'undefined' && window.location.hash) {
             const id = window.location.hash.slice(1) as SectionId
-            const t = setTimeout(() => scrollTo(id), 120)
-            return () => clearTimeout(t)
+            if (NAV_ITEMS.some(n => n.id === id)) selectSection(id)
         }
     }, [loading])
+
+    useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) }, [])
+
+    const showToast = () => {
+        setToastVisible(true)
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = setTimeout(() => setToastVisible(false), 2000)
+    }
 
     // Compute per-section dirty state by comparing current settings against the
     // last-saved snapshot (`original`). Each section reads its own slice.
     const dirty = settings && original ? {
-        profile: settings.full_name !== original.full_name,
+        profile: settings.full_name !== original.full_name ||
+            settings.phone !== original.phone ||
+            settings.headline !== original.headline ||
+            settings.linkedin_url !== original.linkedin_url ||
+            settings.github_url !== original.github_url,
         prefs: JSON.stringify({
             r: settings.target_roles, l: settings.target_locations,
             e: settings.experience_level, p: settings.remote_preference,
@@ -217,55 +254,62 @@ export default function SettingsPage() {
             r: original.target_roles, l: original.target_locations,
             e: original.experience_level, p: original.remote_preference,
         }),
-        notifications: settings.email_frequency !== original.email_frequency ||
-            JSON.stringify(settings.notification_prefs) !== JSON.stringify(original.notification_prefs),
-    } : { profile: false, prefs: false, notifications: false }
-
-    const flashSaved = (id: string) => {
-        setSavedPills(p => ({ ...p, [id]: true }))
-        setTimeout(() => setSavedPills(p => ({ ...p, [id]: false })), 2000)
-    }
+    } : { profile: false, prefs: false }
 
     const saveProfile = async () => {
         if (!settings || !user?.id) return
-        await updateUserSettings(user.id, { full_name: settings.full_name })
-        setOriginal(s => s ? { ...s, full_name: settings.full_name } : s)
-        flashSaved('profile')
+        const patch = {
+            full_name: settings.full_name,
+            phone: settings.phone,
+            headline: settings.headline,
+            linkedin_url: settings.linkedin_url,
+            github_url: settings.github_url,
+        }
+        await updateUserSettings(user.id, patch)
+        setOriginal(s => s ? { ...s, ...patch } : s)
+        showToast()
     }
     const savePrefs = async () => {
         if (!settings || !user?.id) return
-        await updateUserSettings(user.id, {
+        const patch = {
             target_roles: settings.target_roles,
             target_locations: settings.target_locations,
             experience_level: settings.experience_level,
             remote_preference: settings.remote_preference,
-        })
-        setOriginal(s => s ? {
-            ...s,
-            target_roles: settings.target_roles,
-            target_locations: settings.target_locations,
-            experience_level: settings.experience_level,
-            remote_preference: settings.remote_preference,
-        } : s)
-        flashSaved('prefs')
+        }
+        await updateUserSettings(user.id, patch)
+        setOriginal(s => s ? { ...s, ...patch } : s)
+        showToast()
     }
-    const saveNotifications = async () => {
-        if (!settings || !user?.id) return
-        await updateUserSettings(user.id, {
-            email_frequency: settings.email_frequency,
-            notification_prefs: settings.notification_prefs,
-        })
-        setOriginal(s => s ? {
-            ...s,
-            email_frequency: settings.email_frequency,
-            notification_prefs: settings.notification_prefs,
-        } : s)
-        flashSaved('notifications')
+    // Notifications toggle instantly and persist immediately — no separate save step.
+    const saveNotifPrefs = async (next: NotificationPrefs) => {
+        if (!user?.id) return
+        setSettings(s => s ? { ...s, notification_prefs: next } : s)
+        await updateUserSettings(user.id, { notification_prefs: next })
+        setOriginal(s => s ? { ...s, notification_prefs: next } : s)
+        showToast()
+    }
+    const saveEmailFrequency = async (freq: string) => {
+        if (!user?.id) return
+        setSettings(s => s ? { ...s, email_frequency: freq } : s)
+        await updateUserSettings(user.id, { email_frequency: freq })
+        setOriginal(s => s ? { ...s, email_frequency: freq } : s)
+        showToast()
     }
 
-    const resetSection = (id: 'profile' | 'prefs' | 'notifications') => {
+    const resetSection = (id: 'profile' | 'prefs') => {
         if (!original) return
-        setSettings(s => s ? { ...s, ...partialFromOriginal(original, id) } : s)
+        if (id === 'profile') {
+            setSettings(s => s ? {
+                ...s, full_name: original.full_name, phone: original.phone,
+                headline: original.headline, linkedin_url: original.linkedin_url, github_url: original.github_url,
+            } : s)
+        } else {
+            setSettings(s => s ? {
+                ...s, target_roles: original.target_roles, target_locations: original.target_locations,
+                experience_level: original.experience_level, remote_preference: original.remote_preference,
+            } : s)
+        }
     }
 
     const handleDeleteResume = async (id: string) => {
@@ -327,506 +371,525 @@ export default function SettingsPage() {
     }
 
     if (loading || !settings) {
-        return <PageShell><div style={{ padding: 60, textAlign: 'center', color: '#94a3b8' }}>Loading settings…</div></PageShell>
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 64px)', color: '#94a3b8', fontFamily: SANS, fontSize: 14 }}>
+                Loading settings…
+            </div>
+        )
     }
 
     const displayName = settings.full_name ?? user?.email?.split('@')[0] ?? 'You'
     const initial = firstInitial(settings.full_name ?? user?.email)
-    const activeSectionLabel = NAV_ITEMS.find(n => n.id === activeSection)?.label ?? 'Profile'
+    const q = searchQuery.trim().toLowerCase()
+    const filteredNavItems = NAV_ITEMS.filter(it => !q || it.label.toLowerCase().includes(q))
+    const planLabel = !planUsage || planUsage.plan === 'free' ? 'Free' : planUsage.plan === 'pro' ? 'Pro' : 'Max'
 
-    return (
-        <PageShell>
-            {/* Header */}
-            <div style={{ marginBottom: 28 }}>
-                <div style={S.eyebrow}>ACCOUNT</div>
-                <h1 style={S.pageTitle}>Settings</h1>
-                <p style={S.pageSub}>Manage your profile, preferences, and account</p>
-            </div>
+    // ── Section body renderer — used for both the desktop main column and the
+    // mobile drill-down detail screen so the two stay in lockstep. ── //
+    function renderSection(id: SectionId) {
+        if (!settings) return null
+        switch (id) {
+            case 'profile': return (
+                <>
+                    <h1 style={S.h1}>Profile</h1>
+                    <p style={S.sub}>Your basic account details. Email cannot be changed.</p>
 
-            {/* Mobile section nav — sticky button showing current section; tapping opens jump sheet */}
-            <div className="rs-sec-nav" style={{ display: 'none', position: 'sticky', top: 64, zIndex: 20, background: '#fff', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', margin: '8px -8px 0' }}>
-                <button onClick={() => setShowSecSheet(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2" strokeLinecap="round">
-                            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-                            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-                        </svg>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{activeSectionLabel}</span>
-                    </div>
-                </button>
-            </div>
-
-            <div style={S.bodyGrid} className="rs-body-grid">
-
-                {/* Left nav — wrap in a stretching cell, sticky on the inner aside */}
-                <div style={S.navWrap} className="rs-side-nav">
-                    <aside style={S.nav}>
-                        {NAV_ITEMS.map(item => {
-                            const active = activeSection === item.id
-                            return (
-                                <button key={item.id} onClick={() => scrollTo(item.id)}
-                                    style={{
-                                        ...S.navLink,
-                                        background: active ? (item.danger ? '#fef2f2' : '#eff6ff') : 'transparent',
-                                        color: active ? (item.danger ? '#dc2626' : '#135bec') : (item.danger ? '#dc2626' : '#334155'),
-                                        borderLeft: active ? `2px solid ${item.danger ? '#dc2626' : '#135bec'}` : '2px solid transparent',
-                                        fontWeight: active ? 700 : 600,
-                                    }}>
-                                    <span style={{ fontSize: 16, width: 16, display: 'inline-flex', justifyContent: 'center' }}>{item.icon}</span>
-                                    {item.label}
-                                </button>
-                            )
-                        })}
-                    </aside>
-                </div>
-
-                {/* Content */}
-                <main style={S.content}>
-
-                    {/* ─── PROFILE ─── */}
-                    <Card id="profile" refSetter={el => sectionRefs.current.profile = el}
-                        title="Profile" sub="Your basic account details. Email cannot be changed.">
-                        <div style={S.cardBody}>
-                            <div style={S.avatarRow}>
-                                <div style={S.avatar}>{initial}</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
-                                    <div style={{ fontSize: 17, fontWeight: 600, color: '#0f172a' }}>{displayName}</div>
-                                    <div style={{ fontSize: 13, color: '#94a3b8' }}>JPG or PNG · up to 2 MB</div>
-                                </div>
-                                <button style={S.ghostLink} onClick={() => alert('Avatar upload coming soon.')}>Change avatar</button>
+                    <div style={S.card}>
+                        <div style={S.avatarRow}>
+                            <div style={S.avatarCircle}>{initial}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{displayName}</div>
+                                <div style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 2 }}>JPG or PNG · up to 2MB</div>
                             </div>
+                            <button style={S.btnOutlineSmall} onClick={() => alert('Avatar upload coming soon.')}>Change avatar</button>
+                        </div>
 
+                        <div style={S.grid2} className="set-grid2">
                             <Field label="Full name">
-                                <input style={S.input}
-                                    type="text"
-                                    value={settings.full_name ?? ''}
+                                <input style={S.input} type="text" value={settings.full_name ?? ''}
                                     onChange={e => setSettings(s => s ? { ...s, full_name: e.target.value } : s)}
                                     placeholder="Your name" />
                             </Field>
+                            <Field label="Email">
+                                <div style={S.readonlyBox}>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{settings.email}</span>
+                                    <span style={{ color: '#10b981', fontWeight: 700, fontSize: 11.5, whiteSpace: 'nowrap' }}>✓ Verified</span>
+                                </div>
+                            </Field>
+                            <Field label="Phone number">
+                                <input style={S.input} type="tel" value={settings.phone ?? ''}
+                                    onChange={e => setSettings(s => s ? { ...s, phone: e.target.value } : s)}
+                                    placeholder="+91 98765 43210" />
+                            </Field>
+                            <Field label="Member since">
+                                <div style={S.readonlyBox}>{formatMemberSince(settings.joined_at)}</div>
+                            </Field>
+                        </div>
+                    </div>
 
-                            <div style={S.fieldRow} className="rs-field-row">
-                                <Field label="Email">
-                                    <div style={{ position: 'relative' }}>
-                                        <input style={{ ...S.input, background: '#f8fafc', color: '#64748b', cursor: 'default' }}
-                                            type="email" value={settings.email ?? ''} readOnly />
-                                        <span style={S.inputBadge}>✓ Verified</span>
-                                    </div>
-                                </Field>
-                                <Field label="Joined">
-                                    <div style={S.joinedPill}>📅 Member since <b style={{ color: '#0f172a', fontWeight: 600 }}>{formatMemberSince(settings.joined_at)}</b></div>
+                    <div style={S.card}>
+                        <div style={S.cardEyebrow}>Professional details</div>
+                        <div style={S.grid2} className="set-grid2">
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <Field label="Professional headline">
+                                    <input style={S.input} type="text" value={settings.headline ?? ''}
+                                        onChange={e => setSettings(s => s ? { ...s, headline: e.target.value } : s)}
+                                        placeholder="e.g. Full Stack Developer, 2 yrs exp" />
                                 </Field>
                             </div>
+                            <Field label="LinkedIn URL">
+                                <input style={S.input} type="text" value={settings.linkedin_url ?? ''}
+                                    onChange={e => setSettings(s => s ? { ...s, linkedin_url: e.target.value } : s)}
+                                    placeholder="linkedin.com/in/username" />
+                            </Field>
+                            <Field label="GitHub / Portfolio URL">
+                                <input style={S.input} type="text" value={settings.github_url ?? ''}
+                                    onChange={e => setSettings(s => s ? { ...s, github_url: e.target.value } : s)}
+                                    placeholder="github.com/username" />
+                            </Field>
                         </div>
-                        <CardFooter
-                            savedVisible={savedPills.profile}
-                            disabled={!dirty.profile}
-                            onCancel={() => resetSection('profile')}
-                            onSave={saveProfile}
+                    </div>
+
+                    <FooterButtons disabled={!dirty.profile} onCancel={() => resetSection('profile')} onSave={saveProfile} />
+                </>
+            )
+
+            case 'prefs': return (
+                <>
+                    <h1 style={S.h1}>Job Preferences</h1>
+                    <p style={S.sub}>Tells our AI what jobs to surface for you.</p>
+
+                    <div style={S.card}>
+                        <div style={S.cardEyebrow}>Target roles</div>
+                        <ChipField
+                            values={settings.target_roles}
+                            placeholder="Start typing a role…"
+                            options={IT_ROLES}
+                            inputRef={rolesInputRef}
+                            onChange={vs => setSettings(s => s ? { ...s, target_roles: vs } : s)}
                         />
-                    </Card>
+                        <SuggestRow suggestions={ROLE_SUGGESTIONS} existing={settings.target_roles}
+                            onAdd={v => {
+                                setSettings(s => s ? { ...s, target_roles: dedupAdd(s.target_roles, v) } : s)
+                                requestAnimationFrame(() => rolesInputRef.current?.focus())
+                            }} />
+                    </div>
 
-                    {/* ─── JOB PREFERENCES ─── */}
-                    <Card id="prefs" refSetter={el => sectionRefs.current.prefs = el}
-                        title="Job Preferences" sub="Tells our AI what jobs to surface for you">
-                        <div style={S.cardBody}>
-                            <Field label="Target roles">
-                                <ChipField
-                                    values={settings.target_roles}
-                                    placeholder="Start typing a role — suggestions will appear"
-                                    options={IT_ROLES}
-                                    inputRef={rolesInputRef}
-                                    onChange={vs => setSettings(s => s ? { ...s, target_roles: vs } : s)}
-                                />
-                                <SuggestRow label="Try:" suggestions={ROLE_SUGGESTIONS}
-                                    existing={settings.target_roles}
-                                    onAdd={v => {
-                                        setSettings(s => s ? { ...s, target_roles: dedupAdd(s.target_roles, v) } : s)
-                                        // Refocus the chip input so the user can keep typing and the dropdown reopens.
-                                        requestAnimationFrame(() => rolesInputRef.current?.focus())
-                                    }} />
-                            </Field>
+                    <div style={S.card}>
+                        <div style={S.cardEyebrow}>Target locations</div>
+                        <ChipField
+                            values={settings.target_locations}
+                            placeholder="Start typing a city…"
+                            options={INDIA_LOCATIONS}
+                            inputRef={locationsInputRef}
+                            onChange={vs => setSettings(s => s ? { ...s, target_locations: vs } : s)}
+                        />
+                        <SuggestRow suggestions={LOCATION_SUGGESTIONS} existing={settings.target_locations}
+                            onAdd={v => {
+                                setSettings(s => s ? { ...s, target_locations: dedupAdd(s.target_locations, v) } : s)
+                                requestAnimationFrame(() => locationsInputRef.current?.focus())
+                            }} />
+                    </div>
 
-                            <Field label="Target locations">
-                                <ChipField
-                                    values={settings.target_locations}
-                                    placeholder="Start typing a city — suggestions will appear"
-                                    options={INDIA_LOCATIONS}
-                                    inputRef={locationsInputRef}
-                                    onChange={vs => setSettings(s => s ? { ...s, target_locations: vs } : s)}
-                                />
-                                <SuggestRow label="Suggested:" suggestions={LOCATION_SUGGESTIONS}
-                                    existing={settings.target_locations}
-                                    onAdd={v => {
-                                        setSettings(s => s ? { ...s, target_locations: dedupAdd(s.target_locations, v) } : s)
-                                        requestAnimationFrame(() => locationsInputRef.current?.focus())
-                                    }} />
-                            </Field>
-
-                            <Field label="Experience level">
-                                {(() => {
-                                    const selected = parseLevels(settings.experience_level)
-                                    const allOn = selected.length === ALL_LEVEL_KEYS.length
-                                    const toggle = (key: string) => {
-                                        const next = selected.includes(key)
-                                            ? selected.filter(k => k !== key)
-                                            : [...selected, key]
-                                        setSettings(s => s ? { ...s, experience_level: serializeLevels(next) } : s)
-                                    }
-                                    const setAll = () => {
-                                        setSettings(s => s ? { ...s, experience_level: allOn ? '' : serializeLevels(ALL_LEVEL_KEYS) } : s)
-                                    }
-                                    return (
-                                        <>
-                                            <button onClick={setAll}
-                                                style={{
-                                                    ...S.allLevelsBtn,
-                                                    background: allOn ? '#135bec' : '#eff6ff',
-                                                    color: allOn ? '#fff' : '#135bec',
-                                                    borderColor: allOn ? '#135bec' : '#bfdbfe',
-                                                }}>
-                                                {allOn ? '✓ All Levels' : 'All Levels'}
-                                            </button>
-                                            <div style={S.levelGrid} className="rs-level-grid">
-                                                {EXPERIENCE_LEVELS.map(lvl => {
-                                                    const active = selected.includes(lvl.key)
-                                                    return (
-                                                        <button key={lvl.key} onClick={() => toggle(lvl.key)}
-                                                            style={{
-                                                                ...S.levelTile,
-                                                                background: active ? '#135bec' : '#fff',
-                                                                color: active ? '#fff' : '#0f172a',
-                                                                borderColor: active ? '#135bec' : '#cbd5e1',
-                                                            }}>
-                                                            <span style={{ fontSize: 14, fontWeight: 700 }}>{lvl.label}</span>
-                                                            <span style={{
-                                                                fontSize: 11, fontWeight: 600,
-                                                                color: active ? 'rgba(255,255,255,0.85)' : '#64748b',
-                                                                background: active ? 'rgba(255,255,255,0.18)' : '#f1f5f9',
-                                                                padding: '2px 8px', borderRadius: 99,
-                                                            }}>{lvl.years}</span>
-                                                        </button>
-                                                    )
-                                                })}
-                                            </div>
-                                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
-                                                Select one or more. Multiple levels broaden your matches.
-                                            </div>
-                                        </>
-                                    )
-                                })()}
-                            </Field>
-
-                            <Field label="Remote preference">
-                                <div style={S.radioGrid4} className="rs-radioGrid4">
-                                    {REMOTE_OPTIONS.map(opt => {
-                                        const active = settings.remote_preference === opt
+                    <div style={S.card}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                            <div style={{ ...S.cardEyebrow, marginBottom: 0 }}>Experience level</div>
+                            {(() => {
+                                const selected = parseLevels(settings.experience_level)
+                                const allOn = selected.length === ALL_LEVEL_KEYS.length
+                                return (
+                                    <button
+                                        onClick={() => setSettings(s => s ? { ...s, experience_level: allOn ? '' : serializeLevels(ALL_LEVEL_KEYS) } : s)}
+                                        style={{ ...S.pillToggle, background: allOn ? '#135bec' : '#eff6ff', color: allOn ? '#fff' : '#135bec', borderColor: allOn ? '#135bec' : '#bfdbfe' }}>
+                                        {allOn ? '✓ All Levels' : 'All Levels'}
+                                    </button>
+                                )
+                            })()}
+                        </div>
+                        {(() => {
+                            const selected = parseLevels(settings.experience_level)
+                            const toggle = (key: string) => {
+                                const next = selected.includes(key) ? selected.filter(k => k !== key) : [...selected, key]
+                                setSettings(s => s ? { ...s, experience_level: serializeLevels(next) } : s)
+                            }
+                            return (
+                                <div style={S.levelGrid} className="set-level-grid">
+                                    {EXPERIENCE_LEVELS.map(lvl => {
+                                        const active = selected.includes(lvl.key)
                                         return (
-                                            <button key={opt} onClick={() => setSettings(s => s ? { ...s, remote_preference: opt } : s)}
-                                                style={{
-                                                    ...S.radioTile,
-                                                    borderColor: active ? '#135bec' : '#e2e8f0',
-                                                    background: active ? '#eff6ff' : '#fff',
-                                                    color: active ? '#135bec' : '#475569',
-                                                    fontWeight: active ? 600 : 500,
-                                                }}>
-                                                <span style={{
-                                                    width: 14, height: 14, borderRadius: '50%',
-                                                    border: `2px solid ${active ? '#135bec' : '#cbd5e1'}`,
-                                                    background: active ? '#135bec' : 'transparent',
-                                                    boxShadow: active ? 'inset 0 0 0 3px #fff' : 'none',
-                                                    flexShrink: 0,
-                                                }} />
-                                                {opt}
+                                            <button key={lvl.key} onClick={() => toggle(lvl.key)}
+                                                style={{ ...S.levelTile, borderColor: active ? '#135bec' : '#e2e8f0', background: active ? '#135bec' : '#fff', color: active ? '#fff' : '#0f172a' }}>
+                                                <span style={{ fontSize: 13, fontWeight: 700 }}>{lvl.label}</span>
+                                                <span style={{ fontSize: 11, opacity: 0.75 }}>{lvl.years}</span>
                                             </button>
                                         )
                                     })}
                                 </div>
-                            </Field>
+                            )
+                        })()}
+                    </div>
 
-                            <div style={S.infoChip}>
-                                <span style={{ fontSize: 14 }}>💡</span>
-                                <span>These preferences shape your AI matches. Changes take effect within a few minutes.</span>
-                            </div>
-                        </div>
-                        <CardFooter
-                            savedVisible={savedPills.prefs}
-                            disabled={!dirty.prefs}
-                            onCancel={() => resetSection('prefs')}
-                            onSave={savePrefs}
-                        />
-                    </Card>
-
-                    {/* ─── RESUME DEFAULTS ─── */}
-                    {/* ─── RESUMES ─── */}
-                    <Card id="resumes" refSetter={el => sectionRefs.current.resumes = el}
-                        title="Resumes" sub="Your uploaded resumes. The Primary resume is what AI matches against.">
-                        <div style={{ ...S.cardBody, gap: 4 }}>
-                            {resumes.length === 0 ? (
-                                <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', border: '2px dashed #e2e8f0', borderRadius: 10 }}>
-                                    No resumes uploaded yet.
-                                </div>
-                            ) : resumes.map(r => {
-                                const isPrimary = !!r.is_primary
-                                const tailoredFor = (r as any).tailored_for ?? null
+                    <div style={S.card}>
+                        <div style={S.cardEyebrow}>Remote preference</div>
+                        <div style={S.remoteGrid} className="set-remote-grid">
+                            {REMOTE_OPTIONS.map(opt => {
+                                const active = settings.remote_preference === opt
                                 return (
-                                    <div key={r.id} style={S.resumeRow} className="rs-resume-row">
-                                        <div style={S.fileIcon}>📄</div>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={S.fileName}>{r.original_filename ?? 'resume.pdf'}</div>
-                                            <div style={S.fileMeta}>
-                                                {isPrimary ? 'Uploaded' : 'Added'} {formatResumeDate(r.created_at)}
-                                                <span style={{ color: '#cbd5e1' }}>·</span>
-                                                {isPrimary ? 'master resume' : (tailoredFor ?? 'tailored resume')}
-                                            </div>
-                                        </div>
-                                        <div className="rs-resume-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                            {isPrimary ? (
-                                                <span style={S.primaryPill}>★ Primary</span>
-                                            ) : (
-                                                <button className="rs-resume-set-primary" style={S.setPrimary} onClick={() => handleSetPrimary(r.id)}>Set as primary</button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                style={S.iconBtn}
-                                                title="Download"
-                                                onClick={() => handleDownloadResume(r.id)}
-                                            >
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                                            </button>
-                                            <button style={{ ...S.iconBtn }} title="Delete" onClick={() => handleDeleteResume(r.id)}
-                                                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; (e.currentTarget as HTMLButtonElement).style.color = '#dc2626' }}
-                                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b' }}>
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
-                                            </button>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                            <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
-                                <Link href="/dashboard/upload" style={S.btnOutline}>+ Upload new resume</Link>
-                            </div>
-                        </div>
-                    </Card>
-
-                    {/* ─── NOTIFICATIONS ─── */}
-                    <Card id="notifications" refSetter={el => sectionRefs.current.notifications = el}
-                        title="Notifications" sub="Control what we email you about">
-                        <div style={S.cardBody}>
-                            <div style={S.frequencyRow}>
-                                <div>
-                                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>Email frequency</div>
-                                    <div style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>How often we batch and send updates</div>
-                                </div>
-                                <select style={S.select}
-                                    value={settings.email_frequency}
-                                    onChange={e => setSettings(s => s ? { ...s, email_frequency: e.target.value } : s)}>
-                                    {EMAIL_FREQ.map(f => <option key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</option>)}
-                                </select>
-                            </div>
-
-                            <div>
-                                {(Object.entries({
-                                    new_strong_matches: ['New strong matches', 'When jobs above 80% are found'],
-                                    weekly_digest: ['Weekly match digest', 'Sunday morning summary of new jobs and activity'],
-                                    interview_reminders: ['Interview reminders', 'When you have an upcoming interview'],
-                                    product_updates: ['Product updates', 'New features and improvements'],
-                                    tips_career_advice: ['Tips & career advice', 'Occasional career growth content'],
-                                }) as [keyof NotificationPrefs, [string, string]][]).map(([key, [title, desc]], i, arr) => {
-                                    const on = settings.notification_prefs[key]
-                                    const isLast = i === arr.length - 1
-                                    return (
-                                        <div key={key} style={{
-                                            ...S.toggleRow,
-                                            borderBottom: isLast ? 'none' : '1px solid #f1f5f9',
-                                            paddingBottom: isLast ? 0 : 12,
-                                            paddingTop: i === 0 ? 0 : 12,
-                                        }}>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', marginBottom: 3 }}>{title}</div>
-                                                <div style={{ fontSize: 13, color: '#64748b' }}>{desc}</div>
-                                            </div>
-                                            <button onClick={() => setSettings(s => s ? {
-                                                ...s, notification_prefs: { ...s.notification_prefs, [key]: !on },
-                                            } : s)} style={{
-                                                position: 'relative', width: 38, height: 22,
-                                                background: on ? '#135bec' : '#e2e8f0', borderRadius: 99,
-                                                cursor: 'pointer', transition: 'background 0.2s',
-                                                border: 'none', padding: 0, flexShrink: 0,
-                                            }}>
-                                                <span style={{
-                                                    position: 'absolute', top: 2, left: 2, width: 18, height: 18,
-                                                    background: '#fff', borderRadius: '50%',
-                                                    transform: on ? 'translateX(16px)' : 'translateX(0)',
-                                                    transition: 'transform 0.2s',
-                                                    boxShadow: '0 1px 3px rgba(15,23,42,0.15)',
-                                                }} />
-                                            </button>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-                        <CardFooter
-                            savedVisible={savedPills.notifications}
-                            disabled={!dirty.notifications}
-                            onCancel={() => resetSection('notifications')}
-                            onSave={saveNotifications}
-                        />
-                    </Card>
-
-                    {/* ─── USAGE ─── */}
-                    {/* ─── PLAN & BILLING ─── */}
-                    <Card id="plan" refSetter={el => sectionRefs.current.plan = el}
-                        title="Plan & Billing" sub="Your subscription, upgrades, and payment">
-                        <div style={S.cardBody}>
-                            <BillingPanel />
-                        </div>
-                    </Card>
-
-                    <Card id="usage" refSetter={el => sectionRefs.current.usage = el}
-                        title="Usage & Limits" sub={`Your activity this month · resets ${usage?.resetDate ? new Date(usage.resetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : ''}`}>
-                        <div style={S.cardBody}>
-                            <div style={S.usageGrid} className="rs-usage-grid">
-                                {(planUsage?.usage ?? []).map(u => (
-                                    <UsageTile
-                                        key={u.feature}
-                                        label={USAGE_FEATURE_LABELS[u.feature] ?? u.feature}
-                                        value={u.used}
-                                        max={u.limit < 0 ? Math.max(u.used, 1) : u.limit}
-                                        warnAt={u.feature === 'chat' ? 0.7 : 0.85}
-                                    />
-                                ))}
-                                {!planUsage && (
-                                    <div style={{ fontSize: 13, color: '#94a3b8', padding: 18 }}>Loading your usage…</div>
-                                )}
-                            </div>
-                            <div style={S.upgradeCard} className="rs-upgrade-card">
-                                <span style={{ fontSize: 22 }}>💡</span>
-                                <span style={{ flex: 1, fontSize: 14, color: '#1e3a8a' }}>
-                                    {(!planUsage || planUsage.plan === 'free')
-                                        ? <>You&apos;re on the <b style={{ color: '#0f172a', fontWeight: 700 }}>Free Plan</b>. Upgrade for much higher monthly limits.</>
-                                        : <>You&apos;re on the <b style={{ color: '#0f172a', fontWeight: 700 }}>{planUsage.plan === 'pro' ? 'Pro' : 'Max'} Plan</b>. Manage it under Plan &amp; Billing.</>}
-                                </span>
-                                <button style={S.btnOutline} onClick={() => scrollTo('plan')}>
-                                    {(planUsage && planUsage.plan !== 'free') ? 'Manage plan →' : 'View Plans →'}
-                                </button>
-                            </div>
-                        </div>
-                    </Card>
-
-                    {/* ─── SECURITY ─── */}
-                    <Card id="security" refSetter={el => sectionRefs.current.security = el}
-                        title="Security" sub="Account access and authentication">
-                        <div style={S.cardBody}>
-                            <div style={S.secRow}>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>Password</div>
-                                    <div style={{ fontSize: 13, color: '#64748b' }}>Reset via emailed link</div>
-                                </div>
-                                <button style={{ ...S.btnGhost, border: '1px solid #e2e8f0' }} onClick={async () => {
-                                    if (!user?.email) return
-                                    await supabase.auth.resetPasswordForEmail(user.email)
-                                    alert('Password reset link sent to your email.')
-                                }}>
-                                    Change password
-                                </button>
-                            </div>
-
-                            <div style={{ ...S.secRow, paddingTop: 14 }}>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        <span style={S.brandG}>G</span>
-                                        Google
-                                    </div>
-                                    <div style={{ fontSize: 13, color: '#64748b' }}>{settings.email} · connected</div>
-                                </div>
-                                <span style={S.connectedPill}>✓ Connected</span>
-                            </div>
-
-                            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
-                                <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>Active sessions</div>
-                                <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>Devices currently signed in to your JobScorer account</div>
-                                <div style={S.sessionRow}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <div style={S.sessionDot} />
-                                        <div>
-                                            <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 500 }}>This device</div>
-                                            <div style={{ fontSize: 13, color: '#94a3b8' }}>active now</div>
-                                        </div>
-                                    </div>
-                                    <button style={{ ...S.btnGhost, fontSize: 13, padding: '8px 14px' }} onClick={signOut}>Sign out</button>
-                                </div>
-                                <div style={{ fontSize: 13, color: '#94a3b8', fontStyle: 'italic', marginTop: 12 }}>
-                                    Multi-device session management is coming soon.
-                                </div>
-                            </div>
-                        </div>
-                    </Card>
-
-                    {/* ─── DANGER ZONE ─── */}
-                    <Card id="danger" refSetter={el => sectionRefs.current.danger = el}
-                        title="Danger Zone" sub="Destructive actions. These cannot be undone." danger>
-                        <div style={S.cardBody}>
-                            <div style={S.dangerRow} className="rs-dangerRow">
-                                <div style={{ flex: 1 }}>
-                                    <div style={S.dangerTitle}>Sign out everywhere</div>
-                                    <div style={S.dangerDesc}>Sign you out on all devices including this one. You&apos;ll need to log in again with your email or Google.</div>
-                                </div>
-                                <button style={S.btnDangerOutline} onClick={handleSignOutEverywhere} disabled={signOutAllPending}>
-                                    {signOutAllPending ? 'Signing out…' : 'Sign out all sessions'}
-                                </button>
-                            </div>
-
-                            <div style={{ ...S.dangerRow, borderBottom: 'none' }} className="rs-dangerRow">
-                                <div style={{ flex: 1 }}>
-                                    <div style={S.dangerTitle}>Delete account</div>
-                                    <div style={S.dangerDesc}>Permanently delete your account, all resumes, matches, and data. This cannot be undone.</div>
-                                </div>
-                                <button style={S.btnDanger} onClick={() => setDeleteModalOpen(true)}>Delete my account</button>
-                            </div>
-                        </div>
-                    </Card>
-
-                </main>
-            </div>
-
-            {/* Mobile section jump sheet */}
-            {showSecSheet && (
-                <>
-                    <div onClick={() => setShowSecSheet(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', backdropFilter: 'blur(3px)', zIndex: 50 }} />
-                    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 55, background: '#fff', borderRadius: '22px 22px 0 0', boxShadow: '0 -20px 60px rgba(0,0,0,0.22)', maxHeight: '80vh', overflowY: 'auto' }}>
-                        <div style={{ width: 36, height: 4, borderRadius: 99, background: '#e2e8f0', margin: '12px auto 0' }} />
-                        <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid #e2e8f0' }}>
-                            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>Jump to section</div>
-                            <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>Settings · {settings.email}</div>
-                        </div>
-                        <div style={{ padding: '8px 12px 32px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            {NAV_ITEMS.map(item => {
-                                const active = activeSection === item.id
-                                return (
-                                    <button key={item.id} onClick={() => { setShowSecSheet(false); setTimeout(() => scrollTo(item.id), 120) }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderRadius: 11, cursor: 'pointer', border: 'none', background: active ? '#eff6ff' : 'none', fontFamily: 'inherit', width: '100%', textAlign: 'left' as const }}>
-                                        <div style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0, background: active ? 'rgba(19,91,236,0.1)' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>
-                                            {item.icon}
-                                        </div>
-                                        <div style={{ flex: 1, textAlign: 'left' as const }}>
-                                            <div style={{ fontSize: 13, fontWeight: 700, color: item.danger ? '#dc2626' : (active ? '#135bec' : '#0f172a') }}>{item.label}</div>
-                                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{SEC_DESCRIPTIONS[item.id]}</div>
-                                        </div>
-                                        {active && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                                    <button key={opt} onClick={() => setSettings(s => s ? { ...s, remote_preference: opt } : s)}
+                                        style={{ ...S.remoteTile, borderColor: active ? '#135bec' : '#e2e8f0', background: active ? '#eff6ff' : '#fff', color: active ? '#135bec' : '#475569', fontWeight: active ? 700 : 500 }}>
+                                        <span style={{ width: 13, height: 13, borderRadius: '50%', border: `2px solid ${active ? '#135bec' : '#cbd5e1'}`, background: active ? '#135bec' : 'transparent', flexShrink: 0 }} />
+                                        {opt}
                                     </button>
                                 )
                             })}
                         </div>
                     </div>
+
+                    <FooterButtons disabled={!dirty.prefs} onCancel={() => resetSection('prefs')} onSave={savePrefs} />
                 </>
-            )}
+            )
+
+            case 'resumes': return (
+                <>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
+                        <div>
+                            <h1 style={{ ...S.h1, marginBottom: 6 }}>Resumes</h1>
+                            <p style={{ ...S.sub, marginBottom: 0 }}>The Primary resume is what AI matches against.</p>
+                        </div>
+                        <Link href="/dashboard/upload" style={S.btnPrimaryLink}>+ Upload new</Link>
+                    </div>
+
+                    <div style={S.cardNoPad}>
+                        {resumes.length === 0 ? (
+                            <div style={{ padding: 28, textAlign: 'center', color: '#94a3b8', fontSize: 13.5 }}>No resumes uploaded yet.</div>
+                        ) : resumes.map((r, i) => {
+                            const isPrimary = !!r.is_primary
+                            const tailoredFor = (r as any).tailored_for ?? null
+                            return (
+                                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', borderBottom: i === resumes.length - 1 ? 'none' : '1px solid #f1f5f9' }} className="set-resume-row">
+                                    <span style={{ width: 40, height: 40, borderRadius: 9, background: isPrimary ? '#eff6ff' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <Icon name="doc" size={18} stroke={isPrimary ? '#135bec' : '#64748b'} />
+                                    </span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.original_filename ?? 'resume.pdf'}</div>
+                                        <div style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 2 }}>
+                                            {isPrimary ? 'Uploaded' : 'Added'} {formatResumeDate(r.created_at)} · {isPrimary ? 'master resume' : (tailoredFor ?? 'tailored resume')}
+                                        </div>
+                                    </div>
+                                    {isPrimary ? (
+                                        <span style={S.primaryBadge}>★ Primary</span>
+                                    ) : (
+                                        <button style={S.setPrimaryBtn} onClick={() => handleSetPrimary(r.id)}>Set as primary</button>
+                                    )}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                        <button type="button" title="Download" style={S.iconBtn} onClick={() => handleDownloadResume(r.id)}>
+                                            <Icon name="download" size={16} />
+                                        </button>
+                                        <button type="button" title="Delete" style={S.iconBtn} onClick={() => handleDeleteResume(r.id)}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; (e.currentTarget as HTMLButtonElement).style.color = '#dc2626' }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b' }}>
+                                            <Icon name="trash" size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </>
+            )
+
+            case 'notifications': return (
+                <>
+                    <h1 style={S.h1}>Notifications</h1>
+                    <p style={S.sub}>Control what we email and notify you about.</p>
+
+                    <div style={{ ...S.toggleRow, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 18px' }}>
+                        <div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>Email frequency</div>
+                            <div style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 2 }}>How often we batch and send updates</div>
+                        </div>
+                        <select style={S.select} value={settings.email_frequency} onChange={e => saveEmailFrequency(e.target.value)}>
+                            {EMAIL_FREQ.map(f => <option key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        {(Object.entries({
+                            new_strong_matches: ['New strong matches', 'When jobs above 80% match are found'],
+                            weekly_digest: ['Weekly match digest', 'Sunday morning summary of new jobs and activity'],
+                            interview_reminders: ['Interview reminders', 'When you have an upcoming interview'],
+                            product_updates: ['Product updates', 'New features and improvements'],
+                            tips_career_advice: ['Tips & career advice', 'Occasional career growth content'],
+                        }) as [keyof NotificationPrefs, [string, string]][]).map(([key, [title, desc]], i, arr) => {
+                            const on = settings.notification_prefs[key]
+                            const isLast = i === arr.length - 1
+                            return (
+                                <div key={key} style={{ ...S.toggleRow, borderBottom: isLast ? 'none' : '1px solid #f1f5f9' }}>
+                                    <div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{title}</div>
+                                        <div style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 2 }}>{desc}</div>
+                                    </div>
+                                    <ToggleSwitch on={on} onClick={() => saveNotifPrefs({ ...settings.notification_prefs, [key]: !on })} />
+                                </div>
+                            )
+                        })}
+                    </div>
+                </>
+            )
+
+            case 'plan': return (
+                <>
+                    <h1 style={S.h1}>Plan &amp; Billing</h1>
+                    <p style={S.sub}>Your subscription, upgrades, and payment.</p>
+                    <BillingPanel />
+                </>
+            )
+
+            case 'usage': {
+                const rows = (planUsage?.usage ?? []).map(u => {
+                    const meta = USAGE_FEATURE_META[u.feature] ?? { label: u.feature, icon: 'doc' as IconName }
+                    const limit = u.limit < 0 ? Math.max(u.used, 1) : u.limit
+                    const pct = Math.min(100, Math.round((u.used / Math.max(1, limit)) * 100))
+                    const warn = u.limit >= 0 && pct >= 80
+                    const color = warn ? '#f59e0b' : '#135bec'
+                    const iconBg = warn ? '#fef3c7' : '#eff6ff'
+                    return { ...u, meta, limit, pct, color, iconBg }
+                })
+                return (
+                    <>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
+                            <div>
+                                <h1 style={{ ...S.h1, marginBottom: 6 }}>Usage &amp; Limits</h1>
+                                <p style={{ ...S.sub, marginBottom: 0 }}>Your activity this month on the <b style={{ color: '#135bec' }}>{planLabel}</b> plan.</p>
+                            </div>
+                            {usage?.resetDate && (
+                                <span style={S.pill}>Resets {new Date(usage.resetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</span>
+                            )}
+                        </div>
+
+                        <div style={S.usageGrid} className="set-usage-grid">
+                            {rows.map(u => (
+                                <div key={u.feature} style={S.card}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                                        <span style={{ width: 32, height: 32, borderRadius: 8, background: u.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Icon name={u.meta.icon} size={16} stroke={u.color} strokeWidth={2} />
+                                        </span>
+                                        <span style={{ fontSize: 13.5, fontWeight: 600, color: '#334155' }}>{u.meta.label}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}>
+                                        <span style={{ fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{u.used}</span>
+                                        <span style={{ fontSize: 13, color: '#94a3b8' }}>/ {u.limit < 0 ? '∞' : u.limit} used</span>
+                                        <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: u.color }}>{u.pct}%</span>
+                                    </div>
+                                    <div style={{ height: 7, borderRadius: 99, background: '#f1f5f9', overflow: 'hidden' }}>
+                                        <div style={{ height: '100%', borderRadius: 99, background: u.color, width: `${u.pct}%`, transition: 'width 0.5s ease' }} />
+                                    </div>
+                                </div>
+                            ))}
+                            {!planUsage && <div style={{ fontSize: 13, color: '#94a3b8', padding: 18 }}>Loading your usage…</div>}
+                        </div>
+
+                        <div style={S.infoBanner}>
+                            <span style={{ width: 34, height: 34, borderRadius: 8, background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Icon name="sparkles" size={16} stroke="#135bec" strokeWidth={2} />
+                            </span>
+                            <span style={{ flex: 1, fontSize: 13.5, color: '#1e3a8a' }}>
+                                {(!planUsage || planUsage.plan === 'free')
+                                    ? <>You&apos;re on the <b style={{ color: '#0f172a', fontWeight: 700 }}>Free Plan</b>. Upgrade for much higher monthly limits.</>
+                                    : planUsage.plan === 'max'
+                                        ? <>You&apos;re already on <b style={{ color: '#0f172a', fontWeight: 700 }}>Max</b> — the highest tier. Limits reset automatically each month.</>
+                                        : <>You&apos;re on the <b style={{ color: '#0f172a', fontWeight: 700 }}>Pro Plan</b>. Manage it under Plan &amp; Billing.</>}
+                            </span>
+                            {(planUsage?.plan ?? 'free') !== 'max' && (
+                                <button style={S.btnOutlineSmall} onClick={() => selectSection('plan')}>
+                                    {planUsage && planUsage.plan !== 'free' ? 'Manage plan →' : 'View Plans →'}
+                                </button>
+                            )}
+                        </div>
+                    </>
+                )
+            }
+
+            case 'security': return (
+                <>
+                    <h1 style={S.h1}>Security</h1>
+                    <p style={S.sub}>Account access and authentication.</p>
+
+                    <div style={S.cardEyebrow}>Authentication</div>
+                    <div style={{ ...S.cardNoPad, marginBottom: 24 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                            <span style={{ width: 38, height: 38, borderRadius: 9, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Icon name="lock" size={17} stroke="#135bec" strokeWidth={2} />
+                            </span>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Password</div>
+                                <div style={{ fontSize: 12.5, color: '#94a3b8' }}>Reset via emailed link</div>
+                            </div>
+                            <button style={S.btnOutlineSmall} onClick={async () => {
+                                if (!user?.email) return
+                                await supabase.auth.resetPasswordForEmail(user.email)
+                                alert('Password reset link sent to your email.')
+                            }}>Change password</button>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px' }}>
+                            <span style={{ width: 38, height: 38, borderRadius: 9, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#ea4335', flexShrink: 0 }}>G</span>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Google</div>
+                                <div style={{ fontSize: 12.5, color: '#94a3b8' }}>{settings.email}</div>
+                            </div>
+                            <span style={S.connectedBadge}><Icon name="check" size={11} stroke="#059669" strokeWidth={3} /> Connected</span>
+                        </div>
+                    </div>
+
+                    <div style={S.cardEyebrow}>Active sessions</div>
+                    <div style={{ ...S.card, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }} className="set-session-row">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                            <span style={{ width: 38, height: 38, borderRadius: 9, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', flexShrink: 0 }}>
+                                <Icon name="monitor" size={17} stroke="#334155" strokeWidth={2} />
+                                <span style={{ position: 'absolute', top: -2, right: -2, width: 9, height: 9, borderRadius: '50%', background: '#10b981', border: '2px solid #fff' }} />
+                            </span>
+                            <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>This device</div>
+                                <div style={{ fontSize: 12.5, color: '#94a3b8' }}>active now</div>
+                            </div>
+                        </div>
+                        <button style={S.btnOutlineSmall} onClick={signOut}>Sign out</button>
+                    </div>
+                </>
+            )
+
+            case 'danger': return (
+                <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <span style={{ width: 30, height: 30, borderRadius: 8, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Icon name="warning" size={16} stroke="#dc2626" strokeWidth={2} />
+                        </span>
+                        <h1 style={{ ...S.h1, marginBottom: 0 }}>Danger Zone</h1>
+                    </div>
+                    <p style={S.sub}>Destructive actions. These cannot be undone.</p>
+
+                    <div style={{ ...S.cardNoPad, border: '1px solid #fecaca' }}>
+                        <div style={{ padding: '20px 22px', borderBottom: '1px solid #fee2e2' }} className="set-danger-row">
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a', marginBottom: 3 }}>Sign out everywhere</div>
+                                <div style={{ fontSize: 12.5, color: '#94a3b8' }}>Sign out on all devices, including this one. You&apos;ll need to log in again.</div>
+                            </div>
+                            <button style={S.btnDangerOutline} onClick={handleSignOutEverywhere} disabled={signOutAllPending}>
+                                {signOutAllPending ? 'Signing out…' : 'Sign out all sessions'}
+                            </button>
+                        </div>
+                        <div style={{ padding: '20px 22px', background: '#fef2f2' }} className="set-danger-row">
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a', marginBottom: 3 }}>Delete account</div>
+                                <div style={{ fontSize: 12.5, color: '#94a3b8' }}>Permanently delete your account, resumes, matches, and data.</div>
+                            </div>
+                            <button style={S.btnDanger} onClick={() => setDeleteModalOpen(true)}>Delete my account</button>
+                        </div>
+                    </div>
+                </>
+            )
+        }
+    }
+
+    return (
+        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', fontFamily: SANS, color: '#0f172a', background: '#f8fafc' }}>
+
+            {/* ── DESKTOP: sidebar + single active section ── */}
+            <div className="set-desktop" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                <aside style={{ width: 272, minWidth: 272, background: '#fff', borderRight: '1px solid #e2e8f0', overflowY: 'auto', padding: '16px 12px 24px' }}>
+                    <div style={{ position: 'relative', margin: '4px 4px 14px' }}>
+                        <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', display: 'flex' }}>
+                            <Icon name="search" size={14} strokeWidth={2.2} />
+                        </span>
+                        <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search settings"
+                            style={{ width: '100%', padding: '8px 12px 8px 32px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f1f5f9', fontSize: 13, fontFamily: 'inherit', color: '#0f172a', outline: 'none' }} />
+                    </div>
+
+                    <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#94a3b8', padding: '12px 12px 6px' }}>Account</div>
+                    {filteredNavItems.map(item => {
+                        const active = activeSection === item.id
+                        return (
+                            <button key={item.id} onClick={() => selectSection(item.id)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                                    padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                                    fontSize: 13.5, marginBottom: 2,
+                                    background: active ? (item.danger ? '#fef2f2' : '#eff6ff') : 'transparent',
+                                    color: active ? (item.danger ? '#dc2626' : '#135bec') : (item.danger ? '#dc2626' : '#334155'),
+                                    fontWeight: active ? 700 : 500,
+                                }}>
+                                <Icon name={item.icon} size={16} />
+                                <span style={{ flex: 1 }}>{item.label}</span>
+                            </button>
+                        )
+                    })}
+                </aside>
+
+                <main style={{ flex: 1, overflowY: 'auto', padding: '44px 48px 100px' }}>
+                    <div style={{ maxWidth: 680, margin: '0 auto' }}>
+                        {renderSection(activeSection)}
+                    </div>
+                </main>
+            </div>
+
+            {/* ── MOBILE: list screen + drill-down detail ── */}
+            <div className="set-mobile" style={{ flex: 1, minHeight: 0, overflowY: 'auto', position: 'relative' }}>
+                <div style={{ padding: '20px 18px 100px' }}>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em', margin: '4px 0 4px', color: '#0f172a' }}>Settings</h1>
+                    <p style={{ fontSize: 13.5, color: '#64748b', margin: '0 0 18px' }}>Manage your account, resumes, and plan.</p>
+
+                    <div style={{ position: 'relative', marginBottom: 18 }}>
+                        <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', display: 'flex' }}>
+                            <Icon name="search" size={14} strokeWidth={2.2} />
+                        </span>
+                        <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search settings"
+                            style={{ width: '100%', padding: '11px 14px 11px 34px', borderRadius: 11, border: '1px solid #e2e8f0', background: '#fff', fontSize: 14, fontFamily: 'inherit', color: '#0f172a', outline: 'none' }} />
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 16, marginBottom: 20 }}>
+                        <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#eff6ff', color: '#135bec', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, fontWeight: 700, flexShrink: 0 }}>{initial}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</div>
+                            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{settings.email}</div>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#135bec', background: '#eff6ff', padding: '4px 11px', borderRadius: 99, flexShrink: 0 }}>{planLabel}</span>
+                    </div>
+
+                    {filteredNavItems.map(item => (
+                        <button key={item.id} onClick={() => selectSection(item.id)}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 13, textAlign: 'left', padding: 14, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, marginBottom: 10, cursor: 'pointer', fontFamily: 'inherit', minHeight: 44 }}>
+                            <span style={{ width: 36, height: 36, borderRadius: 9, background: item.danger ? '#fef2f2' : '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Icon name={item.icon} size={17} stroke={item.danger ? '#dc2626' : '#135bec'} />
+                            </span>
+                            <span style={{ flex: 1, fontSize: 14.5, fontWeight: 600, color: item.danger ? '#dc2626' : '#0f172a' }}>{item.label}</span>
+                            <Icon name="chevronRight" size={16} stroke="#cbd5e1" strokeWidth={2.2} />
+                        </button>
+                    ))}
+                </div>
+
+                {mobileOpen && (
+                    <div style={{ position: 'absolute', inset: 0, background: '#f8fafc', zIndex: 10 }}>
+                        <div style={{ position: 'sticky', top: 0, zIndex: 2, display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
+                            <button onClick={() => setMobileOpen(false)} style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: 'none', borderRadius: 9, cursor: 'pointer', flexShrink: 0 }}>
+                                <Icon name="chevronLeft" size={17} stroke="#334155" strokeWidth={2.2} />
+                            </button>
+                            <span style={{ fontSize: 15.5, fontWeight: 700, color: '#0f172a' }}>{NAV_ITEMS.find(n => n.id === activeSection)?.label}</span>
+                        </div>
+                        <div style={{ padding: '18px 16px 100px' }}>
+                            {renderSection(activeSection)}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {toastVisible && <div className="set-toast">✓ Changes saved</div>}
 
             {/* Delete confirmation modal */}
             {deleteModalOpen && (
                 <div style={S.modalBackdrop} onClick={(e) => { if (e.target === e.currentTarget) setDeleteModalOpen(false) }}>
                     <div style={S.modal}>
                         <div style={{ padding: '24px 24px 20px' }}>
-                            <div style={S.modalIcon}>⚠</div>
+                            <div style={S.modalIcon}><Icon name="warning" size={18} stroke="#dc2626" strokeWidth={2} /></div>
                             <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', marginBottom: 8 }}>Are you absolutely sure?</h3>
                             <p style={{ fontSize: 13, color: '#475569', marginBottom: 16, lineHeight: 1.6 }}>This will permanently delete your JobScorer account. You&apos;ll lose:</p>
                             <ul style={S.modalList}>
@@ -841,7 +904,7 @@ export default function SettingsPage() {
                                 ))}
                             </ul>
                             <p style={{ fontSize: 13, color: '#475569', marginBottom: 10 }}>
-                                Type <b style={{ color: '#dc2626', fontFamily: "var(--font-mono), 'JetBrains Mono', ui-monospace, monospace" }}>DELETE</b> to confirm:
+                                Type <b style={{ color: '#dc2626' }}>DELETE</b> to confirm:
                             </p>
                             <input style={S.input} type="text" placeholder="DELETE" autoComplete="off"
                                 value={deleteConfirmText}
@@ -859,115 +922,59 @@ export default function SettingsPage() {
             )}
 
             <style>{`
-                @media (max-width: 900px) {
-                    .rs-body-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
-                    .rs-side-nav { display: none !important; }
-                    .rs-tabbar { display: none !important; }
-                    .rs-sec-nav { display: block !important; }
-                    .rs-field-row { grid-template-columns: 1fr !important; }
-                    .rs-usage-grid { grid-template-columns: repeat(2, 1fr) !important; }
-                    .rs-level-grid { grid-template-columns: repeat(2, 1fr) !important; }
-                    .rs-radioGrid4 { grid-template-columns: repeat(2, 1fr) !important; }
-                    .rs-resume-row { flex-wrap: wrap !important; padding: 12px !important; background: #f8fafc !important; border: 1px solid #e2e8f0 !important; border-radius: 10px !important; margin-bottom: 8px !important; row-gap: 0 !important; }
-                    .rs-resume-actions { width: 100% !important; border-top: 1px solid #f1f5f9 !important; padding-top: 10px !important; margin-top: 6px !important; }
-                    .rs-resume-set-primary { flex: 1 !important; border: 1.5px solid rgba(19,91,236,0.25) !important; background: #eff6ff !important; color: #135bec !important; padding: 7px 0 !important; border-radius: 8px !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; font-family: inherit !important; }
-                    .rs-dangerRow { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
-                    .rs-upgrade-card { flex-wrap: wrap !important; align-items: flex-start !important; }
-                    .rs-upgrade-card button { width: 100% !important; justify-content: center !important; margin-top: 6px !important; }
+                @keyframes setToastIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+                .set-toast {
+                    position: fixed; bottom: 24px; right: 24px; z-index: 60;
+                    background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 10px;
+                    font-size: 13.5px; font-weight: 600; box-shadow: 0 8px 24px rgba(15,23,42,.25);
+                    animation: setToastIn .2s ease both; font-family: ${SANS};
                 }
-                input::placeholder { color: #64748b; opacity: 1; }
+                .set-mobile { display: none; }
+                @media (max-width: 900px) {
+                    .set-desktop { display: none !important; }
+                    .set-mobile { display: block !important; }
+                    .set-toast { right: auto; left: 50%; transform: translateX(-50%); bottom: 24px; }
+                    .set-grid2 { grid-template-columns: 1fr !important; }
+                    .set-usage-grid { grid-template-columns: 1fr !important; }
+                    .set-level-grid { grid-template-columns: repeat(2, 1fr) !important; }
+                    .set-remote-grid { grid-template-columns: 1fr !important; }
+                    .set-danger-row { display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+                    .set-danger-row button { width: 100% !important; }
+                    .set-resume-row { flex-wrap: wrap !important; }
+                    .set-session-row { flex-direction: column !important; align-items: flex-start !important; gap: 14px !important; }
+                    .set-session-row button { width: 100% !important; }
+                }
+                input::placeholder { color: #94a3b8; opacity: 1; }
             `}</style>
-        </PageShell>
+        </div>
     )
 }
 
 // ── Sub-components ── //
 
-const NAV_ITEMS: { id: SectionId; label: string; icon: string; danger?: boolean }[] = [
-    { id: 'profile', label: 'Profile', icon: '👤' },
-    { id: 'prefs', label: 'Job Preferences', icon: '🎯' },
-    { id: 'resumes', label: 'Resumes', icon: '📄' },
-    { id: 'notifications', label: 'Notifications', icon: '🔔' },
-    { id: 'plan', label: 'Plan & Billing', icon: '💳' },
-    { id: 'usage', label: 'Usage & Limits', icon: '📊' },
-    { id: 'security', label: 'Security', icon: '🔒' },
-    { id: 'danger', label: 'Danger Zone', icon: '⚠️', danger: true },
-]
-
-const SEC_DESCRIPTIONS: Record<SectionId, string> = {
-    profile: 'Name, avatar, email',
-    prefs: 'Roles, locations, experience level',
-    resumes: 'Uploaded files, primary resume',
-    notifications: 'Email frequency and alerts',
-    plan: 'Subscription, upgrades, payment',
-    usage: 'Monthly activity & quotas',
-    security: 'Password, connected accounts, sessions',
-    danger: 'Delete account, sign out everywhere',
-}
-
-function PageShell({ children }: { children: React.ReactNode }) {
-    return (
-        <div style={{
-            width: '100%', paddingBottom: 96, paddingLeft: 8, paddingRight: 8,
-            // Inherit Inter from the body (next/font preload in app/layout.tsx)
-            // — keeps Settings visually consistent with every other dashboard page.
-            color: '#0f172a',
-        }}>{children}</div>
-    )
-}
-
-function Card({ id, refSetter, title, sub, children, danger }: {
-    id: string
-    refSetter: (el: HTMLElement | null) => void
-    title: string
-    sub: string
-    children: React.ReactNode
-    danger?: boolean
-}) {
-    return (
-        <section id={id} ref={refSetter as any} style={{
-            background: danger ? 'linear-gradient(135deg, #fef2f2 0%, rgba(254,242,242,0) 240px), #fff' : '#fff',
-            border: `1px solid ${danger ? '#fecaca' : '#e2e8f0'}`,
-            borderRadius: 12, boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
-            scrollMarginTop: 96, overflow: 'hidden',
-        }}>
-            <div style={{ padding: '24px 28px 20px' }}>
-                <h2 style={{
-                    fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em',
-                    color: danger ? '#dc2626' : '#0f172a', marginBottom: 6,
-                    margin: '0 0 6px 0',
-                }}>{title}</h2>
-                <p style={{ fontSize: 14, color: danger ? '#991b1b' : '#475569', margin: 0 }}>{sub}</p>
-            </div>
-            <div style={{ height: 1, background: danger ? '#fecaca' : '#e2e8f0' }} />
-            {children}
-        </section>
-    )
-}
-
-function CardFooter({ savedVisible, disabled, onCancel, onSave }: {
-    savedVisible: boolean; disabled: boolean
-    onCancel: () => void; onSave: () => void
-}) {
-    return (
-        <div style={S.cardFooter}>
-            {savedVisible && <span style={S.savePill}>✓ Saved</span>}
-            <button style={S.btnGhost} onClick={onCancel}>Cancel</button>
-            <button style={{
-                ...S.btnPrimary,
-                background: disabled ? '#cbd5e1' : '#135bec',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-            }} disabled={disabled} onClick={onSave}>Save changes</button>
-        </div>
-    )
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div>
-            <label style={S.fieldLabel}>{label}</label>
+            <div style={S.fieldLabel}>{label}</div>
             {children}
         </div>
+    )
+}
+
+function FooterButtons({ disabled, onCancel, onSave }: { disabled: boolean; onCancel: () => void; onSave: () => void }) {
+    return (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button style={S.btnGhost} onClick={onCancel}>Cancel</button>
+            <button style={{ ...S.btnPrimary, background: disabled ? '#cbd5e1' : '#135bec', cursor: disabled ? 'not-allowed' : 'pointer' }} disabled={disabled} onClick={onSave}>Save changes</button>
+        </div>
+    )
+}
+
+function ToggleSwitch({ on, onClick }: { on: boolean; onClick: () => void }) {
+    return (
+        <button onClick={onClick} style={{ position: 'relative', width: 38, height: 22, background: on ? '#135bec' : '#e2e8f0', borderRadius: 99, cursor: 'pointer', border: 'none', padding: 0, flexShrink: 0, transition: 'background 0.15s' }}>
+            <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 18, height: 18, background: '#fff', borderRadius: '50%', transition: 'left 0.15s', boxShadow: '0 1px 3px rgba(15,23,42,0.2)' }} />
+        </button>
     )
 }
 
@@ -1058,15 +1065,12 @@ function ChipField({ values, placeholder, onChange, options = [], inputRef }: {
                 display: 'flex', flexWrap: 'wrap', gap: 8,
                 padding: '10px 12px', background: '#fff',
                 border: `1px solid ${focused ? '#135bec' : '#e2e8f0'}`,
-                borderRadius: 8, minHeight: 44, alignItems: 'center',
+                borderRadius: 9, minHeight: 44, alignItems: 'center',
                 boxShadow: focused ? '0 0 0 3px #dbeafe' : 'none',
                 transition: 'border-color 0.15s, box-shadow 0.15s',
             }}
-                // Click anywhere on the chip-field wrapper → focus the input.
                 onMouseDown={e => {
                     if (e.target === actualInputRef.current) return
-                    // Only refocus on plain clicks in empty space inside the wrapper;
-                    // chip × buttons handle their own events.
                     if ((e.target as HTMLElement).tagName === 'DIV') {
                         e.preventDefault()
                         actualInputRef.current?.focus()
@@ -1077,24 +1081,21 @@ function ChipField({ values, placeholder, onChange, options = [], inputRef }: {
                         {v}
                         <button
                             type="button"
-                            // preventDefault on mousedown keeps the input focused
-                            // when the user clicks × to remove a chip.
                             onMouseDown={e => e.preventDefault()}
                             onClick={() => onChange(values.filter(x => x !== v))}
                             style={S.chipRemove}
-                        >×</button>
+                        ><Icon name="x" size={10} strokeWidth={3} /></button>
                     </span>
                 ))}
                 <input ref={actualInputRef} style={S.chipInput} type="text"
                     value={input}
-                    placeholder={placeholder}
+                    placeholder={values.length === 0 ? placeholder : ''}
                     onFocus={handleFocus}
                     onBlur={handleBlur}
                     onChange={e => { setInput(e.target.value); setHighlight(0) }}
                     onKeyDown={e => {
                         if (e.key === 'Enter') {
                             e.preventDefault()
-                            // Prefer the highlighted suggestion if dropdown is open
                             if (dropdownOpen && filtered[highlight]) {
                                 commit(filtered[highlight])
                             } else if (input.trim()) {
@@ -1123,10 +1124,6 @@ function ChipField({ values, placeholder, onChange, options = [], inputRef }: {
                             <button
                                 key={opt}
                                 type="button"
-                                // preventDefault on mousedown is the canonical way
-                                // to keep the input focused when clicking a dropdown
-                                // item — without it the blur fires first and the
-                                // dropdown can disappear before the click registers.
                                 onMouseDown={e => { e.preventDefault(); commit(opt) }}
                                 onMouseEnter={() => setHighlight(i)}
                                 style={{
@@ -1146,49 +1143,16 @@ function ChipField({ values, placeholder, onChange, options = [], inputRef }: {
     )
 }
 
-function SuggestRow({ label, suggestions, existing, onAdd }: {
-    label: string; suggestions: string[]; existing: string[]; onAdd: (v: string) => void
+function SuggestRow({ suggestions, existing, onAdd }: {
+    suggestions: string[]; existing: string[]; onAdd: (v: string) => void
 }) {
+    const remaining = suggestions.filter(s => !existing.some(e => e.toLowerCase() === s.toLowerCase()))
+    if (remaining.length === 0) return null
     return (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginRight: 4 }}>{label}</span>
-            {suggestions.map(s => {
-                const taken = existing.some(e => e.toLowerCase() === s.toLowerCase())
-                return (
-                    <button key={s} onClick={() => !taken && onAdd(s)}
-                        style={{
-                            fontSize: 12, fontWeight: 600, color: taken ? '#cbd5e1' : '#1e293b',
-                            background: '#f1f5f9', border: '1px dashed #94a3b8',
-                            padding: '4px 10px', borderRadius: 99,
-                            cursor: taken ? 'not-allowed' : 'pointer',
-                            opacity: taken ? 0.5 : 1,
-                            pointerEvents: taken ? 'none' : 'auto',
-                        }}>
-                        {s}
-                    </button>
-                )
-            })}
-        </div>
-    )
-}
-
-function UsageTile({ label, value, max, warnAt = 0.85 }: { label: string; value: number; max: number; warnAt?: number }) {
-    const pct = Math.min(100, (value / Math.max(1, max)) * 100)
-    const warn = pct / 100 >= warnAt
-    return (
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 18 }}>
-            <div style={{
-                fontFamily: "var(--font-mono), 'JetBrains Mono', ui-monospace, monospace", fontSize: 11, fontWeight: 600,
-                letterSpacing: '0.1em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 12,
-            }}>{label}</div>
-            <div style={{
-                fontFamily: "var(--font-mono), 'JetBrains Mono', ui-monospace, monospace", fontSize: 38, fontWeight: 700,
-                color: '#0f172a', lineHeight: 1, marginBottom: 14,
-            }}>{value}</div>
-            <div style={{ height: 5, background: '#e2e8f0', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: warn ? '#d97706' : '#135bec', borderRadius: 99, transition: 'width 0.6s ease' }} />
-            </div>
-            <div style={{ fontFamily: "var(--font-mono), 'JetBrains Mono', ui-monospace, monospace", fontSize: 12, color: '#94a3b8' }}>{value} / {max} this month</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+            {remaining.map(s => (
+                <button key={s} onClick={() => onAdd(s)} style={S.suggestChip}>+ {s}</button>
+            ))}
         </div>
     )
 }
@@ -1202,301 +1166,131 @@ function dedupAdd(arr: string[], val: string): string[] {
     return [...arr, v]
 }
 
-function partialFromOriginal(o: UserSettings, id: 'profile' | 'prefs' | 'notifications'): Partial<UserSettings> {
-    if (id === 'profile') return { full_name: o.full_name }
-    if (id === 'prefs') return {
-        target_roles: o.target_roles, target_locations: o.target_locations,
-        experience_level: o.experience_level, remote_preference: o.remote_preference,
-    }
-    return { email_frequency: o.email_frequency, notification_prefs: o.notification_prefs }
-}
-
 // ── Styles ── //
 const S: Record<string, React.CSSProperties> = {
-    eyebrow: {
-        fontFamily: "var(--font-mono), 'JetBrains Mono', ui-monospace, monospace", fontSize: 11, fontWeight: 700,
-        letterSpacing: '0.14em', textTransform: 'uppercase', color: '#64748b', marginBottom: 10,
-    },
-    pageTitle: { fontSize: 34, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.025em', marginBottom: 6 },
-    pageSub: { fontSize: 15, color: '#475569' },
-    bodyGrid: { display: 'grid', gridTemplateColumns: '260px 1fr', gap: 32 },
-    // Default `align-items: stretch` makes the nav's grid cell as tall as the
-    // content column. With `position: sticky` on the inner nav, it sticks at
-    // top:24 and keeps sticking until you scroll past the bottom of the cell.
-    navWrap: { display: 'block' },
-    nav: { position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 4 },
-    navLink: {
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '12px 16px', borderRadius: 8, fontSize: 14,
-        cursor: 'pointer', textAlign: 'left',
-        background: 'transparent', border: 'none',
-        fontFamily: 'inherit',
-        transition: 'background 0.15s, color 0.15s, border-color 0.15s',
-    },
-    tabbar: {
-        display: 'none', position: 'sticky', top: 0, zIndex: 10,
-        background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
-        margin: '0 -32px 8px', padding: '0 32px', overflowX: 'auto',
-    },
-    tabbarLink: {
-        flexShrink: 0, padding: 14, fontSize: 13, fontWeight: 500,
-        cursor: 'pointer', whiteSpace: 'nowrap', background: 'transparent',
-        fontFamily: 'inherit',
-    },
-    content: { display: 'flex', flexDirection: 'column', gap: 28, minWidth: 0 },
-    cardBody: { padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 22 },
-    cardFooter: {
-        display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12,
-        padding: '18px 28px', borderTop: '1px solid #e2e8f0', background: '#fafbfc',
-    },
-    fieldLabel: {
-        fontFamily: "var(--font-mono), 'JetBrains Mono', ui-monospace, monospace", fontSize: 12, fontWeight: 800,
-        letterSpacing: '0.12em', textTransform: 'uppercase', color: '#1e293b',
-        display: 'block', marginBottom: 8,
-    },
-    fieldRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 },
+    h1: { fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em', margin: '0 0 6px', color: '#0f172a' },
+    sub: { fontSize: 14.5, color: '#64748b', margin: '0 0 24px' },
+    card: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '20px 22px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 0 },
+    cardNoPad: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginBottom: 16 },
+    cardEyebrow: { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 12 },
+    fieldLabel: { fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 },
+    grid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px', marginTop: 20, paddingTop: 20, borderTop: '1px solid #f1f5f9' },
+    avatarRow: { display: 'flex', alignItems: 'center', gap: 16 },
+    avatarCircle: { width: 56, height: 56, borderRadius: '50%', background: '#eff6ff', color: '#135bec', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700, flexShrink: 0 },
     input: {
-        width: '100%', background: '#fff', border: '1px solid #e2e8f0',
-        borderRadius: 8, padding: '12px 16px', fontSize: 15, color: '#0f172a',
-        outline: 'none', fontFamily: 'inherit',
+        width: '100%', padding: '10px 13px', borderRadius: 9, border: '1px solid #e2e8f0',
+        background: '#f8fafc', fontSize: 13.5, fontFamily: 'inherit', outline: 'none', color: '#0f172a',
     },
-    inputBadge: {
-        position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        fontSize: 12, fontWeight: 600, color: '#16a34a',
-        background: '#dcfce7', padding: '4px 10px', borderRadius: 99,
-    },
-    avatarRow: { display: 'flex', alignItems: 'center', gap: 18 },
-    avatar: {
-        width: 72, height: 72, borderRadius: '50%', background: '#135bec',
-        color: '#fff', display: 'grid', placeItems: 'center',
-        fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em', flexShrink: 0,
-    },
-    ghostLink: {
-        fontSize: 14, fontWeight: 600, color: '#135bec',
-        cursor: 'pointer', padding: '8px 12px', borderRadius: 6,
-        background: 'transparent', border: 'none', fontFamily: 'inherit',
-    },
-    joinedPill: {
-        display: 'inline-flex', alignItems: 'center', gap: 8,
-        fontSize: 13, color: '#64748b', background: '#f8fafc',
-        border: '1px solid #e2e8f0', padding: '10px 14px', borderRadius: 99,
-        marginTop: 2,
+    readonlyBox: {
+        padding: '10px 13px', borderRadius: 9, border: '1px solid #e2e8f0', background: '#f1f5f9',
+        fontSize: 13.5, color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 40,
     },
     btnPrimary: {
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '10px 18px', borderRadius: 8, fontSize: 14, fontWeight: 600,
-        background: '#135bec', color: '#fff', border: 'none',
-        fontFamily: 'inherit', cursor: 'pointer',
+        padding: '10px 20px', color: '#fff', border: 'none', borderRadius: 9,
+        fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit',
     },
-    btnOutline: {
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '10px 18px', borderRadius: 8, fontSize: 14, fontWeight: 600,
-        background: '#fff', color: '#135bec', border: '1px solid #135bec',
-        fontFamily: 'inherit', cursor: 'pointer', textDecoration: 'none',
+    btnPrimaryLink: {
+        display: 'inline-flex', alignItems: 'center', padding: '9px 18px', background: '#135bec', color: '#fff',
+        border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap',
     },
     btnGhost: {
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '10px 18px', borderRadius: 8, fontSize: 14, fontWeight: 600,
-        background: 'transparent', color: '#64748b', border: 'none',
-        fontFamily: 'inherit', cursor: 'pointer',
+        padding: '10px 20px', background: '#fff', border: '1px solid #e2e8f0', color: '#334155',
+        borderRadius: 9, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+    },
+    btnOutlineSmall: {
+        padding: '8px 14px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
+        fontSize: 12.5, fontWeight: 600, color: '#135bec', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
     },
     btnDanger: {
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '10px 18px', borderRadius: 8, fontSize: 14, fontWeight: 600,
-        background: '#dc2626', color: '#fff', border: 'none',
-        fontFamily: 'inherit', cursor: 'pointer',
+        padding: '9px 18px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8,
+        fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
     },
     btnDangerOutline: {
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '10px 18px', borderRadius: 8, fontSize: 14, fontWeight: 600,
-        background: '#fff', color: '#dc2626', border: '1px solid #fecaca',
-        fontFamily: 'inherit', cursor: 'pointer',
+        padding: '9px 18px', background: '#fff', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: 8,
+        fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
     },
-    savePill: {
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        fontSize: 12, fontWeight: 600, color: '#16a34a',
-        background: '#dcfce7', padding: '5px 11px', borderRadius: 99,
-        animation: 'rsSaved 0.3s ease',
+    pillToggle: {
+        display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+        padding: '6px 14px', borderRadius: 99, border: '1px solid #bfdbfe', cursor: 'pointer',
     },
+    pill: { fontSize: 12, fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '7px 14px', borderRadius: 99, whiteSpace: 'nowrap' },
     chip: {
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        background: '#dbeafe', color: '#1e3a8a',
-        fontSize: 14, fontWeight: 600,
-        padding: '6px 8px 6px 12px', borderRadius: 6,
+        display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color: '#135bec',
+        background: '#eff6ff', border: '1px solid #bfdbfe', padding: '5px 6px 5px 12px', borderRadius: 99,
     },
     chipRemove: {
-        width: 20, height: 20, borderRadius: 4,
-        display: 'inline-grid', placeItems: 'center',
-        color: '#135bec', opacity: 0.6, cursor: 'pointer',
-        background: 'transparent', border: 'none', fontFamily: 'inherit',
-        fontSize: 15, lineHeight: 1,
+        width: 18, height: 18, borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        color: '#135bec', cursor: 'pointer', background: 'transparent', border: 'none', padding: 2,
     },
     chipInput: {
-        flex: 1, minWidth: 140, border: 'none', outline: 'none',
-        background: 'transparent', fontSize: 15, color: '#0f172a',
-        padding: '6px 2px', fontFamily: 'inherit',
+        flex: 1, minWidth: 140, border: 'none', outline: 'none', background: 'transparent',
+        fontSize: 13.5, color: '#0f172a', padding: '6px 2px', fontFamily: 'inherit',
+    },
+    suggestChip: {
+        fontSize: 12, fontWeight: 600, color: '#64748b', background: '#f8fafc', border: '1px dashed #cbd5e1',
+        padding: '5px 12px', borderRadius: 99, cursor: 'pointer', fontFamily: 'inherit',
     },
     dropdown: {
-        position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
-        background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-        boxShadow: '0 12px 28px rgba(15,23,42,0.12)',
-        zIndex: 20, maxHeight: 320, overflowY: 'auto',
-        padding: 6,
+        position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff',
+        border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 12px 28px rgba(15,23,42,0.12)',
+        zIndex: 20, maxHeight: 320, overflowY: 'auto', padding: 6,
     },
     dropdownItem: {
-        display: 'block', width: '100%', textAlign: 'left',
-        padding: '10px 12px', borderRadius: 6,
-        fontSize: 14, fontFamily: 'inherit', color: '#1e293b',
-        border: 'none', cursor: 'pointer',
-        transition: 'background 0.1s ease',
+        display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 6,
+        fontSize: 13.5, fontFamily: 'inherit', color: '#1e293b', border: 'none', cursor: 'pointer',
     },
-    segmented: { display: 'inline-flex', flexWrap: 'wrap', gap: 8 },
-    segment: {
-        fontSize: 14, fontWeight: 600, color: '#0f172a',
-        background: '#fff', border: '1px solid #cbd5e1',
-        padding: '10px 20px', borderRadius: 8,
-        cursor: 'pointer', fontFamily: 'inherit',
-    },
-    allLevelsBtn: {
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        fontSize: 13, fontWeight: 700, fontFamily: 'inherit',
-        padding: '8px 16px', borderRadius: 99,
-        border: '1px solid #bfdbfe', cursor: 'pointer',
-        marginBottom: 10,
-    },
-    levelGrid: {
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10,
-    },
+    levelGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 },
     levelTile: {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-        padding: '12px 16px', borderRadius: 8,
-        border: '1px solid #cbd5e1', background: '#fff',
-        cursor: 'pointer', fontFamily: 'inherit',
-        textAlign: 'left', transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+        display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start', padding: '12px',
+        borderRadius: 9, border: '1.5px solid #e2e8f0', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+        transition: 'background 0.15s, border-color 0.15s, color 0.15s',
     },
-    radioGrid4: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 },
-    radioTile: {
-        display: 'flex', alignItems: 'center', gap: 12,
-        border: '1px solid #cbd5e1', borderRadius: 8, padding: '14px 18px',
-        cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#0f172a',
-        background: '#fff', fontFamily: 'inherit',
-        textAlign: 'left',
+    remoteGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 },
+    remoteTile: {
+        display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', borderRadius: 9,
+        border: '1.5px solid #e2e8f0', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, textAlign: 'left',
     },
-    infoChip: {
-        display: 'flex', alignItems: 'center', gap: 12,
-        background: '#eff6ff', borderRadius: 8, padding: '14px 18px',
-        fontSize: 14, color: '#1e3a8a',
+    primaryBadge: {
+        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: '#135bec',
+        background: '#eff6ff', padding: '5px 12px', borderRadius: 99, flexShrink: 0,
     },
-    resumeRow: {
-        display: 'flex', alignItems: 'center', gap: 16,
-        padding: '14px 16px', borderRadius: 10, border: '1px solid transparent',
-    },
-    fileIcon: {
-        width: 42, height: 42, borderRadius: 8,
-        background: '#eff6ff', color: '#135bec',
-        display: 'grid', placeItems: 'center', fontSize: 18, flexShrink: 0,
-    },
-    fileName: {
-        fontSize: 15, fontWeight: 600, color: '#0f172a', marginBottom: 3,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-    },
-    fileMeta: { fontSize: 13, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6 },
-    primaryPill: {
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        fontFamily: "var(--font-mono), 'JetBrains Mono', ui-monospace, monospace", fontSize: 11, fontWeight: 600,
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        color: '#d97706', background: '#fffbeb', border: '1px solid #fde68a',
-        padding: '4px 10px', borderRadius: 99,
-    },
-    setPrimary: {
-        fontSize: 13, fontWeight: 600, color: '#64748b',
-        padding: '7px 12px', borderRadius: 6,
-        cursor: 'pointer', background: 'transparent', border: 'none',
-        fontFamily: 'inherit',
+    setPrimaryBtn: {
+        fontSize: 12.5, fontWeight: 600, color: '#135bec', background: 'none', border: 'none', cursor: 'pointer',
+        flexShrink: 0, fontFamily: 'inherit', padding: '6px 4px',
     },
     iconBtn: {
-        width: 36, height: 36, borderRadius: 6,
-        display: 'grid', placeItems: 'center',
-        color: '#64748b', cursor: 'pointer',
-        background: 'transparent', border: 'none', fontFamily: 'inherit',
+        width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none',
+        border: 'none', borderRadius: 7, cursor: 'pointer', color: '#64748b', fontFamily: 'inherit',
     },
-    toggleRow: {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 16, padding: '14px 0',
-    },
-    frequencyRow: {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 16, padding: '14px 18px', background: '#f8fafc',
-        border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 6,
-    },
+    toggleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, padding: '16px 0' },
     select: {
-        background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6,
-        padding: '8px 32px 8px 14px', fontSize: 14, fontWeight: 500, color: '#0f172a',
-        cursor: 'pointer', appearance: 'none' as const,
-        outline: 'none', fontFamily: 'inherit',
-        backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1l4 4 4-4' stroke='%2364748b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>\")",
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'right 10px center',
+        padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff',
+        fontSize: 13.5, fontFamily: 'inherit', color: '#0f172a', cursor: 'pointer', outline: 'none',
     },
-    usageGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 },
-    upgradeCard: {
-        display: 'flex', alignItems: 'center', gap: 16,
-        background: '#eff6ff', borderRadius: 10, padding: '16px 22px',
+    usageGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginBottom: 20 },
+    infoBanner: {
+        display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', background: '#eff6ff',
+        border: '1px solid #bfdbfe', borderRadius: 12,
     },
-    secRow: {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 16, padding: '14px 0', borderBottom: '1px solid #f1f5f9',
+    connectedBadge: {
+        display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#059669',
+        background: '#ecfdf5', padding: '5px 12px', borderRadius: 99,
     },
-    brandG: {
-        width: 26, height: 26, borderRadius: 4,
-        display: 'grid', placeItems: 'center',
-        background: '#fff', border: '1px solid #e2e8f0',
-        fontSize: 14, fontWeight: 700, color: '#4285F4', flexShrink: 0,
-    },
-    sessionRow: {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 12, padding: '10px 12px',
-        background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0',
-    },
-    sessionDot: {
-        width: 8, height: 8, borderRadius: '50%',
-        background: '#16a34a', boxShadow: '0 0 0 3px #dcfce7', flexShrink: 0,
-    },
-    connectedPill: {
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        fontFamily: "var(--font-mono), 'JetBrains Mono', ui-monospace, monospace", fontSize: 10, fontWeight: 600,
-        letterSpacing: '0.1em', textTransform: 'uppercase', color: '#16a34a',
-        background: '#dcfce7', border: '1px solid #bbf7d0',
-        padding: '3px 10px', borderRadius: 99,
-    },
-    dangerRow: {
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 24, padding: '20px 0', borderBottom: '1px solid #fecaca',
-    },
-    dangerTitle: {
-        fontFamily: "var(--font-mono), 'JetBrains Mono', ui-monospace, monospace", fontSize: 12, fontWeight: 700,
-        letterSpacing: '0.12em', textTransform: 'uppercase', color: '#dc2626', marginBottom: 8,
-    },
-    dangerDesc: { fontSize: 14, color: '#475569', maxWidth: 640 },
     modalBackdrop: {
         position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 50, padding: 24,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 70, padding: 24,
     },
     modal: {
         background: '#fff', borderRadius: 16, maxWidth: 480, width: '100%',
-        boxShadow: '0 20px 50px rgba(15,23,42,0.25)', overflow: 'hidden',
+        boxShadow: '0 20px 50px rgba(15,23,42,0.25)', overflow: 'hidden', fontFamily: SANS,
     },
     modalIcon: {
-        width: 40, height: 40, borderRadius: 10,
-        background: '#fef2f2', color: '#dc2626',
-        display: 'grid', placeItems: 'center', fontSize: 18, marginBottom: 14,
+        width: 40, height: 40, borderRadius: 10, background: '#fef2f2', color: '#dc2626',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14,
     },
     modalList: {
-        listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6,
-        marginBottom: 16, background: '#f8fafc', border: '1px solid #e2e8f0',
-        borderRadius: 8, padding: '12px 14px',
+        listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16,
+        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 14px',
     },
     modalListItem: { fontSize: 12, color: '#475569', display: 'flex', alignItems: 'center', gap: 8 },
 }

@@ -1,7 +1,6 @@
 import LandingNav from '@/components/landing/LandingNav'
 import Hero from '@/components/landing/Hero'
 import Journey from '@/components/landing/Journey'
-import CompanyResearch from '@/components/landing/CompanyResearch'
 import Features from '@/components/landing/Features'
 import Testimonials from '@/components/landing/Testimonials'
 import Pricing from '@/components/landing/Pricing'
@@ -16,7 +15,6 @@ export default function LandingPage() {
       <main style={{ paddingTop: 64 }}>
         <Hero />
         <Journey />
-        <CompanyResearch />
         <Features />
         <Testimonials />
         <Pricing />

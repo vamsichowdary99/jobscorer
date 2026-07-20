@@ -39,8 +39,12 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Delete dependents first (order matters for FK constraints)
+    // Delete dependents first (order matters for FK constraints).
+    // Most resume_id FKs cascade or SET NULL at the DB level; user_job_matches
+    // and resume_layouts are NO ACTION, so they must be cleared explicitly or
+    // the delete below fails with a foreign key violation.
     await getAdminSupabase().from('user_job_matches').delete().eq('resume_id', id)
+    await getAdminSupabase().from('resume_layouts').delete().eq('resume_id', id)
     await getAdminSupabase().from('gap_form_responses').delete().eq('resume_id', id)
     await getAdminSupabase().from('optimized_resumes').delete().eq('resume_id', id)
 

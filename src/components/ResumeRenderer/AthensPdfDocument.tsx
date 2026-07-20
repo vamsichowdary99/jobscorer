@@ -72,22 +72,29 @@ interface ResumeEditorState {
 }
 
 // ── Constants ─────────────────────────────────────────────
-// Lapis = modern indigo recreation of the ananya-reddy carousel mockup.
-// Single-column. Two inks (ink-core pixel-sampled): deep indigo accent + near
-// black. Distinctive: each section header is a small vertical indigo bar + an
-// indigo uppercase label sitting under a thin light divider rule; skills render
-// as a wrapping cloud of outlined pills (each pill is real, extractable text);
-// the company/tech line is indigo italic. Font: Open Sans (incl. true italic).
+// Athens — recreation of the "Resume.io Athens" card in view-competitor-10.html
+// (red accent, gray header panel, outlined skill pills). Built 2026-07-19,
+// chosen to fill the one warm-color-accent gap left after Amber (gold) —
+// nothing else in the catalog is red. Font: Helvetica, the PDF base-14
+// built-in font (same guaranteed-ATS-extraction logic as Harvard's
+// Times-Roman) — the catalog lists "Arial" as the source font, and Helvetica
+// is its metric-compatible PDF-standard substitute, so no new font file or
+// fonts.ts registration is needed for this template.
+// Bullet marker is a CSS border-triangle, not a "▸" glyph — Helvetica's
+// base-14 WinAnsi encoding doesn't cover that Unicode triangle (same glyph-
+// coverage bug class fixed for Executive's diamond bullets).
 
-const FONT = "Open Sans";
-const ACCENT = "#1a1670";    // name, subtitle, section headers + bars, company line
-const INK = "#1f2024";       // body, titles, contact, pill text
-const DIVIDER = "#e4e4ee";   // thin light rule above each section header
-const PILL_BORDER = "#cdcdde"; // outlined skill pills
+const FONT = "Helvetica";
+const RED = "#c0392b";
+const INK = "#1a1a1a";
+const MUTED = "#666666";
+const BODY = "#444444";
+const HR = "#dcdcdc";
+const HEADER_BG = "#f7f7f7";
 const PAGE_W = 612;
 const PAGE_H = 792;
 const MARGIN_H = "42pt";
-const MARGIN_V = "36pt";
+const MARGIN_V = "0pt";
 
 // ── Bold-marker renderer (**bold** → bold run) ────────────
 
@@ -113,36 +120,45 @@ const BoldText: React.FC<BoldTextProps> = ({ children: text, style = {} }) => {
   );
 };
 
-// ── Section Heading (thin divider rule → ▌ indigo bar + indigo label) ─
+// ── Section Heading (red uppercase, thin gray rule below) ──
 
-const SectionHeading: React.FC<{ title: string; first?: boolean }> = ({ title, first = false }) => (
-  <View style={{ marginTop: first ? "9pt" : "10pt", marginBottom: "4pt" }}>
-    <View
+const SectionHeading: React.FC<{ title: string }> = ({ title }) => (
+  <View style={{ marginTop: "11pt", marginBottom: "4pt" }}>
+    <Text
       style={{
-        borderTopWidth: 1,
-        borderTopColor: DIVIDER,
-        borderTopStyle: "solid",
-        marginBottom: "5pt",
+        fontWeight: "bold",
+        fontSize: "10pt",
+        letterSpacing: "1.5pt",
+        textTransform: "uppercase",
+        color: RED,
+        marginBottom: "3pt",
       }}
-    />
-    <View style={{ flexDirection: "row", alignItems: "center" }}>
-      <View style={{ width: 3, height: 10.5, backgroundColor: ACCENT, marginRight: "6pt" }} />
-      <Text
-        style={{
-          fontWeight: "bold",
-          fontSize: "11pt",
-          letterSpacing: "0.5pt",
-          textTransform: "uppercase",
-          color: ACCENT,
-        }}
-      >
-        {dL(title)}
-      </Text>
-    </View>
+    >
+      {dL(title)}
+    </Text>
+    <View style={{ borderBottomWidth: 1, borderBottomColor: HR, borderBottomStyle: "solid" }} />
   </View>
 );
 
-// ── Bullet list (round • marker, black) ───────────────────
+// ── Triangle bullet marker (CSS border-triangle, not a glyph) ─
+
+const TriangleMarker: React.FC = () => (
+  <View style={{ width: "10pt", paddingTop: "3.5pt" }}>
+    <View
+      style={{
+        width: 0,
+        height: 0,
+        borderTopWidth: 3,
+        borderBottomWidth: 3,
+        borderLeftWidth: 5,
+        borderTopColor: "transparent",
+        borderBottomColor: "transparent",
+        borderLeftColor: RED,
+        borderStyle: "solid",
+      }}
+    />
+  </View>
+);
 
 const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
   <View style={{ marginTop: "2pt" }}>
@@ -150,8 +166,8 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
       .filter((b) => b.trim())
       .map((b, i) => (
         <View key={i} wrap={false} style={{ flexDirection: "row", marginBottom: "1.5pt" }}>
-          <Text style={{ width: "12pt", fontSize: "10pt" }}>{"•"}</Text>
-          <BoldText style={{ flex: 1, fontSize: "10pt", lineHeight: 1.3 }}>
+          <TriangleMarker />
+          <BoldText style={{ flex: 1, fontSize: "9.5pt", lineHeight: 1.32, color: BODY }}>
             {b}
           </BoldText>
         </View>
@@ -159,19 +175,36 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
   </View>
 );
 
-// ── Skill pills (wrapping cloud of outlined, extractable text) ─
+// ── Row: left (bold, ink) + right (bold, red) ─────────────
+
+const HeaderRow: React.FC<{ left: string; right?: string }> = ({ left, right }) => (
+  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
+    <Text style={{ fontWeight: "bold", fontSize: "10.5pt", flex: 1, color: INK }}>{dL(left)}</Text>
+    {right ? (
+      <Text style={{ fontWeight: "bold", fontSize: "9pt", color: RED, marginLeft: "8pt" }}>{dL(right)}</Text>
+    ) : null}
+  </View>
+);
+
+// ── Skill pills (outlined red, wrapping cloud of extractable text) ─
+
+const splitItems = (csv: string): string[] =>
+  (csv || "")
+    .split(/,(?![^(]*\))|[•\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
 const SkillPills: React.FC<{ items: string[] }> = ({ items }) => (
-  <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: "3pt" }}>
+  <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: "2pt" }}>
     {items.map((s, i) => (
       <View
         key={i}
         wrap={false}
         style={{
           borderWidth: 0.8,
-          borderColor: PILL_BORDER,
+          borderColor: RED,
           borderStyle: "solid",
-          borderRadius: 4,
+          borderRadius: 2,
           paddingTop: "2pt",
           paddingBottom: "2pt",
           paddingLeft: "6pt",
@@ -180,40 +213,21 @@ const SkillPills: React.FC<{ items: string[] }> = ({ items }) => (
           marginBottom: "5pt",
         }}
       >
-        <Text style={{ fontSize: "9pt", color: INK }}>{dL(s)}</Text>
+        <Text style={{ fontSize: "8.5pt", color: RED }}>{dL(s)}</Text>
       </View>
     ))}
   </View>
 );
 
-// ── Row: left (bold) + right date, both black ─────────────
-
-const HeaderRow: React.FC<{ left: string; right?: string }> = ({ left, right }) => (
-  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-    <Text style={{ fontWeight: "bold", fontSize: "10.5pt", flex: 1 }}>{dL(left)}</Text>
-    {right ? (
-      <Text style={{ fontSize: "9.5pt", color: INK, marginLeft: "10pt" }}>{dL(right)}</Text>
-    ) : null}
-  </View>
-);
-
 // ── Main PDF Document ─────────────────────────────────────
 
-interface LapisPdfDocumentProps {
+interface AthensPdfDocumentProps {
   state: ResumeEditorState;
 }
 
-const DEFAULT_ORDER = ["summary", "skills", "experience", "projects", "education", "certifications", "achievements", "leadership"];
+const DEFAULT_ORDER = ["summary", "experience", "projects", "skills", "education", "certifications", "achievements", "leadership"];
 
-const splitItems = (csv: string): string[] =>
-  (csv || "")
-    // Split on commas / newlines / bullets, but keep commas INSIDE parentheses
-    // together so e.g. "AWS (S3, EC2, Glue)" stays a single pill.
-    .split(/,(?![^(]*\))|[•\n]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
+const AthensPdfDocument: React.FC<AthensPdfDocumentProps> = ({ state }) => {
   const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state;
 
   const contactParts = [
@@ -227,7 +241,6 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
 
   const roleSubtitle = profile.headline?.trim() || experience.find((e) => e.title && e.title.trim())?.title?.trim() || "";
 
-  // Skills merge into one flat pill cloud (mockup shows no category labels).
   const skillPills = [
     ...splitItems(skills.languages),
     ...splitItems(skills.frameworks),
@@ -236,15 +249,11 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
   ];
 
   const order = state.sectionOrder ?? DEFAULT_ORDER;
-  // ponytail: the `first={...}` margin logic below assumes the DEFAULT_ORDER
-  // sequence (summary, skills, experience, ...) to decide which heading skips
-  // its top margin. It stays correct only while order === DEFAULT_ORDER;
-  // reordering (Phase 2+) needs this recomputed from the actual `order` array.
   const sections: Record<string, () => React.ReactNode> = {
     summary: () => summary ? (
       <View>
-        <SectionHeading title="Summary" first />
-        <BoldText style={{ fontSize: "10pt", lineHeight: 1.4, color: INK }}>
+        <SectionHeading title="Summary" />
+        <BoldText style={{ fontSize: "9.7pt", lineHeight: 1.45, color: BODY }}>
           {summary}
         </BoldText>
       </View>
@@ -252,24 +261,24 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
 
     skills: () => skillPills.length > 0 && (
       <View>
-        <SectionHeading title="Skills" first={!summary} />
+        <SectionHeading title="Technical Skills" />
         <SkillPills items={skillPills} />
       </View>
     ),
 
     experience: () => experience.length > 0 && (
       <View>
-        <SectionHeading title="Work Experience" first={!summary && skillPills.length === 0} />
+        <SectionHeading title="Experience" />
         {experience.map((exp, i) => {
-          const companyLine = [exp.company, exp.location].filter(Boolean).join(", ");
+          const companyLine = [exp.title, exp.location].filter(Boolean).join(" · ");
           return (
-            <View key={i} style={{ marginBottom: "6pt" }}>
+            <View key={i} style={{ marginBottom: "7pt" }}>
               <HeaderRow
-                left={exp.title || "Role"}
+                left={exp.company || "Company"}
                 right={[exp.startDate, exp.endDate].filter(Boolean).join(" – ")}
               />
               {companyLine ? (
-                <Text style={{ fontStyle: "italic", fontSize: "10pt", color: ACCENT, marginTop: "0.5pt" }}>
+                <Text style={{ fontSize: "9pt", color: MUTED, marginTop: "0.5pt", marginBottom: "1pt" }}>
                   {dL(companyLine)}
                 </Text>
               ) : null}
@@ -286,10 +295,10 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
       <View>
         <SectionHeading title="Projects" />
         {projects.map((proj, i) => (
-          <View key={i} style={{ marginBottom: "5pt" }}>
+          <View key={i} style={{ marginBottom: "6pt" }}>
             <HeaderRow left={proj.name} right={proj.date} />
             {proj.tech ? (
-              <Text style={{ fontStyle: "italic", fontSize: "10pt", color: ACCENT, marginTop: "0.5pt" }}>
+              <Text style={{ fontSize: "9pt", color: MUTED, marginTop: "1pt" }}>
                 {dL(proj.tech)}
               </Text>
             ) : null}
@@ -305,21 +314,21 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
       <View>
         <SectionHeading title="Education" />
         {education.map((edu, i) => {
-          const eduTop = edu.degree || edu.school || "Degree";
-          const showSchool = edu.school && !sameText(edu.school, eduTop);
+          const eduTop = edu.school || "University";
+          const showDegree = edu.degree && !sameText(edu.degree, eduTop);
           return (
           <View key={i} style={{ marginBottom: "5pt" }}>
             <HeaderRow left={eduTop} right={edu.date} />
-            {(showSchool || edu.gpa) && (
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
-                <Text style={{ fontStyle: "italic", fontSize: "10pt", color: ACCENT, flex: 1 }}>{showSchool ? dL(edu.school) : ""}</Text>
-                {edu.gpa ? (
-                  <Text style={{ fontSize: "9.5pt", color: INK, marginLeft: "10pt" }}>{dL(edu.gpa)}</Text>
-                ) : null}
-              </View>
-            )}
+            {showDegree ? (
+              <Text style={{ fontSize: "9pt", color: MUTED, marginTop: "0.5pt" }}>
+                {dL(edu.degree)}
+                {edu.gpa ? `  ·  GPA: ${edu.gpa}` : ""}
+              </Text>
+            ) : edu.gpa ? (
+              <Text style={{ fontSize: "9pt", color: MUTED, marginTop: "0.5pt" }}>GPA: {dL(edu.gpa)}</Text>
+            ) : null}
             {edu.coursework ? (
-              <Text style={{ fontSize: "9.5pt", marginTop: "1.5pt" }}>
+              <Text style={{ fontSize: "9pt", marginTop: "1.5pt", lineHeight: 1.3, color: BODY }}>
                 <Text style={{ fontWeight: "bold" }}>Relevant Coursework: </Text>
                 {dL(edu.coursework)}
               </Text>
@@ -333,7 +342,11 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
     certifications: () => certifications.filter((c) => c.trim()).length > 0 && (
       <View>
         <SectionHeading title="Certifications" />
-        <BulletList items={certifications} />
+        {certifications.filter((c) => c.trim()).map((c, i) => (
+          <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", marginTop: "2pt" }}>
+            <Text style={{ fontSize: "9.5pt", color: INK }}>{dL(c)}</Text>
+          </View>
+        ))}
       </View>
     ),
 
@@ -351,7 +364,7 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
           <View key={i} style={{ marginBottom: "5pt" }}>
             <HeaderRow left={lead.org} right={lead.date} />
             {lead.role ? (
-              <Text style={{ fontStyle: "italic", fontSize: "10pt", color: ACCENT, marginTop: "0.5pt" }}>{dL(lead.role)}</Text>
+              <Text style={{ fontSize: "9pt", color: MUTED, marginTop: "0.5pt" }}>{dL(lead.role)}</Text>
             ) : null}
             {lead.bullets.filter((b) => b.trim()).length > 0 && (
               <BulletList items={lead.bullets} />
@@ -371,34 +384,47 @@ const LapisPdfDocument: React.FC<LapisPdfDocumentProps> = ({ state }) => {
           fontSize: "10pt",
           color: INK,
           paddingTop: MARGIN_V,
-          paddingBottom: MARGIN_V,
-          paddingLeft: MARGIN_H,
-          paddingRight: MARGIN_H,
+          paddingBottom: "36pt",
+          paddingLeft: 0,
+          paddingRight: 0,
         }}
       >
-        {/* ── Header ── */}
-        <View>
-          <Text style={{ fontWeight: "bold", fontSize: "22pt", letterSpacing: "0.5pt", textTransform: "uppercase", color: ACCENT, lineHeight: 1.05 }}>
+        {/* ── Header (gray panel, 3pt red bottom border) ── */}
+        <View
+          style={{
+            backgroundColor: HEADER_BG,
+            borderBottomWidth: 3,
+            borderBottomColor: RED,
+            borderBottomStyle: "solid",
+            paddingTop: "22pt",
+            paddingBottom: "14pt",
+            paddingLeft: MARGIN_H,
+            paddingRight: MARGIN_H,
+          }}
+        >
+          <Text style={{ fontWeight: "bold", fontSize: "20pt", letterSpacing: "0.5pt", color: INK }}>
             {dL(profile.name || "Your Name")}
           </Text>
           {roleSubtitle ? (
-            <Text style={{ fontWeight: "bold", fontSize: "11.5pt", color: ACCENT, marginTop: "2pt" }}>
+            <Text style={{ fontWeight: "bold", fontSize: "10pt", letterSpacing: "1pt", textTransform: "uppercase", color: RED, marginTop: "3pt" }}>
               {dL(roleSubtitle)}
             </Text>
           ) : null}
           {contactParts.length > 0 && (
-            <Text style={{ fontSize: "9pt", color: INK, marginTop: "5pt", letterSpacing: "0.1pt" }}>
-              {dL(contactParts.join(" \u00a0|\u00a0 "))}
+            <Text style={{ fontSize: "9pt", color: MUTED, marginTop: "3pt" }}>
+              {dL(contactParts.join("  ·  "))}
             </Text>
           )}
         </View>
 
-        {order.map((key) => (
-          <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
-        ))}
+        <View style={{ paddingLeft: MARGIN_H, paddingRight: MARGIN_H, paddingTop: "10pt" }}>
+          {order.map((key) => (
+            <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>
+          ))}
+        </View>
       </Page>
     </Document>
   );
 };
 
-export default LapisPdfDocument;
+export default AthensPdfDocument;
