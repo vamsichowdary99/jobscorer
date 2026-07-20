@@ -4,9 +4,9 @@ import { updateSession } from '@/lib/supabase/middleware'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Never auth-gate static assets, font API, the redis debug verification route,
-  // admin routes, or RAG embedding routes — admin and RAG routes use their own
-  // X-Admin-Token / X-Internal-Token header auth instead of session cookies.
+  // Never auth-gate static assets, font API, admin routes, or RAG embedding
+  // routes — admin and RAG routes use their own X-Admin-Token / X-Internal-Token
+  // header auth instead of session cookies.
   if (
     pathname.startsWith('/fonts/') ||
     pathname.startsWith('/api/fonts/') ||
@@ -15,7 +15,6 @@ export async function middleware(request: NextRequest) {
     // Razorpay webhook authenticates via X-Razorpay-Signature (HMAC), not a
     // session cookie — Razorpay's servers have no session. Must bypass auth.
     pathname === '/api/billing/webhook' ||
-    pathname === '/api/debug/redis' ||
     // Public SEO / metadata routes — must be reachable without a session and
     // never trigger a Supabase auth lookup (crawlers, social scrapers, favicon).
     pathname === '/robots.txt' ||

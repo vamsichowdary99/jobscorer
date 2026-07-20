@@ -7,10 +7,10 @@ export const maxDuration = 60
 
 /**
  * POST /api/admin/score-legitimacy
- * Service-role-token-gated. Re-scores any `jobs` row whose legitimacy_tier is NULL
+ * Admin-token-gated. Re-scores any `jobs` row whose legitimacy_tier is NULL
  * or 'unknown'. Useful after Phase 2C lands — earlier pool promotions stored 'unknown'.
  *
- * Auth: header `X-Admin-Token: <SUPABASE_SERVICE_ROLE_KEY>`
+ * Auth: header `X-Admin-Token: <ADMIN_API_TOKEN>`
  *
  * Body (all optional):
  *   { limit?: number }   // default 200

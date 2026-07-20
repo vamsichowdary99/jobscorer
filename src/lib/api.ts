@@ -919,8 +919,6 @@ export async function fetchBuildPlanProjectSummaries(userId: string): Promise<Bu
         .select('resume_id, job_id, recommendations')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
-    // TEMP DIAGNOSTIC — remove once the "Projects badge shows 0 on reload" bug is confirmed fixed.
-    console.log('[fetchBuildPlanProjectSummaries]', { userId, error, recsLen: recs?.length ?? null })
     if (error || !recs?.length) return []
 
     const rows = recs as unknown as { resume_id: string; job_id: string; recommendations: BuildPlan }[]
@@ -973,8 +971,6 @@ export interface ProjectRoadmapSummary {
 /** All roadmaps for the authenticated user (Roadmap Library / Projects tab status). */
 export async function fetchProjectRoadmaps(): Promise<ProjectRoadmapSummary[]> {
     const res = await fetch('/api/project-roadmap')
-    // TEMP DIAGNOSTIC — remove once the "Projects badge shows 0 on reload" bug is confirmed fixed.
-    console.log('[fetchProjectRoadmaps]', { status: res.status, ok: res.ok })
     if (!res.ok) return []
     const json = await res.json()
     return json.roadmaps ?? []

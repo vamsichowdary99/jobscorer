@@ -5,11 +5,11 @@ import { isValidAdminToken } from '@/lib/adminAuth'
 
 /**
  * POST /api/admin/refresh-jobs
- * Service-role-token-gated. Deletes the cached jobs:* entry for a given
+ * Admin-token-gated. Deletes the cached jobs:* entry for a given
  * (role, location, level) tuple so the next /api/ingest-jobs call hits n8n
  * fresh. Optionally pass {all: true} to wipe every jobs:* key.
  *
- * Auth: header `X-Admin-Token: <SUPABASE_SERVICE_ROLE_KEY>`.
+ * Auth: header `X-Admin-Token: <ADMIN_API_TOKEN>`.
  */
 export async function POST(req: NextRequest) {
     if (!isValidAdminToken(req)) {

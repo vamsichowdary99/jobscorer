@@ -3,10 +3,8 @@ import { timingSafeEqual } from 'crypto'
 /**
  * Timing-safe check for the admin bearer header `X-Admin-Token`.
  *
- * Prefers a dedicated `ADMIN_API_TOKEN`; falls back to `SUPABASE_SERVICE_ROLE_KEY`
- * for backward compatibility with existing admin routes (refresh-jobs, extract-years,
- * score-legitimacy). Phase 2 / H1: set `ADMIN_API_TOKEN` in env and migrate every
- * admin route to this helper so the service-role key is no longer used as a bearer.
+ * Requires a dedicated `ADMIN_API_TOKEN` — the service-role key is never accepted
+ * as a bearer (H1: the DB's most powerful key must not double as an API password).
  *
  * Returns true only when a non-empty expected token is configured and the supplied
  * token matches it in constant time.
@@ -23,7 +21,7 @@ function tokensMatch(supplied: string, expected: string): boolean {
 export function isValidAdminToken(req: Request): boolean {
     return tokensMatch(
         req.headers.get('x-admin-token') ?? '',
-        process.env.ADMIN_API_TOKEN || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+        process.env.ADMIN_API_TOKEN || '',
     )
 }
 

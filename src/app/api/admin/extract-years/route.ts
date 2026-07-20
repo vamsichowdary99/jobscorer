@@ -7,10 +7,10 @@ export const maxDuration = 300;
 
 /**
  * POST /api/admin/extract-years
- * Service-role-token-gated. Runs the years-of-experience extractor on a
+ * Admin-token-gated. Runs the years-of-experience extractor on a
  * batch of jobs whose min_years_experience column is still NULL.
  *
- * Auth: header `X-Admin-Token: <SUPABASE_SERVICE_ROLE_KEY>`
+ * Auth: header `X-Admin-Token: <ADMIN_API_TOKEN>`
  *
  * Body (all optional):
  *   { limit?: number,             // default 50

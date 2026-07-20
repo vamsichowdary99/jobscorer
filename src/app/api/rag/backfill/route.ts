@@ -11,7 +11,7 @@ export const maxDuration = 300;
 
 /**
  * POST /api/rag/backfill
- * Header: X-Admin-Token: <SUPABASE_SERVICE_ROLE_KEY>
+ * Header: X-Admin-Token: <ADMIN_API_TOKEN>
  * Body (optional):
  *   { scope?: 'jobs' | 'resumes' | 'all'   // default 'all'
  *   , limit?: number                       // batch size cap (default 200)
