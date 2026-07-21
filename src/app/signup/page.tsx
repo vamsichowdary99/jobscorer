@@ -31,10 +31,14 @@ export default function SignupPage() {
     }
     setLoading(true)
 
+    const origin = window.location.origin
     const { error, data } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION } },
+      options: {
+        emailRedirectTo: `${origin}/auth/callback`,
+        data: { terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION },
+      },
     })
     if (error) {
       setError(error.message)

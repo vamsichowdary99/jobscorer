@@ -1,3 +1,20 @@
 export async function register() {
-  // Sentry disabled — incompatible with Turbopack in dev
+  // Sentry's OTel instrumentation conflicts with Turbopack's dev HMR — only
+  // register in production (webpack) builds, matching next.config.ts's split.
+  if (process.env.NODE_ENV !== 'production') return
+
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    await import('./sentry.server.config')
+  }
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    await import('./sentry.edge.config')
+  }
+}
+
+export async function onRequestError(
+  ...args: Parameters<typeof import('@sentry/nextjs').captureRequestError>
+) {
+  if (process.env.NODE_ENV !== 'production') return
+  const Sentry = await import('@sentry/nextjs')
+  await Sentry.captureRequestError(...args)
 }
