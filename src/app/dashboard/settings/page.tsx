@@ -727,7 +727,9 @@ export default function SettingsPage() {
                             </div>
                             <button style={S.btnOutlineSmall} onClick={async () => {
                                 if (!user?.email) return
-                                await supabase.auth.resetPasswordForEmail(user.email)
+                                await supabase.auth.resetPasswordForEmail(user.email, {
+                                    redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+                                })
                                 alert('Password reset link sent to your email.')
                             }}>Change password</button>
                         </div>

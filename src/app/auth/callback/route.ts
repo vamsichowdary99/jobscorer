@@ -14,5 +14,12 @@ export async function GET(request: Request) {
     }
   }
 
+  // A failed password-recovery exchange (expired/already-used link) should
+  // land on /reset-password, which already renders a friendly "link expired"
+  // state when it finds no session — rather than a silent /login redirect.
+  if (next.startsWith('/reset-password')) {
+    return NextResponse.redirect(`${origin}/reset-password`)
+  }
+
   return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
 }
