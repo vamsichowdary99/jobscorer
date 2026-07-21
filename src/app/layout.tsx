@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Outfit, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import ConsentBanner from '@/components/legal/ConsentBanner'
+import PostHogProvider from '@/components/providers/PostHogProvider'
 import { AuthProvider } from '@/components/providers/AuthProvider'
 import { SITE_URL, SITE_NAME, SITE_TAGLINE, SITE_DESCRIPTION } from '@/lib/site'
 
@@ -76,6 +77,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <ConsentBanner />
+          <PostHogProvider />
         </AuthProvider>
       </body>
     </html>

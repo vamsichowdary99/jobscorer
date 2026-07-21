@@ -29,16 +29,18 @@ const nextConfig: NextConfig = {
     return config;
   },
   async headers() {
-    // CSP is Report-Only for now so a misconfigured directive can't break the
-    // live app. Watch the console for violations, widen as needed, then rename
-    // the key to "Content-Security-Policy" to enforce.
+    // Enforced (Phase 7). frame-src covers blob: PDF preview iframes (optimize,
+    // resumes, chat, cover letter, jade-preview) plus Razorpay's checkout iframe;
+    // without it these fall back to default-src 'self', which blocks blob:.
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.i.posthog.com https://checkout.razorpay.com https://cdn.razorpay.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.upstash.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io",
+      // data: is required for pdfjs-dist, which fetches its compiled WASM module via a data: URI.
+      "connect-src 'self' data: https://*.supabase.co wss://*.supabase.co https://*.upstash.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io https://*.i.posthog.com https://api.razorpay.com https://lumberjack.razorpay.com",
+      "frame-src 'self' blob: https://checkout.razorpay.com https://api.razorpay.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -52,7 +54,7 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-          { key: "Content-Security-Policy-Report-Only", value: csp },
+          { key: "Content-Security-Policy", value: csp },
         ],
       },
     ];
