@@ -35,15 +35,14 @@ async function checkRedis(): Promise<boolean> {
 }
 
 async function checkN8n(): Promise<boolean> {
-    // Any one configured webhook host stands in for reachability of the n8n instance.
+    // n8n's own /healthz reports whether the app itself is up, not just the
+    // host — a bare origin ping would return 200 for any web server.
     const url = process.env.N8N_SCORING_WEBHOOK_URL || process.env.N8N_RESUME_WEBHOOK_URL
     if (!url) return false
     return withTimeout(async () => {
         const origin = new URL(url).origin
-        // Any response (even 404) means the host is reachable; only a network
-        // error/timeout means it's down.
-        await fetch(origin, { method: 'GET' })
-        return true
+        const res = await fetch(`${origin}/healthz`, { method: 'GET' })
+        return res.ok
     }, 3000)
 }
 
