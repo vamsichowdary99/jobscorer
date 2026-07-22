@@ -847,7 +847,7 @@ const S: Record<string, React.CSSProperties> = {
     sidebar: { display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 88 },
     card: {
         background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
-        padding: 22, boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+        padding: 22, boxShadow: '0 1px 3px rgba(15,23,42,0.04)', minWidth: 0,
     },
     cardHeader: {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16,
@@ -888,10 +888,10 @@ const S: Record<string, React.CSSProperties> = {
         fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
     },
     itemName: {
-        fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 2,
+        fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 2, minWidth: 0,
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
     },
-    itemMeta: { fontSize: 11, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+    itemMeta: { fontSize: 11, color: '#94a3b8', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     itemBadge: {
         padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700,
         background: '#dbeafe', color: '#1d4ed8', flexShrink: 0,

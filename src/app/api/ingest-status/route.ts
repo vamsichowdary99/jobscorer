@@ -38,12 +38,21 @@ export async function GET(request: NextRequest) {
         return jsonNoStore({ error: 'Missing id param' }, { status: 400 })
     }
 
-    // Sentinel 1: cache-hit (Phase 2) — synthesise completed status
+    // Sentinel 1: cache-hit (Phase 2) — synthesise completed status. Read the
+    // REAL cached counts back rather than hardcoding zeros — the ingest-jobs
+    // POST route stores the true new_jobs_added/total_jobs_fetched at write
+    // time (either from the last real run, or from a pool promotion), and
+    // discarding them here made every cache hit read as "0 new jobs" even
+    // when the underlying data genuinely had fresh results.
     if (id.startsWith('cache-hit:')) {
+        const rest = id.slice('cache-hit:'.length)
+        const redisKey = rest.startsWith('pool:') ? rest.slice('pool:'.length) : rest
+        const cached = await safeRedis(r => r.get<Record<string, unknown>>(redisKey))
         return jsonNoStore({
             status: 'completed',
-            new_jobs_added: 0,
-            total_jobs_fetched: 0,
+            new_jobs_added: (cached?.new_jobs_added as number | undefined) ?? 0,
+            total_jobs_fetched: (cached?.total_jobs_fetched as number | undefined) ?? 0,
+            from_pool: (cached?.from_pool as boolean | undefined) ?? false,
             cached: true,
         })
     }

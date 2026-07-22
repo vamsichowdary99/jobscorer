@@ -163,13 +163,13 @@ export function KanbanReceipt() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
         {cols.map(col => (
-          <div key={col.s} style={{ position: 'relative' }}>
+          <div key={col.s} style={{ position: 'relative', minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: col.color }} />
-                <span style={{ fontSize: '0.625rem', fontWeight: 700, color: col.color, fontFamily: SANS }}>{col.s}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: col.color, flexShrink: 0 }} />
+                <span style={{ fontSize: '0.625rem', fontWeight: 700, color: col.color, fontFamily: SANS, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{col.s}</span>
               </div>
-              <span style={{ fontFamily: MONO, fontSize: '0.5625rem', fontWeight: 700, color: C.textTer }}>{col.count}</span>
+              <span style={{ fontFamily: MONO, fontSize: '0.5625rem', fontWeight: 700, color: C.textTer, flexShrink: 0 }}>{col.count}</span>
             </div>
             {col.confetti && (
               <div style={{ position: 'absolute', top: 20, left: 0, right: 0, height: 60, overflow: 'hidden', pointerEvents: 'none', zIndex: 5 }}>

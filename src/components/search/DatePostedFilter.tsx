@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Clock, ChevronDown, X } from 'lucide-react'
+import { Clock, ChevronDown, X, Check } from 'lucide-react'
 
 export type DateRange = 'any' | '24h' | '7d' | '30d'
 
@@ -64,22 +64,26 @@ export function DatePostedFilter({ value, onChange, postedDates }: Props) {
 
     const active = OPTIONS.find(o => o.value === value)!
     const isActive = value !== 'any'
+    const [hover, setHover] = useState(false)
 
     return (
         <div ref={wrapRef} style={{ position: 'relative', display: 'inline-block' }}>
             <button
                 type="button"
                 onClick={() => setOpen(o => !o)}
+                onMouseEnter={() => setHover(true)}
+                onMouseLeave={() => setHover(false)}
                 style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     padding: '6px 10px 6px 12px',
                     borderRadius: 9999,
-                    border: `1px solid ${isActive ? '#135bec' : '#E2E8F0'}`,
+                    border: `1px solid ${isActive ? '#135bec' : (hover || open) ? '#CBD5E1' : '#E2E8F0'}`,
                     background: isActive ? '#EFF4FE' : '#fff',
                     color: isActive ? '#0F4DD0' : '#475569',
                     fontSize: '0.8125rem', fontWeight: 600,
                     fontFamily: 'inherit', cursor: 'pointer',
-                    transition: 'border-color 0.15s, background 0.15s, color 0.15s',
+                    boxShadow: (hover || open) ? '0 1px 3px rgba(15,23,42,0.08)' : 'none',
+                    transition: 'border-color 0.15s, background 0.15s, color 0.15s, box-shadow 0.15s',
                     whiteSpace: 'nowrap',
                 }}
             >
@@ -100,6 +104,7 @@ export function DatePostedFilter({ value, onChange, postedDates }: Props) {
                     </span>
                 ) : (
                     <ChevronDown size={13} style={{
+                        color: '#94A3B8',
                         transition: 'transform 0.2s',
                         transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
                     }} />
@@ -114,18 +119,21 @@ export function DatePostedFilter({ value, onChange, postedDates }: Props) {
                         exit={{ opacity: 0, y: -4, scale: 0.97 }}
                         transition={{ duration: 0.14, ease: [0.32, 0.72, 0.2, 1] }}
                         style={{
-                            position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 30,
-                            width: 248,
+                            position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 30,
+                            width: 252,
                             background: '#fff',
                             border: '1px solid #E2E8F0',
-                            borderRadius: 12,
-                            boxShadow: '0 12px 32px -8px rgba(15,23,42,0.18), 0 2px 6px rgba(15,23,42,0.06)',
-                            padding: 6,
+                            borderRadius: 14,
+                            boxShadow: '0 16px 40px -12px rgba(15,23,42,0.2), 0 4px 10px -2px rgba(15,23,42,0.06)',
+                            padding: '6px',
                             fontFamily: 'inherit',
+                            overflow: 'hidden',
                         }}
                     >
                         <div style={{
-                            padding: '6px 10px 8px',
+                            padding: '8px 12px 9px',
+                            marginBottom: 2,
+                            borderBottom: '1px solid #F1F5F9',
                             fontSize: '0.6875rem', fontWeight: 700, letterSpacing: 0.6,
                             color: '#94A3B8', textTransform: 'uppercase',
                         }}>
@@ -142,43 +150,39 @@ export function DatePostedFilter({ value, onChange, postedDates }: Props) {
                                     onClick={() => { onChange(opt.value); setOpen(false) }}
                                     disabled={dim}
                                     style={{
-                                        position: 'relative',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                                        display: 'flex', alignItems: 'center', gap: 9,
                                         width: '100%', textAlign: 'left',
-                                        padding: '10px 12px 10px 14px',
-                                        borderRadius: 8,
+                                        padding: '9px 10px',
+                                        borderRadius: 9,
                                         border: 'none',
                                         background: isSel ? '#EFF4FE' : 'transparent',
                                         color: dim ? '#CBD5E1' : isSel ? '#0F4DD0' : '#1E293B',
                                         cursor: dim ? 'not-allowed' : 'pointer',
                                         fontFamily: 'inherit',
                                         transition: 'background 0.12s',
-                                        marginBottom: idx === OPTIONS.length - 1 ? 0 : 1,
+                                        marginTop: idx === 0 ? 2 : 0,
                                     }}
                                     onMouseEnter={(e) => { if (!isSel && !dim) e.currentTarget.style.background = '#F8FAFC' }}
                                     onMouseLeave={(e) => { if (!isSel && !dim) e.currentTarget.style.background = 'transparent' }}
                                 >
-                                    {/* Left accent rail on the selected row */}
-                                    {isSel && (
-                                        <span style={{
-                                            position: 'absolute', left: 4, top: 10, bottom: 10,
-                                            width: 2, borderRadius: 2,
-                                            background: '#135bec',
-                                        }} />
-                                    )}
-                                    <span style={{ fontSize: '0.8125rem', fontWeight: isSel ? 600 : 500 }}>
+                                    {/* Checkmark slot — reserves space so labels stay aligned whether or not a row is selected */}
+                                    <span style={{ width: 14, height: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {isSel && <Check size={13} strokeWidth={2.75} style={{ color: '#135bec' }} />}
+                                    </span>
+                                    <span style={{ flex: 1, minWidth: 0, fontSize: '0.8125rem', fontWeight: isSel ? 600 : 500 }}>
                                         {opt.label}
                                     </span>
                                     <span style={{
                                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                        minWidth: 26, height: 20, padding: '0 7px',
+                                        minWidth: 24, height: 20, padding: '0 7px',
                                         borderRadius: 9999,
                                         background: dim
                                             ? 'transparent'
                                             : isSel ? '#DCE7FD' : '#F1F5F9',
-                                        color: dim ? '#CBD5E1' : isSel ? '#0F4DD0' : '#475569',
-                                        fontSize: '0.6875rem', fontWeight: 600,
+                                        color: dim ? '#CBD5E1' : isSel ? '#0F4DD0' : '#64748B',
+                                        fontSize: '0.6875rem', fontWeight: 700,
                                         fontVariantNumeric: 'tabular-nums',
+                                        flexShrink: 0,
                                     }}>
                                         {c}
                                     </span>

@@ -110,6 +110,18 @@ const SKILL_REMOVE: React.CSSProperties = { background: '#cbd5e1', color: '#4755
 
 const MAX_RESUMES = 5
 
+const ANALYZE_PHRASES = [
+    'Reading your resume…',
+    'Mapping your work experience…',
+    'Identifying your skills…',
+    'Reviewing your projects…',
+    'Scoring your profile…',
+]
+
+function fileExt(name: string): 'PDF' | 'DOCX' {
+    return name.toLowerCase().endsWith('.docx') ? 'DOCX' : 'PDF'
+}
+
 interface CertEntry    { name: string; issuer: string; date: string }
 interface ProjectEntry { name: string; description: string; technologies: string; link: string }
 interface AchievEntry  { title: string; description: string; year: string }
@@ -419,6 +431,7 @@ export default function UploadPage() {
     const [resumes, setResumes]             = useState<Resume[]>([])
     const [loadingResumes, setLoadingResumes] = useState(true)
     const [viewMode, setViewMode]           = useState<'upload' | 'view'>('upload')
+    const [resumeSheetOpen, setResumeSheetOpen] = useState(false)
     const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
     const [primaryId, setPrimaryId]         = useState<string | null>(null)
     const [file, setFile]                   = useState<File | null>(null)
@@ -451,7 +464,6 @@ export default function UploadPage() {
     // AI Profile Assessment
     const [resumeAnalysis, setResumeAnalysis] = useState<ResumeAiAnalysis | null>(null)
     const [analysisLoading, setAnalysisLoading] = useState(false)
-    const [assessmentExpanded, setAssessmentExpanded] = useState(false)
 
     // ── resume a landing-page upload started before the user had an account ──
     // The Hero dropzone stashes the file in sessionStorage and sends the user
@@ -475,16 +487,36 @@ export default function UploadPage() {
     }, [file])
 
     // ── load resumes ─────────────────────────────────────────────
+    // Remembers which screen (upload form vs. a specific resume) the user was
+    // on, so switching tabs and coming back doesn't dump them back onto the
+    // most-recent resume — the page remounts on every route change, so this
+    // has to survive in sessionStorage rather than plain component state.
     useEffect(() => {
         if (!user) return
+        const viewStateKey = `jobscorer_upload_view_${user.id}`
         fetchResumes(user.id).then(data => {
             setResumes(data)
             const stored = getPrimaryResumeId()
             const pid = (stored && data.some(r => r.id === stored)) ? stored : data[0]?.id ?? null
             if (pid) { setPrimaryResumeId(pid); setPrimaryId(pid) }
-            if (data.length > 0 && !autoUploadingRef.current) { setSelectedResume(data[0]); setViewMode('view'); loadGapResponses(data[0].id) }
+            if (autoUploadingRef.current) return
+            let savedIntent: { viewMode: 'upload' | 'view'; resumeId: string | null } | null = null
+            try { savedIntent = JSON.parse(sessionStorage.getItem(viewStateKey) ?? 'null') } catch { savedIntent = null }
+            if (savedIntent?.viewMode === 'upload') { setViewMode('upload'); return }
+            const remembered = savedIntent?.resumeId ? data.find(r => r.id === savedIntent!.resumeId) : null
+            const toSelect = remembered ?? data[0]
+            if (toSelect) { setSelectedResume(toSelect); setViewMode('view'); loadGapResponses(toSelect.id) }
         }).catch(console.error).finally(() => setLoadingResumes(false))
     }, [user])
+
+    // Persist the current screen after resumes have finished their initial
+    // load (guarded so this can't fire with default state and clobber the
+    // saved intent before the effect above has a chance to read it).
+    useEffect(() => {
+        if (!user || loadingResumes) return
+        const viewStateKey = `jobscorer_upload_view_${user.id}`
+        sessionStorage.setItem(viewStateKey, JSON.stringify({ viewMode, resumeId: selectedResume?.id ?? null }))
+    }, [user, loadingResumes, viewMode, selectedResume])
 
     // ── AI analysis: load from resume or poll until populated ────
     useEffect(() => {
@@ -819,6 +851,16 @@ export default function UploadPage() {
         if (f && (f.type === 'application/pdf' || f.name.endsWith('.docx'))) setFile(f)
     }, [])
 
+    // Rotating status line while the resume is being parsed & scored — cycles
+    // every 1.6s so "Upload & Analyze" doesn't sit frozen for the ~10-30s
+    // n8n round trip in handleUpload.
+    const [analyzePhraseIdx, setAnalyzePhraseIdx] = useState(0)
+    useEffect(() => {
+        if (!uploading) { setAnalyzePhraseIdx(0); return }
+        const id = setInterval(() => setAnalyzePhraseIdx(i => (i + 1) % ANALYZE_PHRASES.length), 1600)
+        return () => clearInterval(id)
+    }, [uploading])
+
     const handleUpload = async () => {
         if (!file || !user) return
         setUploading(true); setUploadError('')
@@ -1010,32 +1052,96 @@ export default function UploadPage() {
 
             <div style={{ ...S.body, ...(isMobile ? { flexDirection: 'column' } : {}) }}>
 
-                {/* ── Mobile Resume Tab Strip ──────────────────────────── */}
+                {/* ── Mobile Resume Selector (dropdown, replaces the old swipeable tab strip) ── */}
                 {isMobile && (
-                    <div style={{ padding: '10px 14px', background: '#fff', borderBottom: '1px solid #e5e7eb', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as React.CSSProperties['WebkitOverflowScrolling'], display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <div style={{ padding: '10px 14px', background: '#fff', borderBottom: '1px solid #e5e7eb', flexShrink: 0, display: 'flex', gap: 8, alignItems: 'center' }}>
                         <button
-                            onClick={() => { setViewMode('upload'); setFile(null); setUploadError('') }}
+                            onClick={() => { setViewMode('upload'); setFile(null); setUploadError(''); setResumeSheetOpen(false) }}
                             disabled={atLimit}
-                            style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 20, background: viewMode === 'upload' ? '#1d4ed8' : '#f3f4f6', color: viewMode === 'upload' ? '#fff' : '#374151', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: atLimit ? 0.5 : 1, whiteSpace: 'nowrap' }}
+                            title={atLimit ? 'Limit reached' : 'Upload new resume'}
+                            style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 10, background: viewMode === 'upload' ? '#1d4ed8' : '#eff6ff', color: viewMode === 'upload' ? '#fff' : '#1d4ed8', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: atLimit ? 0.5 : 1 }}
                         >
-                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
-                            Upload
+                            <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
                         </button>
-                        {resumes.map(r => {
-                            const active = viewMode === 'view' && selectedResume?.id === r.id
-                            const rv = parse(r)
-                            const name = rv?.name && rv.name !== 'Unknown' ? rv.name : (r.original_filename || 'Unnamed')
-                            const shortName = name.length > 18 ? name.substring(0, 18) + '…' : name
-                            return (
-                                <button
-                                    key={r.id}
-                                    onClick={() => switchResume(r)}
-                                    style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 20, background: active ? '#dbeafe' : '#f3f4f6', color: active ? '#1d4ed8' : '#374151', border: `1.5px solid ${active ? '#bfdbfe' : 'transparent'}`, fontSize: 13, fontWeight: active ? 600 : 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                                >
-                                    {shortName}
-                                </button>
-                            )
-                        })}
+                        <MorphingPopover open={resumeSheetOpen} onOpenChange={setResumeSheetOpen} style={{ display: 'block', width: '100%', flex: 1, minWidth: 0 }}>
+                            <MorphingPopoverTrigger
+                                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 12, background: '#f8fafc', border: '1px solid #e5e7eb', cursor: 'pointer' }}
+                            >
+                                {(() => {
+                                    if (viewMode === 'upload') return (
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, color: '#374151', fontSize: 14, fontWeight: 600 }}>
+                                            <svg width="14" height="14" fill="none" stroke="#1d4ed8" viewBox="0 0 24 24" style={{ flexShrink: 0 }}><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
+                                            Upload new resume
+                                        </span>
+                                    )
+                                    const rv = selectedResume ? parse(selectedResume) : null
+                                    const name = rv?.name && rv.name !== 'Unknown' ? rv.name : (selectedResume?.original_filename || 'Select a resume')
+                                    return (
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                            <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#dbeafe', color: '#1d4ed8', fontSize: 11, fontWeight: 700, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{name[0]?.toUpperCase() ?? 'R'}</span>
+                                            <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                                        </span>
+                                    )
+                                })()}
+                                <svg width="14" height="14" fill="none" stroke="#6b7280" viewBox="0 0 24 24" style={{ flexShrink: 0, transform: resumeSheetOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><polyline points="6 9 12 15 18 9" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" /></svg>
+                            </MorphingPopoverTrigger>
+                            <MorphingPopoverContent style={popContentStyle}>
+                                {SHEET_HANDLE}
+                                <div style={POP_HEADER}>
+                                    <div>
+                                        <h4 style={POP_HEAD}>Your resumes</h4>
+                                        <p style={POP_SUB}>Pick one to view, or upload a new one.</p>
+                                    </div>
+                                </div>
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 18px' }}>
+                                    <button
+                                        onClick={() => { setViewMode('upload'); setFile(null); setUploadError(''); setResumeSheetOpen(false) }}
+                                        disabled={atLimit}
+                                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 10px', borderRadius: 10, background: viewMode === 'upload' ? 'rgba(219,234,254,0.5)' : 'transparent', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', textAlign: 'left', opacity: atLimit ? 0.5 : 1 }}
+                                    >
+                                        <span style={{ width: 28, height: 28, borderRadius: '50%', background: '#eff6ff', color: '#1d4ed8', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
+                                        </span>
+                                        <span style={{ fontSize: 14, fontWeight: 600, color: '#1d4ed8' }}>{atLimit ? 'Limit reached' : 'Upload new resume'}</span>
+                                    </button>
+                                    {resumes.map(r => {
+                                        const active = viewMode === 'view' && selectedResume?.id === r.id
+                                        const isPrimary = primaryId === r.id
+                                        const rv = parse(r)
+                                        const name = rv?.name && rv.name !== 'Unknown' ? rv.name : (r.original_filename || 'Unnamed')
+                                        return (
+                                            <div
+                                                key={r.id}
+                                                onClick={() => { switchResume(r); setResumeSheetOpen(false) }}
+                                                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 10px', borderRadius: 10, background: active ? 'rgba(219,234,254,0.5)' : 'transparent', borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                                            >
+                                                <span style={{ width: 28, height: 28, borderRadius: '50%', background: '#f1f5f9', color: '#475569', fontSize: 12, fontWeight: 700, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{name[0]?.toUpperCase() ?? 'R'}</span>
+                                                <span style={{ flex: 1, minWidth: 0 }}>
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <span style={{ fontSize: 14, fontWeight: active ? 700 : 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                                                        {isPrimary && (
+                                                            <span style={{ flexShrink: 0, background: '#dbeafe', color: '#1d4ed8', fontSize: 9, fontWeight: 700, borderRadius: 4, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACTIVE</span>
+                                                        )}
+                                                    </span>
+                                                    <span style={{ display: 'block', fontSize: 11.5, color: '#9ca3af', marginTop: 1 }}>Updated {timeAgo(r.created_at)}</span>
+                                                </span>
+                                                <button
+                                                    onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
+                                                    disabled={deletingId === r.id}
+                                                    title="Delete resume"
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 6, flexShrink: 0, opacity: deletingId === r.id ? 0.4 : 1 }}
+                                                >
+                                                    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
+                                                </button>
+                                            </div>
+                                        )
+                                    })}
+                                    {resumes.length === 0 && (
+                                        <p style={{ fontSize: 13, color: '#9ca3af', padding: '16px 10px', textAlign: 'center' }}>No resumes yet — upload your first one above.</p>
+                                    )}
+                                </div>
+                            </MorphingPopoverContent>
+                        </MorphingPopover>
                     </div>
                 )}
 
@@ -1107,14 +1213,72 @@ export default function UploadPage() {
                             {viewMode === 'upload' ? (
                                 /* Upload form */
                                 <div style={{ maxWidth: 460, margin: isMobile ? '16px 0' : '36px auto', background: '#fff', borderRadius: 16, padding: isMobile ? 20 : 36, boxShadow: '0 2px 12px rgba(0,0,0,0.07)' }}>
-                                    <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>Upload your resume</h2>
-                                    <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 24px', lineHeight: '1.6' }}>AI extracts your skills, experience, and education to find your best job matches.</p>
-                                    <div onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => document.getElementById('rs-file')?.click()} style={{ border: `2px dashed ${dragging ? '#1d4ed8' : '#d1d5db'}`, borderRadius: 12, padding: '40px 20px', textAlign: 'center', cursor: 'pointer', background: dragging ? '#eff6ff' : '#fafafa', transition: 'all 0.2s' }}>
-                                        <div style={{ fontSize: 36, marginBottom: 10 }}>{dragging ? '📥' : '📄'}</div>
-                                        {file ? (<><p style={{ fontWeight: 600, color: '#111827', margin: '0 0 3px' }}>{file.name}</p><p style={{ fontSize: 12, color: '#10b981', margin: 0 }}>{(file.size/1024/1024).toFixed(2)} MB · ready</p></>) : (<><p style={{ fontWeight: 500, color: '#374151', margin: '0 0 4px' }}>Drop PDF or DOCX here</p><p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>or click to browse · max 10MB</p></>)}
-                                        <input id="rs-file" type="file" accept=".pdf,.docx" onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f) }} style={{ display: 'none' }} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                                        <div style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3M7 9l5-5 5 5M12 4v12" /></svg>
+                                        </div>
+                                        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0 }}>Upload your resume</h2>
                                     </div>
-                                    {file && <button onClick={handleUpload} disabled={uploading} style={{ ...S.saveBtn, width: '100%', marginTop: 14, justifyContent: 'center', display: 'flex', opacity: uploading ? 0.6 : 1 }}>{uploading ? 'Analyzing…' : 'Upload & Analyze'}</button>}
+                                    <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px', lineHeight: '1.6' }}>AI extracts your skills, experience, and education to find your best job matches.</p>
+
+                                    {file ? (
+                                        /* Selected-file tile — icon-led, matches the resume-row cards elsewhere in the app */
+                                        <div style={{ position: 'relative', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 44px 16px 16px', display: 'flex', alignItems: 'center', gap: 12, background: '#fafafa' }}>
+                                            <div style={{ width: 40, height: 40, borderRadius: 9, flexShrink: 0, background: fileExt(file.name) === 'PDF' ? '#fef2f2' : '#eff6ff', color: fileExt(file.name) === 'PDF' ? '#dc2626' : '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace', fontSize: 9, fontWeight: 800, letterSpacing: '0.02em' }}>
+                                                {fileExt(file.name)}
+                                            </div>
+                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                                <p style={{ fontWeight: 600, color: '#111827', margin: '0 0 2px', fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</p>
+                                                <p style={{ fontSize: 12, color: '#10b981', margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5L20 7" /></svg>
+                                                    {(file.size / 1024 / 1024).toFixed(2)} MB · ready
+                                                </p>
+                                            </div>
+                                            {!uploading && (
+                                                <button onClick={() => setFile(null)} title="Remove file" style={{ position: 'absolute', top: 10, right: 10, width: 24, height: 24, borderRadius: 6, background: '#fff', border: '1px solid #e5e7eb', color: '#9ca3af', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div
+                                            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                                            onDragLeave={() => setDragging(false)}
+                                            onDrop={handleDrop}
+                                            onClick={() => document.getElementById('rs-file')?.click()}
+                                            className="rs-dropzone"
+                                            style={{ border: `1.5px dashed ${dragging ? '#1d4ed8' : '#d1d5db'}`, borderRadius: 12, padding: '36px 20px', textAlign: 'center', cursor: 'pointer', background: dragging ? '#eff6ff' : '#fafafa', transition: 'border-color 0.2s, background 0.2s' }}
+                                        >
+                                            <div style={{ width: 44, height: 44, borderRadius: 11, margin: '0 auto 12px', background: dragging ? '#dbeafe' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={dragging ? '#1d4ed8' : '#94a3b8'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3M7 9l5-5 5 5M12 4v12" /></svg>
+                                            </div>
+                                            <p style={{ fontWeight: 500, color: '#374151', margin: '0 0 4px', fontSize: 14 }}>Drop PDF or DOCX here</p>
+                                            <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>or click to browse</p>
+                                            <span style={{ display: 'inline-block', marginTop: 12, fontFamily: 'monospace', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', color: '#9ca3af', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 999, padding: '3px 10px' }}>PDF or DOCX · up to 10MB</span>
+                                            <input id="rs-file" type="file" accept=".pdf,.docx" onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f) }} style={{ display: 'none' }} />
+                                        </div>
+                                    )}
+
+                                    {file && (
+                                        <button onClick={handleUpload} disabled={uploading} style={{ ...S.saveBtn, width: '100%', marginTop: 14, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 9, opacity: uploading ? 0.85 : 1 }}>
+                                            {uploading ? (
+                                                <>
+                                                    <span style={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff', animation: 'rs-spin 0.8s linear infinite', flexShrink: 0 }} />
+                                                    <AnimatePresence mode="wait">
+                                                        <motion.span
+                                                            key={analyzePhraseIdx}
+                                                            initial={{ opacity: 0, y: 6 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            exit={{ opacity: 0, y: -6 }}
+                                                            transition={{ duration: 0.25 }}
+                                                        >
+                                                            {ANALYZE_PHRASES[analyzePhraseIdx]}
+                                                        </motion.span>
+                                                    </AnimatePresence>
+                                                </>
+                                            ) : 'Upload & Analyze'}
+                                        </button>
+                                    )}
                                     {uploadError && <p style={{ color: '#ef4444', fontSize: 13, marginTop: 8 }}>{uploadError}</p>}
                                 </div>
 
@@ -1781,7 +1945,6 @@ export default function UploadPage() {
                                                 @keyframes fade-in-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
                                                 .assess-card { animation: fade-in-up 0.5s ease both; }
                                                 .score-ring-fill { transition: stroke-dashoffset 1.4s cubic-bezier(0.34,1.56,0.64,1); }
-                                                .expand-btn:hover { background: #f8fafc !important; }
                                                 .assess-asset-card:hover { box-shadow: 0 2px 8px rgba(16,185,129,0.12); }
                                                 .assess-action-card:hover { box-shadow: 0 2px 8px rgba(19,91,236,0.12); }
                                                 .pb-card:hover { border-color: #cbd5e1 !important; box-shadow: 0 2px 12px rgba(15,23,42,0.06); transform: translateY(-1px); }
@@ -1830,9 +1993,8 @@ export default function UploadPage() {
                                                     }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#135bec', boxShadow: '0 0 5px rgba(19,91,236,0.35)' }} />
-                                                            <span style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: '#94a3b8' }}>AI Profile Assessment</span>
+                                                            <span style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: '#135bec' }}>AI Profile Assessment</span>
                                                         </div>
-                                                        <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#cbd5e1', letterSpacing: '0.06em' }}>GPT-4.1 · Career Coach</span>
                                                     </div>
 
                                                     {/* Main content */}
@@ -2026,26 +2188,17 @@ export default function UploadPage() {
                                                         </div>
                                                     ) : null}
 
-                                                    {/* Expandable full assessment */}
+                                                    {/* Full assessment — always shown at the bottom of the card */}
                                                     {resumeAnalysis.full_assessment && (
                                                         <div style={{ borderTop: '1px solid #f1f5f9' }}>
-                                                            <button
-                                                                className="expand-btn"
-                                                                onClick={() => setAssessmentExpanded(p => !p)}
-                                                                style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: isMobile ? '10px 14px' : '10px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background 0.15s', borderRadius: '0 0 14px 14px' }}
-                                                            >
-                                                                <span style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.13em' }}>Full Assessment</span>
-                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" style={{ transform: assessmentExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                                                                    <polyline points="6 9 12 15 18 9"/>
-                                                                </svg>
-                                                            </button>
-                                                            {assessmentExpanded && (
-                                                                <div style={{ padding: isMobile ? '0 14px 20px' : '0 28px 24px' }}>
-                                                                    {resumeAnalysis.full_assessment.split('\n\n').map((para, i) => (
-                                                                        <p key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.825rem', color: '#64748b', lineHeight: 1.75, margin: '0 0 14px' }}>{para}</p>
-                                                                    ))}
-                                                                </div>
-                                                            )}
+                                                            <div style={{ padding: isMobile ? '14px 14px 4px' : '20px 28px 4px' }}>
+                                                                <span style={{ fontFamily: 'monospace', fontSize: '0.52rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.13em' }}>Full Assessment</span>
+                                                            </div>
+                                                            <div style={{ padding: isMobile ? '0 14px 20px' : '0 28px 24px' }}>
+                                                                {resumeAnalysis.full_assessment.split('\n\n').map((para, i) => (
+                                                                    <p key={i} style={{ fontFamily: "'Inter', sans-serif", fontSize: '0.825rem', color: '#64748b', lineHeight: 1.75, margin: '0 0 14px' }}>{para}</p>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
@@ -2072,12 +2225,12 @@ export default function UploadPage() {
                     </div>
 
                     {/* Bottom Action Bar */}
-                    <div style={{ ...S.bar, ...(isMobile ? { padding: '10px 14px' } : {}) }}>
-                        <div style={{ ...S.barInfo, ...(isMobile ? { fontSize: 11 } : {}) }}>
-                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
+                    <div style={{ ...S.bar, ...(isMobile ? { padding: '10px 14px', gap: 10 } : {}) }}>
+                        <div style={{ ...S.barInfo, ...(isMobile ? { fontSize: 11, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } : {}) }}>
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0 }}><path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
                             {lastSaved ? <><span>Last saved</span><strong style={{ color: '#111827', marginLeft: 3 }}>{Math.max(1, Math.floor((Date.now() - lastSaved.getTime()) / 60000))} min ago</strong></> : <span>No unsaved changes</span>}
                         </div>
-                        <div style={{ display: 'flex', gap: isMobile ? 7 : 10, alignItems: 'center', ...(isMobile ? { paddingRight: 60 } : {}) }}>
+                        <div style={{ display: 'flex', gap: isMobile ? 7 : 10, alignItems: 'center', flexShrink: 0 }}>
                             {!isMobile && <button onClick={() => { setAddingSection(null); setEditingIndex(null); setCertEntries([EMPTY_CERT]); setProjectEntries([EMPTY_PROJECT]); setAchievEntries([EMPTY_ACHIEV]); setLinkEntry(EMPTY_LINKS); setWorkEntries([EMPTY_WORK]); setEduEntries([EMPTY_EDU]) }} style={S.discardBtn}>Discard Changes</button>}
                             <button onClick={() => {
                                 if (addingSection === 'work_experience') saveWork()
@@ -2104,6 +2257,8 @@ export default function UploadPage() {
                 .delete-btn { opacity: 0; transition: opacity 0.15s; }
                 .edit-pencil-btn { opacity: 1; }
                 .edit-pencil-btn:hover { background: #dbeafe !important; color: #1d4ed8 !important; border-color: #bfdbfe !important; }
+                .rs-dropzone:hover { border-color: #93c5fd !important; background: #f8faff !important; }
+                @keyframes rs-spin { to { transform: rotate(360deg); } }
             `}</style>
         </div>
     )

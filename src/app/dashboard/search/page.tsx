@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { searchJobs, fetchJobsSince, fetchJobsByIds, triggerJobIngestion, triggerScoring, getPrimaryResumeId, RateLimitError, reportJobStatus } from '@/lib/api'
 import { jobStatusLabel } from '@/lib/jobs/applicationStatus'
 import type { QueueJobState } from '@/lib/hooks/useQueueJob'
-import { QueueStatusBanner } from '@/components/queue/QueueStatusBanner'
+import { useQueueJob } from '@/lib/hooks/useQueueJob'
 import type { Job } from '@/lib/types'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
@@ -18,6 +18,83 @@ import {
     CheckCircle2, X, AlertCircle, Clock, Briefcase,
     ExternalLink, Building2, Tag,
 } from 'lucide-react'
+
+// ── Deep Search progress bar ─────────────────────────────────
+// One horizontal line: spinner, current step (crossfades as it advances),
+// a segmented track standing in for the step count, and the time estimate.
+// A real ingestion run has no granular server-side step signal, so the step
+// advances on a client timer paced to the ~2-5 min run and holds on the last
+// step until the job actually completes.
+const DEEP_SEARCH_STEPS = [
+    'Searching LinkedIn',
+    'Searching Naukri',
+    'Searching Indeed',
+    'Searching Google Jobs',
+    'Searching Glassdoor',
+    'Searching Internshala',
+    'Searching across 150+ job boards',
+    'Removing duplicate postings',
+    'Filtering for your experience level',
+    'Matching listings to your target role',
+    'Sorting by relevance and freshness',
+]
+const DEEP_SEARCH_STEP_MS = 5000 // 11 steps, looping every ~55s until the job actually finishes
+
+function DeepSearchProgress({ queueStatus, isMobile }: { queueStatus?: QueueJobState['status']; isMobile?: boolean }) {
+    const [stepIdx, setStepIdx] = useState(0)
+    useEffect(() => {
+        // Loops rather than holding on the last step — a real run can take
+        // longer than one pass through the list, and a frozen last line reads
+        // as "stuck" even when it's still genuinely working.
+        const id = setInterval(() => setStepIdx(i => (i + 1) % DEEP_SEARCH_STEPS.length), DEEP_SEARCH_STEP_MS)
+        return () => clearInterval(id)
+    }, [])
+    const queued = queueStatus === 'queued' || queueStatus === 'pending'
+    const label = queued ? 'Queued — starting shortly' : DEEP_SEARCH_STEPS[stepIdx]
+
+    const spinner = (
+        <span style={{ width: 13, height: 13, flexShrink: 0, borderRadius: '50%', border: '2px solid #DBEAFE', borderTopColor: '#1D4ED8', animation: 'spin 0.7s linear infinite' }} />
+    )
+    const segments = (
+        <span style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+            {DEEP_SEARCH_STEPS.map((_, i) => (
+                <span key={i} style={{ width: 12, height: 3, borderRadius: 99, background: queued ? '#E2E8F0' : i <= stepIdx ? '#1D4ED8' : '#E2E8F0', transition: 'background 0.3s' }} />
+            ))}
+        </span>
+    )
+    const estimate = <span style={{ flexShrink: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>Est. 2–5 min</span>
+
+    if (isMobile) {
+        // Narrow width can't fit spinner + full step text + segments + estimate on
+        // one line without truncating the very thing the step exists to say —
+        // stack it: label gets the full row to breathe, progress + estimate below.
+        return (
+            <div style={{ padding: '10px 12px', borderRadius: 12, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    {spinner}
+                    <span key={label} className="ds-step-fade" style={{ flex: 1, minWidth: 0, fontSize: '0.8125rem', fontWeight: 600, color: '#1D4ED8', lineHeight: 1.35 }}>
+                        {label}
+                    </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    {segments}
+                    {estimate}
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 999, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+            {spinner}
+            <span key={label} className="ds-step-fade" style={{ flex: 1, minWidth: 0, fontSize: '0.8125rem', fontWeight: 600, color: '#1D4ED8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {label}
+            </span>
+            {segments}
+            {estimate}
+        </div>
+    )
+}
 
 // ── Static Data ───────────────────────────────────────────────
 
@@ -1293,6 +1370,27 @@ type PersistedSearchState = {
     hasSearched: boolean
 }
 
+// A Deep Search run tracked separately from the above — it needs to resume
+// polling (not just redisplay stale results) if the user tabs away mid-search.
+const DEEP_SEARCH_STATE_PREFIX = 'deepSearchState:'
+// Don't resume a persisted run older than this — n8n ingestions finish in
+// ~1-2 min in practice (server-side gate times out at 5 min), so anything
+// beyond this is a stale/abandoned session, not a genuinely still-running one.
+const DEEP_SEARCH_RESUME_MAX_AGE_MS = 8 * 60 * 1000
+// Above the server's own LOG_GATE_TIMEOUT_MS (5 min) so a slow-but-real run
+// gets a chance to resolve naturally first; this only fires for jobs stuck
+// well past that, most commonly a queue row that never got picked up at all.
+const DEEP_SEARCH_CLIENT_TIMEOUT_MS = 6 * 60 * 1000
+type PersistedDeepSearchState = {
+    ingesting: boolean
+    ingestJobId: string | null
+    ingestStatus: string
+    ingestStartTime: string
+    queryAtStart: string
+    locationAtStart: string
+    levelAtStart: string
+}
+
 export default function SearchPage() {
     const { user } = useAuth()
     const router = useRouter()
@@ -1377,6 +1475,63 @@ export default function SearchPage() {
     const queryAtStartRef = useRef<string>('')
     const locationAtStartRef = useRef<string>('')
     const levelAtStartRef = useRef<string>('')
+    const deepRestoredRef = useRef(false)
+
+    // A Deep Search keeps running server-side regardless of what the user does
+    // in the browser, but this page's component tree gets torn down on every
+    // route change — so without this, leaving for AI Matches and coming back
+    // mid-search would silently drop back to the idle "Deep Search" button.
+    // Persist just enough to resume polling the same job on remount.
+    //
+    // Bug this guards against: a real ingestion run takes ~1-2 min (server-side
+    // gate times out at 5 min, see LOG_GATE_TIMEOUT_MS). If the browser tab sat
+    // around long enough for a PREVIOUS run to actually finish server-side
+    // before this page remounted, blindly resuming it made useQueueJob's
+    // immediate first poll resolve as "completed" (using whatever that old job
+    // finished with) within the same instant the user's brand-new click for a
+    // different search was still genuinely in flight — showing stale results
+    // that looked like they belonged to the fresh search. Only resume if the
+    // persisted run could plausibly still be alive; otherwise treat it as
+    // abandoned and start clean.
+    useEffect(() => {
+        if (!user?.id || deepRestoredRef.current) return
+        deepRestoredRef.current = true
+        const storageKey = DEEP_SEARCH_STATE_PREFIX + user.id
+        try {
+            const raw = sessionStorage.getItem(storageKey)
+            if (!raw) return
+            const saved = JSON.parse(raw) as PersistedDeepSearchState
+            if (!saved.ingesting || !saved.ingestJobId) return
+            const startedMs = Date.parse(saved.ingestStartTime)
+            const tooOld = !Number.isFinite(startedMs) || (Date.now() - startedMs) > DEEP_SEARCH_RESUME_MAX_AGE_MS
+            if (tooOld) {
+                sessionStorage.removeItem(storageKey)
+                return
+            }
+            setIngesting(true)
+            ingestingRef.current = true
+            setIngestJobId(saved.ingestJobId)
+            setIngestStatus(saved.ingestStatus || 'Fetching jobs from web…')
+            setShowIngestBanner(true)
+            ingestStartTimeRef.current = saved.ingestStartTime
+            queryAtStartRef.current = saved.queryAtStart
+            locationAtStartRef.current = saved.locationAtStart
+            levelAtStartRef.current = saved.levelAtStart
+        } catch { /* corrupt entry — ignore */ }
+    }, [user?.id])
+
+    useEffect(() => {
+        if (!user?.id || !deepRestoredRef.current) return
+        try {
+            sessionStorage.setItem(DEEP_SEARCH_STATE_PREFIX + user.id, JSON.stringify({
+                ingesting, ingestJobId, ingestStatus,
+                ingestStartTime: ingestStartTimeRef.current,
+                queryAtStart: queryAtStartRef.current,
+                locationAtStart: locationAtStartRef.current,
+                levelAtStart: levelAtStartRef.current,
+            } satisfies PersistedDeepSearchState))
+        } catch { /* quota — ignore */ }
+    }, [user?.id, ingesting, ingestJobId, ingestStatus])
 
     const onIngestComplete = async (state: QueueJobState) => {
         const log = state.raw as { new_jobs_added?: number; cached?: boolean } | null
@@ -1389,24 +1544,31 @@ export default function SearchPage() {
             let jobs = await fetchJobsSince(since)
             if (jobs.length === 0) {
                 // On a cache/pool hit no n8n run happened, so fetchJobsSince
-                // returns nothing. Recall the previously-ingested job IDs for this
-                // exact filter set so we show the same results as the last real
-                // ingestion, not a broad DB dump of 200+ unrelated historical jobs.
-                if (isCacheHit) {
+                // returns nothing. Query the DB directly for what currently
+                // matches this exact filter set — the live source of truth.
+                // (Previously this fell back to a client-side "remembered job
+                // IDs" localStorage entry first; that list is fragile — once
+                // any single completion overwrote it with a smaller result
+                // set, every later cache hit for the same filters kept
+                // replaying that same shrunk list indefinitely, even after a
+                // real ingestion had since added many more matching jobs.)
+                jobs = await searchJobs(queryStart, {
+                    location: locStart || undefined,
+                    experience_level: lvlStart || undefined,
+                })
+                // n8n's experience_level extraction is unreliable — drop the level
+                // filter on miss so role+location still surface results.
+                if (jobs.length === 0 && lvlStart) {
+                    jobs = await searchJobs(queryStart, { location: locStart || undefined })
+                }
+                // Last resort only: a previous ingestion's remembered IDs, in
+                // case the live search's text/location matching misses rows
+                // that DB search filtering trips over but a raw ID lookup
+                // would still find.
+                if (jobs.length === 0 && isCacheHit) {
                     const rememberedIds = recallIngestion(queryStart, locStart, lvlStart)
                     if (rememberedIds.length > 0) {
                         jobs = await fetchJobsByIds(rememberedIds)
-                    }
-                }
-                if (jobs.length === 0) {
-                    jobs = await searchJobs(queryStart, {
-                        location: locStart || undefined,
-                        experience_level: lvlStart || undefined,
-                    })
-                    // n8n's experience_level extraction is unreliable — drop the level
-                    // filter on miss so role+location still surface results.
-                    if (jobs.length === 0 && lvlStart) {
-                        jobs = await searchJobs(queryStart, { location: locStart || undefined })
                     }
                 }
             }
@@ -1436,6 +1598,55 @@ export default function SearchPage() {
         setIngestStatus('Ingestion failed. Check n8n logs.')
         setIngestJobId(null)
     }
+
+    // Phase 8 — queue-driven ingestion lifecycle. Runs the poll loop directly
+    // (rather than through the old QueueStatusBanner child) so this page can
+    // render its own progress card from the same live state.
+    const ingestJob = useQueueJob(ingestJobId)
+    useEffect(() => {
+        if (!ingestJob.terminal) return
+        // Guard against acting on a resolution for a job that's no longer the
+        // one this page is tracking (e.g. a restored/stale job settling right
+        // as a fresh search starts) — never let it overwrite newer state.
+        if (ingestJob.jobId !== ingestJobId) return
+        if (ingestJob.status === 'failed') onIngestFail()
+        else onIngestComplete(ingestJob)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ingestJob.terminal, ingestJob.status, ingestJobId])
+
+    // Safety net: if the queue job never even reaches job_queue.status='done'
+    // (e.g. the n8n Queue Processor never picks it up — a stuck-pending row,
+    // not a slow-but-real run), resolveIngestStatus's own log-gate timeout
+    // never engages because that gate only applies once status IS 'done'.
+    // Nothing server-side bounds that case, so the spinner would otherwise
+    // run forever with zero feedback. Stop waiting after a while, show
+    // whatever's actually in the DB right now, and let the user retry.
+    useEffect(() => {
+        if (!ingesting || !ingestJobId) return
+        const capturedJobId = ingestJobId
+        const timer = setTimeout(async () => {
+            if (ingestJobId !== capturedJobId) return // a newer search already replaced this one
+            const queryStart = queryAtStartRef.current
+            const locStart = locationAtStartRef.current
+            const lvlStart = levelAtStartRef.current
+            try {
+                const jobs = await searchJobs(queryStart, {
+                    location: locStart || undefined,
+                    experience_level: lvlStart || undefined,
+                })
+                setResults(jobs)
+                setHasSearched(true)
+                if (jobs.length > 0) setSelected(jobs[0])
+            } catch { /* best-effort — still clear the stuck spinner below */ }
+            setIngestStatus('This is taking longer than expected — showing what’s available now. Try Deep Search again in a bit.')
+            setIngestSuccess(false)
+            setShowIngestBanner(true)
+            ingestingRef.current = false
+            setIngesting(false)
+            setIngestJobId(null)
+        }, DEEP_SEARCH_CLIENT_TIMEOUT_MS)
+        return () => clearTimeout(timer)
+    }, [ingesting, ingestJobId])
 
     // Deep Search remaining-count display. Shown on every finite-quota plan
     // (Free / Pro / Max) so the count is always visible; only a genuinely
@@ -1510,7 +1721,7 @@ export default function SearchPage() {
         ingestingRef.current = true
         setIngesting(true)
         setIngestSuccess(false)
-        setIngestStatus('Scraping LinkedIn, Indeed & Google Jobs…')
+        setIngestStatus('Searching LinkedIn, Naukri & other top job boards…')
         setShowIngestBanner(true)
 
         const ingestStartTime = new Date().toISOString()
@@ -1998,37 +2209,25 @@ export default function SearchPage() {
                     )
                 })()}
 
-                {/* Phase 8 — Queue status pill (shows queue position + lifecycle while waiting) */}
-                {ingestJobId && (
-                    <QueueStatusBanner
-                        jobId={ingestJobId}
-                        label="Fetching jobs"
-                        onComplete={onIngestComplete}
-                        onFail={onIngestFail}
-                    />
-                )}
+                {/* Deep Search in progress — rotating status + estimated time, resumes
+                    on remount via ingestJobId so leaving for another tab and coming
+                    back mid-search doesn't drop back to the idle state. */}
+                {ingesting && <DeepSearchProgress queueStatus={ingestJob.status} isMobile={isMobile} />}
 
-                {/* Ingest status banner */}
-                {showIngestBanner && ingestStatus && (
+                {/* Ingest result banner — success/fail, shown once the run is terminal */}
+                {!ingesting && showIngestBanner && ingestStatus && (
                     <div style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         padding: '10px 14px', borderRadius: 8,
-                        background: ingestSuccess ? '#F0FDF4' : ingesting ? '#EFF6FF' : '#FEF2F2',
-                        border: `1px solid ${ingestSuccess ? '#BBF7D0' : ingesting ? '#BFDBFE' : '#FECACA'}`,
+                        background: ingestSuccess ? '#F0FDF4' : '#FEF2F2',
+                        border: `1px solid ${ingestSuccess ? '#BBF7D0' : '#FECACA'}`,
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {ingesting && (
-                                <div style={{
-                                    width: 14, height: 14, border: '2px solid #93C5FD',
-                                    borderTopColor: '#2563EB', borderRadius: '50%',
-                                    animation: 'spin 0.8s linear infinite', flexShrink: 0,
-                                }} />
-                            )}
                             {ingestSuccess && <CheckCircle2 size={15} style={{ color: '#16A34A', flexShrink: 0 }} />}
-                            {!ingesting && !ingestSuccess && <AlertCircle size={15} style={{ color: '#DC2626', flexShrink: 0 }} />}
+                            {!ingestSuccess && <AlertCircle size={15} style={{ color: '#DC2626', flexShrink: 0 }} />}
                             <span style={{
                                 fontSize: '0.8125rem', fontWeight: 500,
-                                color: ingestSuccess ? '#166534' : ingesting ? '#1D4ED8' : '#DC2626',
+                                color: ingestSuccess ? '#166534' : '#DC2626',
                             }}>
                                 {ingestStatus}
                             </span>
@@ -2271,6 +2470,8 @@ export default function SearchPage() {
                 @keyframes orbit-spin {
                     to { transform: rotate(360deg); }
                 }
+                @keyframes ds-step-fade-in { from { opacity: 0; } to { opacity: 1; } }
+                .ds-step-fade { animation: ds-step-fade-in 0.35s ease both; }
             `}</style>
         </div>
     )
