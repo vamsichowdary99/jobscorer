@@ -36,10 +36,12 @@ function LoginForm() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error, data } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setError(error.message)
       setLoading(false)
+    } else if (data.user && !data.user.email_confirmed_at) {
+      router.push('/verify-email')
     } else {
       router.push('/dashboard')
     }

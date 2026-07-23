@@ -71,10 +71,14 @@ export async function updateSession(request: NextRequest) {
   // are handled above with an early return.
   const isProtected = pathname.startsWith('/dashboard')
 
+  // OAuth identities (Google) are pre-verified by the provider, so
+  // email_confirmed_at is only ever null for an unconfirmed password signup.
+  const isUnconfirmed = !!user && !user.email_confirmed_at
+
   // Already-authenticated users shouldn't see the auth pages.
   if (user && (pathname === '/login' || pathname === '/signup')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = isUnconfirmed ? '/verify-email' : '/dashboard'
     const redirectResponse = NextResponse.redirect(url)
     supabaseResponse.cookies.getAll().forEach((c) => redirectResponse.cookies.set({ ...c }))
     return redirectResponse
@@ -83,6 +87,16 @@ export async function updateSession(request: NextRequest) {
   if (!user && isProtected && !transientError) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    const redirectResponse = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach(c => {
+      redirectResponse.cookies.set({ ...c })
+    })
+    return redirectResponse
+  }
+
+  if (isUnconfirmed && isProtected) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/verify-email'
     const redirectResponse = NextResponse.redirect(url)
     supabaseResponse.cookies.getAll().forEach(c => {
       redirectResponse.cookies.set({ ...c })
