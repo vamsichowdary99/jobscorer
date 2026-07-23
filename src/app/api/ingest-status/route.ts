@@ -47,6 +47,13 @@ export async function GET(request: NextRequest) {
     if (id.startsWith('cache-hit:')) {
         const rest = id.slice('cache-hit:'.length)
         const redisKey = rest.startsWith('pool:') ? rest.slice('pool:'.length) : rest
+        // The client only ever receives the `jobs:...` half of this sentinel from
+        // our own /api/ingest-jobs response — never trust it as an arbitrary Redis
+        // key without this check, or any authenticated user could read any key in
+        // the shared Redis instance (e.g. other namespaces like score:*).
+        if (!redisKey.startsWith('jobs:')) {
+            return jsonNoStore({ error: 'Invalid id' }, { status: 400 })
+        }
         const cached = await safeRedis(r => r.get<Record<string, unknown>>(redisKey))
         return jsonNoStore({
             status: 'completed',
