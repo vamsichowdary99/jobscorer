@@ -6,6 +6,45 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { EmailOtpType } from '@supabase/supabase-js'
 
+const HEADING_FONT = "'Plus Jakarta Sans', system-ui, sans-serif"
+
+function IconBadge({ tone, children }: { tone: 'blue' | 'green' | 'red'; children: React.ReactNode }) {
+  const palette = {
+    blue: { bg: '#eff6ff', border: '#bfdbfe', stroke: '#135bec' },
+    green: { bg: '#f0fdf4', border: '#bbf7d0', stroke: '#16a34a' },
+    red: { bg: '#fef2f2', border: '#fecaca', stroke: '#dc2626' },
+  }[tone]
+  return (
+    <span style={{
+      width: 56, height: 56, borderRadius: '50%',
+      background: palette.bg, border: `1px solid ${palette.border}`,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      marginBottom: 20, color: palette.stroke,
+    }}>
+      {children}
+    </span>
+  )
+}
+
+const MailIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7 L12 13 L21 7" />
+    <path d="M3 7 L3 17 L21 17 L21 7" />
+  </svg>
+)
+
+const ShieldIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3 L20 6.5 V11 C20 16 16.5 19.5 12 21 C7.5 19.5 4 16 4 11 V6.5 Z" />
+  </svg>
+)
+
+const CheckIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 6 L9 17 L4 12" />
+  </svg>
+)
+
 export default function VerifyEmailPage() {
   return (
     <Suspense fallback={null}>
@@ -102,7 +141,7 @@ function VerifyEmailContent() {
         maxWidth: '440px',
         textAlign: 'center',
       }}>
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '28px' }}>
           <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
             <span style={{ position: 'relative', width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg, #135bec 0%, #2563eb 100%)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 8px -1px rgba(19,91,236,0.4)', flexShrink: 0 }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -110,7 +149,7 @@ function VerifyEmailContent() {
                 <path d="M15 6 L20 6 L20 11" />
               </svg>
             </span>
-            <span style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.025em' }}><span style={{ color: '#0f172a' }}>Job</span><span style={{ color: '#135bec' }}>Scorer</span></span>
+            <span style={{ fontFamily: HEADING_FONT, fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.025em' }}><span style={{ color: '#0f172a' }}>Job</span><span style={{ color: '#135bec' }}>Scorer</span></span>
           </Link>
         </div>
 
@@ -127,10 +166,11 @@ function VerifyEmailContent() {
 
         {(status === 'confirm' || status === 'confirming') ? (
           <>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '10px' }}>
+            <IconBadge tone="blue"><ShieldIcon /></IconBadge>
+            <h1 style={{ fontFamily: HEADING_FONT, fontSize: '1.375rem', fontWeight: 800, color: '#0f172a', marginBottom: 10 }}>
               Confirm your email
             </h1>
-            <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '24px', lineHeight: 1.5 }}>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 28 }}>
               Tap below to finish activating your account.
             </p>
             <button
@@ -151,13 +191,24 @@ function VerifyEmailContent() {
               {status === 'confirming' ? 'Confirming…' : 'Confirm my email'}
             </button>
           </>
+        ) : status === 'confirmed' ? (
+          <>
+            <IconBadge tone="green"><CheckIcon /></IconBadge>
+            <h1 style={{ fontFamily: HEADING_FONT, fontSize: '1.375rem', fontWeight: 800, color: '#0f172a', marginBottom: 10 }}>
+              Email confirmed
+            </h1>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: 1.6 }}>
+              Taking you to your dashboard…
+            </p>
+          </>
         ) : (
           <>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '10px' }}>
+            <IconBadge tone="blue"><MailIcon /></IconBadge>
+            <h1 style={{ fontFamily: HEADING_FONT, fontSize: '1.375rem', fontWeight: 800, color: '#0f172a', marginBottom: 10 }}>
               Check your inbox
             </h1>
-            <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '24px', lineHeight: 1.5 }}>
-              We sent a confirmation link to{email ? <> <strong>{email}</strong></> : ' your email address'}.
+            <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: 28 }}>
+              We sent a confirmation link to{email ? <> <strong style={{ color: '#334155' }}>{email}</strong></> : ' your email address'}.
               Open it and tap the confirm button to activate your account.
             </p>
 
