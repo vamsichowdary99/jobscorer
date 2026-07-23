@@ -44,6 +44,9 @@ next-env.d.ts
 # local-only smoke-test scripts (may contain test creds)
 /scripts/
 
+# MCP server config — contains live API keys/tokens, must never be committed
+.mcp.json
+
 # dev/brainstorm artefacts — not source code
 .superpowers/
 .dev.log
