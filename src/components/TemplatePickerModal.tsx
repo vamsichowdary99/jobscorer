@@ -77,8 +77,10 @@ function useModalStyles() {
         .tpick-title { font-size: 15px !important; }
         .tpick-name { font-size: 20px !important; }
         .tpick-tagline { font-size: 12.5px !important; max-width: 88vw !important; }
+        .tpick-row { gap: 10px !important; padding: 4px 10px !important; }
         .tpick-arrow { width: 40px !important; height: 40px !important; }
         .tpick-neighbor { display: none !important; }
+        .tpick-center-scroll { width: min(78vw, 480px) !important; }
         .tpick-footer { padding: 14px 16px 22px !important; }
       }
     `
@@ -177,7 +179,7 @@ export default function TemplatePickerModal({ onSelect, onClose, currentTemplate
       </div>
 
       {/* ── Dominant center preview with peeking neighbors ── */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '4px 20px', gap: 28 }}>
+      <div className="tpick-row" style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '4px 20px', gap: 28 }}>
         <button
           onClick={() => go(-1)}
           aria-label="Previous template"

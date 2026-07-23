@@ -282,7 +282,7 @@ function ReasoningBullets({ text }: { text: string }) {
     return (
         <ul style={{
             listStyle: 'none', padding: 0, margin: 0,
-            display: 'flex', flexDirection: 'column', gap: 12,
+            display: 'flex', flexDirection: 'column', gap: 10,
         }}>
             {bullets.map((b, i) => {
                 const style = REASONING_LABEL_STYLES[b.label] ?? {
@@ -290,23 +290,25 @@ function ReasoningBullets({ text }: { text: string }) {
                 }
                 return (
                     <li key={i} style={{
-                        display: 'flex', alignItems: 'flex-start', gap: 14,
+                        border: `1px solid ${style.border}`,
+                        background: style.bg,
+                        borderRadius: 10,
+                        padding: '10px 14px 12px',
                     }}>
                         <span style={{
-                            flexShrink: 0,
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            padding: '4px 11px', borderRadius: 9999,
-                            background: style.bg, color: style.color,
+                            display: 'inline-flex', alignItems: 'center',
+                            padding: '3px 10px', borderRadius: 9999,
+                            background: '#ffffff', color: style.color,
                             border: `1px solid ${style.border}`,
-                            fontSize: '0.6875rem', fontWeight: 700,
-                            letterSpacing: '0.04em', textTransform: 'uppercase',
-                            minWidth: 92, height: 24,
+                            fontSize: '0.625rem', fontWeight: 800,
+                            letterSpacing: '0.05em', textTransform: 'uppercase',
+                            whiteSpace: 'nowrap', marginBottom: 6,
                         }}>
                             {b.label}
                         </span>
                         <p style={{
-                            margin: 0, paddingTop: 2,
-                            fontSize: '0.9rem', lineHeight: 1.55, color: '#1f2937', flex: 1,
+                            margin: 0,
+                            fontSize: '0.875rem', lineHeight: 1.55, color: '#1f2937',
                         }}>
                             {b.content.replace(/\*\*/g, '')}
                         </p>
@@ -1464,15 +1466,17 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                                 <div key={`${g.skill}-${i}`} style={{
                                                     display: 'flex', alignItems: 'center',
                                                     justifyContent: 'space-between', gap: 8,
+                                                    flexWrap: 'wrap', rowGap: 6,
+                                                    border: `1px solid ${border}`, background: bg,
+                                                    borderRadius: 10, padding: '8px 12px',
                                                 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0, flex: '1 1 auto', flexWrap: 'wrap' }}>
                                                         <span style={{
-                                                            fontSize: '0.75rem', padding: '4px 11px', borderRadius: 20,
-                                                            background: bg, color, border: `1px solid ${border}`,
-                                                            fontWeight: 500, flexShrink: 0,
+                                                            fontSize: '0.8125rem', fontWeight: 700, color,
+                                                            minWidth: 0, wordBreak: 'break-word',
                                                         }}>{g.skill}</span>
                                                         {g.has_adjacent_evidence && g.adjacent_from && (
-                                                            <span style={{ fontSize: '0.65rem', color: '#9ca3af', fontStyle: 'italic', flexShrink: 0 }}>
+                                                            <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontStyle: 'italic' }}>
                                                                 ≈ {g.adjacent_from}
                                                             </span>
                                                         )}
@@ -1480,8 +1484,8 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                                     {(g.score_impact ?? 0) > 0 && (
                                                         <span style={{
                                                             fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px',
-                                                            borderRadius: 20, background: '#fef9c3', color: '#a16207',
-                                                            border: '1px solid #fde68a', flexShrink: 0,
+                                                            borderRadius: 20, background: '#ffffff', color: '#a16207',
+                                                            border: '1px solid #fde68a', flexShrink: 0, whiteSpace: 'nowrap',
                                                         }}>+{g.score_impact}%</span>
                                                     )}
                                                 </div>
@@ -2811,12 +2815,14 @@ export default function MatchesPage() {
             {isMobile && mobileSheetOpen && selected && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 50 }}>
                     <div onClick={() => setMobileSheetOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }} />
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#ffffff', borderRadius: '22px 22px 0 0', maxHeight: '95vh', overflowY: 'auto', paddingBottom: 32 }}>
-                        <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 20px 0' }}>
-                            <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e5e7eb' }} />
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 0' }}>
-                            <button onClick={() => setMobileSheetOpen(false)} style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>Close</button>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#ffffff', borderRadius: '22px 22px 0 0', maxHeight: '95dvh', overflowY: 'auto', paddingBottom: 32 }}>
+                        <div style={{ position: 'sticky', top: 0, zIndex: 5, background: '#ffffff', borderRadius: '22px 22px 0 0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 20px 0' }}>
+                                <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e5e7eb' }} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 8px' }}>
+                                <button onClick={() => setMobileSheetOpen(false)} style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>Close</button>
+                            </div>
                         </div>
                         <JobDetail
                             key={selected.id}

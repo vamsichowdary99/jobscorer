@@ -140,7 +140,6 @@ function MorphingPopoverTrigger({
             <MotionComponent
                 {...childProps}
                 onClick={context.open}
-                layoutId={`popover-trigger-${context.uniqueId}`}
                 className={childProps.className as string | undefined}
                 key={context.uniqueId}
                 aria-expanded={context.isOpen}
@@ -150,22 +149,16 @@ function MorphingPopoverTrigger({
     }
 
     return (
-        <motion.div
+        <motion.button
+            {...props}
             key={context.uniqueId}
-            layoutId={`popover-trigger-${context.uniqueId}`}
             onClick={context.open}
+            className={className}
+            aria-expanded={context.isOpen}
+            aria-controls={`popover-content-${context.uniqueId}`}
         >
-            <motion.button
-                {...props}
-                layoutId={`popover-label-${context.uniqueId}`}
-                key={context.uniqueId}
-                className={className}
-                aria-expanded={context.isOpen}
-                aria-controls={`popover-content-${context.uniqueId}`}
-            >
-                {children}
-            </motion.button>
-        </motion.div>
+            {children}
+        </motion.button>
     )
 }
 
@@ -202,7 +195,6 @@ function MorphingPopoverContent({
                 <motion.div
                     {...props}
                     ref={ref}
-                    layoutId={`popover-trigger-${context.uniqueId}`}
                     key={context.uniqueId}
                     id={`popover-content-${context.uniqueId}`}
                     role="dialog"

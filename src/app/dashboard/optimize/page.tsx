@@ -2569,7 +2569,7 @@ function OptimizePageInner() {
                 {showBuildPlan && selected && (
                     <BuildPlanModal
                         buildPlan={buildPlan} loading={buildPlanLoading} error={buildPlanError}
-                        jobId={selected.job.id} onConfirm={runOptimizer}
+                        jobId={selected.job.id} resumeId={resumeId} onConfirm={runOptimizer}
                         onSkipAll={() => runOptimizer([])} onClose={() => setShowBuildPlan(false)}
                     />
                 )}
@@ -2956,6 +2956,7 @@ function OptimizePageInner() {
                     loading={buildPlanLoading}
                     error={buildPlanError}
                     jobId={selected.job.id}
+                    resumeId={resumeId}
                     onConfirm={runOptimizer}
                     onSkipAll={() => runOptimizer([])}
                     onClose={() => setShowBuildPlan(false)}

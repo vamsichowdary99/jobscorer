@@ -2289,7 +2289,7 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
                         width: 32, height: 32, borderRadius: 8, flexShrink: 0,
                         background: '#fff', border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                     }}>
-                        <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth={2.2} strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+                        <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><line x1="9" y1="4" x2="9" y2="20" /></svg>
                     </button>
                 </div>
             )}

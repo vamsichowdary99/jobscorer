@@ -52,15 +52,6 @@ const navLinks = [
         ),
     },
     {
-        href: '/dashboard/chat',
-        label: 'AI Chat',
-        icon: (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
-            </svg>
-        ),
-    },
-    {
         href: '/dashboard/research',
         label: 'Company Intel',
         icon: (
@@ -88,6 +79,15 @@ const navLinks = [
                 <line x1="16" y1="13" x2="8" y2="13"/>
                 <line x1="16" y1="17" x2="8" y2="17"/>
                 <line x1="10" y1="9" x2="8" y2="9"/>
+            </svg>
+        ),
+    },
+    {
+        href: '/dashboard/chat',
+        label: 'AI Chat',
+        icon: (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
             </svg>
         ),
     },

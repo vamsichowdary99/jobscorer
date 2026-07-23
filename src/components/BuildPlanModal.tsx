@@ -20,6 +20,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { BuildPlan, AcceptedRecommendation } from '@/lib/types'
+import { selectBuildPlanProject } from '@/lib/api'
 
 type Decision = 'accept' | 'skip'
 
@@ -28,6 +29,7 @@ export default function BuildPlanModal({
     loading,
     error,
     jobId,
+    resumeId,
     onConfirm,
     onSkipAll,
     onClose,
@@ -36,6 +38,7 @@ export default function BuildPlanModal({
     loading: boolean
     error: string | null
     jobId: string
+    resumeId: string | null
     onConfirm: (accepted: AcceptedRecommendation[]) => void
     onSkipAll: () => void
     onClose: () => void
@@ -80,6 +83,14 @@ export default function BuildPlanModal({
     function gotoLearning(skill: string) {
         onClose()
         router.push(`/dashboard/learning?jobId=${encodeURIComponent(jobId)}&skill=${encodeURIComponent(skill)}`)
+    }
+
+    // Clicking "Learn it" on a project is the moment the user actually chooses
+    // to pursue it — this is what puts it in the Projects tab (fetchBuildPlanProjectSummaries
+    // only returns selected ids). Being AI-suggested alone never qualifies.
+    function learnProject(projectId: string, skill: string) {
+        if (resumeId) void selectBuildPlanProject(resumeId, jobId, projectId)
+        gotoLearning(skill)
     }
 
     function collectAccepted(): AcceptedRecommendation[] {
@@ -176,7 +187,7 @@ export default function BuildPlanModal({
                                             decision={decisions.get(p.id)}
                                             onAccept={() => setDecision(p.id, 'accept')}
                                             onSkip={() => setDecision(p.id, 'skip')}
-                                            onLearn={(p.learning_skill || p.addresses_gaps?.[0] || p.tech?.[0]) ? () => gotoLearning((p.learning_skill || p.addresses_gaps?.[0] || p.tech?.[0])!) : undefined}
+                                            onLearn={(p.learning_skill || p.addresses_gaps?.[0] || p.tech?.[0]) ? () => learnProject(p.id, (p.learning_skill || p.addresses_gaps?.[0] || p.tech?.[0])!) : undefined}
                                         >
                                             {p.example_repos.length > 0 && (
                                                 <div className="bp-repos">

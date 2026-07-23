@@ -54,15 +54,6 @@ const NAV_LINKS = [
         ),
     },
     {
-        href: '/dashboard/chat',
-        label: 'AI Chat',
-        icon: (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-            </svg>
-        ),
-    },
-    {
         href: '/dashboard/research',
         label: 'Company Intel',
         icon: (
@@ -89,6 +80,15 @@ const NAV_LINKS = [
                 <polyline points="14 2 14 8 20 8"/>
                 <line x1="16" y1="13" x2="8" y2="13"/>
                 <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+        ),
+    },
+    {
+        href: '/dashboard/chat',
+        label: 'AI Chat',
+        icon: (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
             </svg>
         ),
     },
@@ -220,7 +220,12 @@ export default function MobileNavbar() {
 
                 {/* Drawer footer: user info + sign out */}
                 <div style={S.drawerFoot}>
-                    <div style={S.drawerUser}>
+                    <Link
+                        href="/dashboard/settings"
+                        onClick={close}
+                        title="Settings"
+                        style={{ ...S.drawerUser, textDecoration: 'none', cursor: 'pointer' }}
+                    >
                         <div style={{ ...S.avatar, width: 34, height: 34, fontSize: 13 }}>{initial}</div>
                         <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -230,7 +235,7 @@ export default function MobileNavbar() {
                                 {email}
                             </div>
                         </div>
-                    </div>
+                    </Link>
                     <button
                         onClick={() => { close(); signOut() }}
                         style={S.signOutBtn}

@@ -1323,7 +1323,7 @@ function CobaltResumePreview({ state }: { state: ResumeEditorState }) {
         profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
     ].filter(Boolean)
 
-    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || ''
 
     const skillRows = [
         { field: 'languages' as const, label: 'Languages', value: skills.languages },
@@ -1575,7 +1575,7 @@ function OnyxResumePreview({ state }: { state: ResumeEditorState }) {
         profile.phone, profile.email, profile.location, profile.linkedin, profile.github, profile.portfolio,
     ].filter(Boolean)
 
-    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || ''
 
     const skillRows = [
         { field: 'languages' as const, label: 'Languages', value: skills.languages },
@@ -1822,7 +1822,7 @@ function JadeResumePreview({ state }: { state: ResumeEditorState }) {
     const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
         deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
 
-    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
     const splitItems = (csv: string) => (csv || '').split(/[,•\n]/).map(s => s.trim()).filter(Boolean)
 
@@ -2313,7 +2313,7 @@ function AmberResumePreview({ state }: { state: ResumeEditorState }) {
     const contactParts = [
         profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio,
     ].filter(Boolean)
-    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
 
     const skillRows = [
@@ -2572,7 +2572,7 @@ function AthensResumePreview({ state }: { state: ResumeEditorState }) {
     const contactParts = [
         profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio,
     ].filter(Boolean)
-    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
     const splitItems = (csv: string) => (csv || '').split(/,(?![^(]*\))|[•\n]/).map(s => s.trim()).filter(Boolean)
 
@@ -2829,7 +2829,7 @@ function AxisResumePreview({ state }: { state: ResumeEditorState }) {
     const contactParts = [
         profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio,
     ].filter(Boolean)
-    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
 
     const skillRows = [
@@ -3062,7 +3062,7 @@ function BeaconResumePreview({ state }: { state: ResumeEditorState }) {
         deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
 
     const contactParts = [profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
 
     const skillRows = [
@@ -3279,7 +3279,7 @@ function LapisResumePreview({ state }: { state: ResumeEditorState }) {
         deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
 
     const contactParts = [profile.email, profile.phone, profile.location, profile.linkedin, profile.github, profile.portfolio].filter(Boolean)
-    const roleSubtitle = profile.headline?.trim() || experience.find(e => e.title && e.title.trim())?.title?.trim() || ''
+    const roleSubtitle = profile.headline?.trim() || ''
     const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
     const splitItems = (csv: string) => (csv || '').split(/,(?![^(]*\))|[•\n]/).map(s => s.trim()).filter(Boolean)
     // Rendered as one merged pill cloud (no per-field grouping in this

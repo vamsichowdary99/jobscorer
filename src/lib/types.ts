@@ -702,6 +702,10 @@ export interface ResumeBuildRecommendation {
     job_id: string
     recommendations: BuildPlan
     gap_snapshot: JobGap[] | null
+    // Project ids (BuildRecoProject.id) the user explicitly chose to pursue by
+    // clicking "Learn it" in BuildPlanModal — being AI-suggested alone doesn't
+    // put a project here. Gates what fetchBuildPlanProjectSummaries returns.
+    selected_project_ids: string[]
     created_at: string
     updated_at: string
 }

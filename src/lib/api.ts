@@ -907,21 +907,25 @@ export interface BuildPlanProjectSummary {
 }
 
 /**
- * Every build-plan project across the user's scored jobs, flattened for the
- * Projects tab. resume_build_recommendations has no FK to jobs (deliberately
- * loose per the design doc — this feature treats it as read-only), so job
- * title/company are joined in a second query rather than an embedded select.
+ * Every build-plan project the user actually selected (clicked "Learn it" on)
+ * across their scored jobs, flattened for the Projects tab. Being AI-suggested
+ * alone does NOT qualify — only ids in selected_project_ids do, so the
+ * library only shows projects the user chose to pursue, not everything the
+ * Build Plan Generator proposed. resume_build_recommendations has no FK to
+ * jobs (deliberately loose per the design doc — this feature treats it as
+ * read-only), so job title/company are joined in a second query rather than
+ * an embedded select.
  */
 export async function fetchBuildPlanProjectSummaries(userId: string): Promise<BuildPlanProjectSummary[]> {
     if (!userId) return []
     const { data: recs, error } = await supabase
         .from('resume_build_recommendations' as any)
-        .select('resume_id, job_id, recommendations')
+        .select('resume_id, job_id, recommendations, selected_project_ids')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
     if (error || !recs?.length) return []
 
-    const rows = recs as unknown as { resume_id: string; job_id: string; recommendations: BuildPlan }[]
+    const rows = recs as unknown as { resume_id: string; job_id: string; recommendations: BuildPlan; selected_project_ids: string[] | null }[]
     const jobIds = Array.from(new Set(rows.map(r => r.job_id).filter(Boolean)))
     let jobs: { id: string; title: string | null; company: string | null }[] = []
     if (jobIds.length) {
@@ -934,8 +938,11 @@ export async function fetchBuildPlanProjectSummaries(userId: string): Promise<Bu
     for (const r of rows) {
         const projects = r.recommendations?.projects
         if (!Array.isArray(projects)) continue
+        const selected = new Set(r.selected_project_ids ?? [])
+        if (selected.size === 0) continue
         const job = jobById.get(r.job_id)
         for (const project of projects) {
+            if (!selected.has(project.id)) continue
             out.push({
                 resume_id: r.resume_id,
                 job_id: r.job_id,
@@ -947,6 +954,20 @@ export async function fetchBuildPlanProjectSummaries(userId: string): Promise<Bu
         }
     }
     return out
+}
+
+/** Marks a build-plan-suggested project as selected — called when the user clicks "Learn it" in BuildPlanModal. Puts it in fetchBuildPlanProjectSummaries' results. */
+export async function selectBuildPlanProject(resumeId: string, jobId: string, buildPlanProjectId: string): Promise<{ success: boolean; error?: string }> {
+    const res = await fetch('/api/build-plan/select-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resume_id: resumeId, job_id: jobId, build_plan_project_id: buildPlanProjectId }),
+    })
+    if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        return { success: false, error: json.error || 'Failed to select project' }
+    }
+    return { success: true }
 }
 
 export interface ProjectRoadmapSummary {

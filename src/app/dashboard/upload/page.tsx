@@ -9,6 +9,7 @@ import type { Resume, ResumeAiAnalysis } from '@/lib/types'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { createClient } from '@/lib/supabase/client'
 import { MorphingPopover, MorphingPopoverTrigger, MorphingPopoverContent } from '@/components/ui/morphing-popover'
+import { useClickOutside } from '@/hooks/use-click-outside'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const POPOVER_VARIANTS = {
@@ -17,6 +18,12 @@ const POPOVER_VARIANTS = {
     exit:    { opacity: 0, filter: 'blur(8px)' },
 }
 const POPOVER_TRANSITION = { duration: 0.32, ease: [0.32, 0.72, 0.2, 1] as [number, number, number, number] }
+// Resume-picker sheet: quick fade in, instant close on select — no bounce/morph on the way out.
+const RESUME_SHEET_VARIANTS = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: 0.18, ease: 'easeOut' as const } },
+    exit:    { opacity: 0, transition: { duration: 0 } },
+}
 
 // Full-screen-ish centered panel (~75vw, capped). position:fixed so it ignores scroll/clip ancestors.
 const POP_CONTENT_BASE: React.CSSProperties = {
@@ -432,6 +439,8 @@ export default function UploadPage() {
     const [loadingResumes, setLoadingResumes] = useState(true)
     const [viewMode, setViewMode]           = useState<'upload' | 'view'>('upload')
     const [resumeSheetOpen, setResumeSheetOpen] = useState(false)
+    const resumeSheetRef = useRef<HTMLDivElement>(null)
+    useClickOutside(resumeSheetRef, () => setResumeSheetOpen(false))
     const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
     const [primaryId, setPrimaryId]         = useState<string | null>(null)
     const [file, setFile]                   = useState<File | null>(null)
@@ -1063,8 +1072,9 @@ export default function UploadPage() {
                         >
                             <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
                         </button>
-                        <MorphingPopover open={resumeSheetOpen} onOpenChange={setResumeSheetOpen} style={{ display: 'block', width: '100%', flex: 1, minWidth: 0 }}>
-                            <MorphingPopoverTrigger
+                        <div style={{ position: 'relative', width: '100%', flex: 1, minWidth: 0 }}>
+                            <button
+                                onClick={() => setResumeSheetOpen(o => !o)}
                                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 12, background: '#f8fafc', border: '1px solid #e5e7eb', cursor: 'pointer' }}
                             >
                                 {(() => {
@@ -1084,8 +1094,16 @@ export default function UploadPage() {
                                     )
                                 })()}
                                 <svg width="14" height="14" fill="none" stroke="#6b7280" viewBox="0 0 24 24" style={{ flexShrink: 0, transform: resumeSheetOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><polyline points="6 9 12 15 18 9" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" /></svg>
-                            </MorphingPopoverTrigger>
-                            <MorphingPopoverContent style={popContentStyle}>
+                            </button>
+                        <AnimatePresence>
+                            {resumeSheetOpen && (
+                                <motion.div
+                                    ref={resumeSheetRef}
+                                    initial={RESUME_SHEET_VARIANTS.initial}
+                                    animate={RESUME_SHEET_VARIANTS.animate}
+                                    exit={RESUME_SHEET_VARIANTS.exit}
+                                    style={popContentStyle}
+                                >
                                 {SHEET_HANDLE}
                                 <div style={POP_HEADER}>
                                     <div>
@@ -1140,8 +1158,10 @@ export default function UploadPage() {
                                         <p style={{ fontSize: 13, color: '#9ca3af', padding: '16px 10px', textAlign: 'center' }}>No resumes yet — upload your first one above.</p>
                                     )}
                                 </div>
-                            </MorphingPopoverContent>
-                        </MorphingPopover>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                        </div>
                     </div>
                 )}
 
@@ -1382,7 +1402,7 @@ export default function UploadPage() {
                                                 >
                                                     <MorphingPopoverTrigger onClick={() => openAdd('work_experience')} style={MINI_ADD}>
                                                         <span style={{ color: '#1d4ed8', fontSize: 14, lineHeight: 1 }}>+</span>
-                                                        <motion.span layout="position" layoutId="work-add-label">Add</motion.span>
+                                                        <span>Add</span>
                                                     </MorphingPopoverTrigger>
                                                     <MorphingPopoverContent style={popContentStyle}>
                                                         {SHEET_HANDLE}
@@ -1390,7 +1410,7 @@ export default function UploadPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="experience" />
                                                                 <div>
-                                                                    <motion.h4 layout="position" layoutId="work-add-label" style={POP_HEAD}>{editingIndex !== null ? 'Edit experience' : 'Add experience'}</motion.h4>
+                                                                    <h4 style={POP_HEAD}>{editingIndex !== null ? 'Edit experience' : 'Add experience'}</h4>
                                                                     <p style={POP_SUB}>Role, company, dates, and what you actually did — one bullet per line.</p>
                                                                 </div>
                                                             </div>
@@ -1500,7 +1520,7 @@ export default function UploadPage() {
                                                 >
                                                     <MorphingPopoverTrigger onClick={() => openAdd('skills')} style={MINI_ADD}>
                                                         <span style={{ color: '#1d4ed8', fontSize: 14, lineHeight: 1 }}>+</span>
-                                                        <motion.span layout="position" layoutId="skills-add-label">Manage</motion.span>
+                                                        <span>Manage</span>
                                                     </MorphingPopoverTrigger>
                                                     <MorphingPopoverContent style={popContentStyle}>
                                                         {SHEET_HANDLE}
@@ -1508,7 +1528,7 @@ export default function UploadPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="skills" />
                                                                 <div>
-                                                                    <motion.h4 layout="position" layoutId="skills-add-label" style={POP_HEAD}>Manage skills</motion.h4>
+                                                                    <h4 style={POP_HEAD}>Manage skills</h4>
                                                                     <p style={POP_SUB}>Click × to remove. Type a skill and press Enter (or comma) to add.</p>
                                                                 </div>
                                                             </div>
@@ -1576,7 +1596,7 @@ export default function UploadPage() {
                                                 >
                                                     <MorphingPopoverTrigger onClick={() => openAdd('education')} style={MINI_ADD}>
                                                         <span style={{ color: '#1d4ed8', fontSize: 14, lineHeight: 1 }}>+</span>
-                                                        <motion.span layout="position" layoutId="edu-add-label">Add</motion.span>
+                                                        <span>Add</span>
                                                     </MorphingPopoverTrigger>
                                                     <MorphingPopoverContent style={popContentStyle}>
                                                         {SHEET_HANDLE}
@@ -1584,7 +1604,7 @@ export default function UploadPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="education" />
                                                                 <div>
-                                                                    <motion.h4 layout="position" layoutId="edu-add-label" style={POP_HEAD}>{editingIndex !== null ? 'Edit education' : 'Add education'}</motion.h4>
+                                                                    <h4 style={POP_HEAD}>{editingIndex !== null ? 'Edit education' : 'Add education'}</h4>
                                                                     <p style={POP_SUB}>Institution, degree, field of study, dates, and GPA if it&apos;s strong.</p>
                                                                 </div>
                                                             </div>
@@ -1675,7 +1695,7 @@ export default function UploadPage() {
                                                 >
                                                     <MorphingPopoverTrigger onClick={() => openAdd('certifications')} style={{ ...S.addBtn, margin: 0 } as React.CSSProperties}>
                                                         <span style={{ color: '#d97706', fontSize: 16, lineHeight: 1 }}>+</span>
-                                                        <motion.span layout="position" layoutId="cert-add-label">Add</motion.span>
+                                                        <span>Add</span>
                                                     </MorphingPopoverTrigger>
                                                     <MorphingPopoverContent style={popContentStyle}>
                                                         {SHEET_HANDLE}
@@ -1683,7 +1703,7 @@ export default function UploadPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="certifications" />
                                                                 <div>
-                                                                    <motion.h4 layout="position" layoutId="cert-add-label" style={POP_HEAD}>{editingIndex !== null ? 'Edit certification' : 'Add certifications'}</motion.h4>
+                                                                    <h4 style={POP_HEAD}>{editingIndex !== null ? 'Edit certification' : 'Add certifications'}</h4>
                                                                     <p style={POP_SUB}>Cloud, security, frameworks — signals you took initiative beyond the syllabus.</p>
                                                                 </div>
                                                             </div>
@@ -1754,7 +1774,7 @@ export default function UploadPage() {
                                                 >
                                                     <MorphingPopoverTrigger onClick={() => openAdd('projects')} style={{ ...S.addBtn, margin: 0 } as React.CSSProperties}>
                                                         <span style={{ color: '#d97706', fontSize: 16, lineHeight: 1 }}>+</span>
-                                                        <motion.span layout="position" layoutId="project-add-label">Add</motion.span>
+                                                        <span>Add</span>
                                                     </MorphingPopoverTrigger>
                                                     <MorphingPopoverContent style={popContentStyle}>
                                                         {SHEET_HANDLE}
@@ -1762,7 +1782,7 @@ export default function UploadPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="projects" />
                                                                 <div>
-                                                                    <motion.h4 layout="position" layoutId="project-add-label" style={POP_HEAD}>Add a project</motion.h4>
+                                                                    <h4 style={POP_HEAD}>Add a project</h4>
                                                                     <p style={POP_SUB}>Show what you&apos;ve shipped — what it does, your role, the stack, and a link.</p>
                                                                 </div>
                                                             </div>
@@ -1830,7 +1850,7 @@ export default function UploadPage() {
                                                 >
                                                     <MorphingPopoverTrigger onClick={() => openAdd('achievements')} style={{ ...S.addBtn, margin: 0 } as React.CSSProperties}>
                                                         <span style={{ color: '#16a34a', fontSize: 16, lineHeight: 1 }}>+</span>
-                                                        <motion.span layout="position" layoutId="achiev-add-label">Add</motion.span>
+                                                        <span>Add</span>
                                                     </MorphingPopoverTrigger>
                                                     <MorphingPopoverContent style={popContentStyle}>
                                                         {SHEET_HANDLE}
@@ -1838,7 +1858,7 @@ export default function UploadPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="achievements" />
                                                                 <div>
-                                                                    <motion.h4 layout="position" layoutId="achiev-add-label" style={POP_HEAD}>{editingIndex !== null ? 'Edit achievement' : 'Add achievements & awards'}</motion.h4>
+                                                                    <h4 style={POP_HEAD}>{editingIndex !== null ? 'Edit achievement' : 'Add achievements & awards'}</h4>
                                                                     <p style={POP_SUB}>Hackathons, scholarships, rankings — anything that sets you apart from peers.</p>
                                                                 </div>
                                                             </div>
@@ -1898,7 +1918,7 @@ export default function UploadPage() {
                                                 >
                                                     <MorphingPopoverTrigger onClick={() => openAdd('links')} style={{ ...S.addBtn, margin: 0 } as React.CSSProperties}>
                                                         <span style={{ color: '#7c3aed', fontSize: 16, lineHeight: 1 }}>+</span>
-                                                        <motion.span layout="position" layoutId="links-add-label">{hasAnyLink ? 'Edit Links' : 'Add Links'}</motion.span>
+                                                        <span>{hasAnyLink ? 'Edit Links' : 'Add Links'}</span>
                                                     </MorphingPopoverTrigger>
                                                     <MorphingPopoverContent style={popContentStyle}>
                                                         {SHEET_HANDLE}
@@ -1906,7 +1926,7 @@ export default function UploadPage() {
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                                 <PopSectionIcon k="links" />
                                                                 <div>
-                                                                    <motion.h4 layout="position" layoutId="links-add-label" style={POP_HEAD}>Links & portfolio</motion.h4>
+                                                                    <h4 style={POP_HEAD}>Links & portfolio</h4>
                                                                     <p style={POP_SUB}>Recruiters cold-stalk these. Paste full URLs so they&apos;re one click away.</p>
                                                                 </div>
                                                             </div>
