@@ -34,29 +34,24 @@ export function isTrimEmpty(changes: TrimChanges): boolean {
     return !changes.summary && !changes.certifications && changes.experience.length === 0 && changes.projects.length === 0
 }
 
-/** The user-message prompt sent to gpt-4.1-mini. Kept as a pure string builder so it's testable without a network call. */
-export function buildTrimPrompt(
-    state: ResumeEditorState,
-    jobTitle: string,
-    jobDescription: string,
-    currentPages: number,
-    pageTarget: number,
-): string {
-    return `This tailored resume is ${currentPages} page(s), target is ${pageTarget} page(s). Condense it to fit — never add or remove whole experience/project entries, only tighten content within them.
-
-Target job: ${jobTitle}
-Job description excerpt:
-${jobDescription.slice(0, 2000)}
-
-Resume (JSON):
-${JSON.stringify(state)}
+// Kept as the ENTIRE system message — never mixed with the mutable resume
+// state or job context — so it's a byte-identical prefix on every single
+// call to this endpoint, across every user/resume/job. This is the ONLY
+// content in this feature that's guaranteed invariant call-to-call; OpenAI's
+// automatic prompt-cache only reuses a prefix match starting at position 0,
+// so this text MUST come first (as the system message) to ever get cached —
+// it previously lived at the END of the user prompt (after the resume JSON),
+// where it could never benefit from caching no matter how many times the
+// endpoint was called. Same pattern already established in the chat route's
+// SYSTEM_PROMPT (src/app/api/resume-edit/chat/route.ts).
+export const TRIM_SYSTEM_PROMPT = `You condense resumes to fit a page target for a job application tool ("Trim with AI" in the Resume Studio One-Page Optimizer). Never add or remove whole experience/project entries — only tighten content within them. Always return valid JSON matching the requested shape exactly.
 
 Rules:
 1. Experience entries with 5+ bullets: condense to 2-3 bullets by merging/tightening, not just shortening each line. Entries with 4 or fewer bullets: leave alone unless a specific bullet is clearly redundant.
-2. If there are 4+ projects: judge which are most relevant to THIS job using the description above, keep ~2 with full bullets (2 each is typical), and demote the rest to name-only by returning an empty bullets array for them. Never remove a project entirely — only its bullets.
-3. If there are 4+ certifications: trim the list down to the most relevant ones for this job.
+2. If there are 4+ projects: judge which are most relevant to the given job using its description, keep ~2 with full bullets (2 each is typical), and demote the rest to name-only by returning an empty bullets array for them. Never remove a project entirely — only its bullets.
+3. If there are 4+ certifications: trim the list down to the most relevant ones for the given job.
 4. Only touch the summary if it's clearly redundant with tightened experience bullets.
-5. NEVER invent a number, percentage, dollar amount, or duration that isn't already in the resume above. If you can't verify a metric, rewrite the line qualitatively without one.
+5. NEVER invent a number, percentage, dollar amount, or duration that isn't already in the resume you're given. If you can't verify a metric, rewrite the line qualitatively without one.
 6. Only include a field in your JSON output if you're actually changing it. Do not repeat unchanged entries.
 
 Return JSON exactly in this shape (all fields optional, omit anything unchanged):
@@ -66,6 +61,23 @@ Return JSON exactly in this shape (all fields optional, omit anything unchanged)
   "projects": [{ "index": 2, "bullets": [] }],
   "certifications": ["Cert A", "Cert B"]
 }`
+
+/** The user-message prompt sent to gpt-4.1-mini — only the mutable, per-call content. Kept as a pure string builder so it's testable without a network call. */
+export function buildTrimPrompt(
+    state: ResumeEditorState,
+    jobTitle: string,
+    jobDescription: string,
+    currentPages: number,
+    pageTarget: number,
+): string {
+    return `This tailored resume is ${currentPages} page(s), target is ${pageTarget} page(s). Condense it to fit.
+
+Target job: ${jobTitle}
+Job description excerpt:
+${jobDescription.slice(0, 2000)}
+
+Resume (JSON):
+${JSON.stringify(state)}`
 }
 
 interface RawTrimExperience { index?: unknown; bullets?: unknown }

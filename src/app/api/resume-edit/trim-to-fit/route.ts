@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserLimit } from '@/lib/rate-limit'
 import { checkQuota } from '@/lib/plan'
 import { logUsage } from '@/lib/usage'
-import { buildTrimPrompt, parseTrimResponse, isTrimEmpty, type TrimChanges } from '@/lib/resume-edit/trimToFit'
+import { buildTrimPrompt, parseTrimResponse, isTrimEmpty, TRIM_SYSTEM_PROMPT, type TrimChanges } from '@/lib/resume-edit/trimToFit'
 import type { ResumeEditorState } from '@/lib/types'
 
 function getOpenAI() {
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
             temperature: 0.4,
             response_format: { type: 'json_object' },
             messages: [
-                { role: 'system', content: 'You condense resumes to fit a page target for a job application tool. Always return valid JSON matching the requested shape exactly. Never invent metrics not already present in the resume.' },
+                { role: 'system', content: TRIM_SYSTEM_PROMPT },
                 { role: 'user', content: prompt },
             ],
         })
