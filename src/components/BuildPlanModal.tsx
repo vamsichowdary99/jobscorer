@@ -88,9 +88,13 @@ export default function BuildPlanModal({
     // Clicking "Learn it" on a project is the moment the user actually chooses
     // to pursue it — this is what puts it in the Projects tab (fetchBuildPlanProjectSummaries
     // only returns selected ids). Being AI-suggested alone never qualifies.
-    function learnProject(projectId: string, skill: string) {
+    // Deliberately does NOT go through gotoLearning/jobId+skill — that deep-link
+    // triggers the skills learning-path generation workflow, which a project
+    // click must never fire. Goes straight to the Projects tab instead.
+    function learnProject(projectId: string) {
         if (resumeId) void selectBuildPlanProject(resumeId, jobId, projectId)
-        gotoLearning(skill)
+        onClose()
+        router.push('/dashboard/learning?section=projects')
     }
 
     function collectAccepted(): AcceptedRecommendation[] {
@@ -187,7 +191,7 @@ export default function BuildPlanModal({
                                             decision={decisions.get(p.id)}
                                             onAccept={() => setDecision(p.id, 'accept')}
                                             onSkip={() => setDecision(p.id, 'skip')}
-                                            onLearn={(p.learning_skill || p.addresses_gaps?.[0] || p.tech?.[0]) ? () => learnProject(p.id, (p.learning_skill || p.addresses_gaps?.[0] || p.tech?.[0])!) : undefined}
+                                            onLearn={() => learnProject(p.id)}
                                         >
                                             {p.example_repos.length > 0 && (
                                                 <div className="bp-repos">

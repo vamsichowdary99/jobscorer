@@ -1580,30 +1580,64 @@ function WsMilestoneDetail({ milestone, checklistState, onToggleChecklistItem, o
     return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: T.bgAlt, minHeight: 0 }}>
             <div style={{ padding: isNarrow ? '16px 16px 0' : '28px 36px 0', borderBottom: `1px solid ${T.line2}`, background: T.bgAlt }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: 240 }}>
+                {isNarrow ? (
+                    // Stacked mobile header — a genuine second row, not a
+                    // `flexWrap`-improvised one. At true narrow widths (e.g.
+                    // iPhone SE) the right-aligned stats column used to wrap
+                    // onto its own line as a *single* flex item, which drops
+                    // `justify-content: space-between`/`flex-end` (they only
+                    // apply across siblings sharing a row), collapsing the
+                    // column to the left and blowing up "3 Hours" out of its
+                    // intended compact layout. Explicit stacking sidesteps
+                    // that entirely instead of hoping the wrap looks right.
+                    <div style={{ marginBottom: 16 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: T.blue, marginBottom: 6 }}>Milestone {milestone.milestone_number}</div>
-                        <h2 style={{ fontSize: isNarrow ? 20 : 30, fontWeight: 800, color: T.ink, letterSpacing: '-0.04em', margin: '0 0 8px' }}>{milestone.title}</h2>
-                        <div style={{ fontSize: 14, color: T.muted }}>{milestone.goal}</div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0, paddingTop: 4 }}>
-                        <div style={{ textAlign: 'right' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', marginBottom: 3 }}>
-                                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
-                                <span style={{ fontSize: 12, color: T.muted }}>Estimated Time</span>
+                        <h2 style={{ fontSize: 20, fontWeight: 800, color: T.ink, letterSpacing: '-0.04em', margin: '0 0 8px' }}>{milestone.title}</h2>
+                        <div style={{ fontSize: 14, color: T.muted, marginBottom: 14 }}>{milestone.goal}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                                    <span style={{ fontSize: 12, color: T.muted }}>Estimated Time</span>
+                                </div>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: T.ink }}>{milestone.estimated_hours ? `${milestone.estimated_hours} Hours` : 'Not estimated'}</div>
                             </div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: T.ink }}>{milestone.estimated_hours ? `${milestone.estimated_hours} Hours` : 'Not estimated'}</div>
-                        </div>
-                        <div style={{ width: 1, height: 14, background: T.line2 }} />
-                        <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: 12, color: T.muted, marginBottom: 3 }}>Status</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusDot }} />
-                                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{statusLabel}</span>
+                            <div style={{ width: 1, height: 28, background: T.line2, flexShrink: 0 }} />
+                            <div>
+                                <div style={{ fontSize: 12, color: T.muted, marginBottom: 3 }}>Status</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusDot, flexShrink: 0 }} />
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{statusLabel}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                ) : (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 16 }}>
+                        <div style={{ flex: 1, minWidth: 240 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: T.blue, marginBottom: 6 }}>Milestone {milestone.milestone_number}</div>
+                            <h2 style={{ fontSize: 30, fontWeight: 800, color: T.ink, letterSpacing: '-0.04em', margin: '0 0 8px' }}>{milestone.title}</h2>
+                            <div style={{ fontSize: 14, color: T.muted }}>{milestone.goal}</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0, paddingTop: 4 }}>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', marginBottom: 3 }}>
+                                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={T.muted} strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                                    <span style={{ fontSize: 12, color: T.muted }}>Estimated Time</span>
+                                </div>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: T.ink }}>{milestone.estimated_hours ? `${milestone.estimated_hours} Hours` : 'Not estimated'}</div>
+                            </div>
+                            <div style={{ width: 1, height: 14, background: T.line2 }} />
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: 12, color: T.muted, marginBottom: 3 }}>Status</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: statusDot }} />
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{statusLabel}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
                     <div style={{ fontSize: '13.5px', fontWeight: 700, color: T.muted, whiteSpace: 'nowrap' }}>{pct}% Complete</div>
                     <div style={{ flex: 1, height: 6, background: '#E2E8F0', borderRadius: 99, overflow: 'hidden', maxWidth: 520 }}>
@@ -2168,6 +2202,23 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
         return () => mq.removeEventListener('change', handler)
     }, [])
 
+    // Lock background scroll while the mobile milestone rail is open. The
+    // backdrop's onClick alone doesn't stop touch-drag scroll from reaching
+    // the page behind it on iOS Safari — a touchmove there bleeds straight
+    // through to whichever inner pane is scrollable, which desktop mouse-based
+    // DevTools emulation doesn't reproduce. preventDefault on touchmove blocks
+    // that, except inside the rail's own milestone list (data-rail-scroll),
+    // which still needs to scroll normally.
+    useEffect(() => {
+        if (!(isNarrow && railOpen)) return
+        const preventScroll = (e: TouchEvent) => {
+            if ((e.target as HTMLElement).closest('[data-rail-scroll]')) return
+            e.preventDefault()
+        }
+        document.addEventListener('touchmove', preventScroll, { passive: false })
+        return () => document.removeEventListener('touchmove', preventScroll)
+    }, [isNarrow, railOpen])
+
     const goMilestone = (i: number) => { setMsIdx(i); setView('ms'); setCoach(null); setOpenTask(null); setRailOpen(false) }
     const goOverview = () => { setView('overview'); setCoach(null); setRailOpen(false) }
 
@@ -2320,7 +2371,7 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
                     </div>
                 </div>
 
-                <div style={{ borderTop: `1px solid ${T.line2}`, overflowY: 'auto', flex: 1 }}>
+                <div data-rail-scroll style={{ borderTop: `1px solid ${T.line2}`, overflowY: 'auto', flex: 1 }}>
                     {milestones.map((m, i) => {
                         const state = checklistByMilestone[i] ?? []
                         const doneCount = state.filter(Boolean).length
@@ -2413,10 +2464,10 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
 
 type LibFilter = 'all' | 'inprogress' | 'complete' | 'new'
 
-function LearningHistoryIndex({ summaries }: { summaries: LearningPathSummary[] }) {
+function LearningHistoryIndex({ summaries, initialSection }: { summaries: LearningPathSummary[]; initialSection?: 'skills' | 'projects' }) {
     const [filter, setFilter] = useState<LibFilter>('all')
     const [visible, setVisible] = useState(false)
-    const [section, setSection] = useState<'skills' | 'projects'>('skills')
+    const [section, setSection] = useState<'skills' | 'projects'>(initialSection ?? 'skills')
     const [activeRoadmapId, setActiveRoadmapId] = useState<string | null>(null)
     // null = not fetched yet — badge shows a loading dash instead of a
     // misleading "0" while the eager fetch is still in flight.
@@ -2818,8 +2869,11 @@ function ProjectsSection({ onOpen, onCount, active }: { onOpen: (roadmapId: stri
                                     </span>
                                 </div>
                                 <h3 className="lib-proj-title">{p.name}</h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8, fontSize: '.75rem', fontWeight: 700, color: T.blue }}>
+                                    <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="14" rx="2" /><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                                    <span>Built for {summary.company_name} · {summary.job_title}</span>
+                                </div>
                                 <p className="lib-proj-desc">{p.description}</p>
-                                <div style={{ fontSize: 11, color: T.muted2, marginTop: 4 }}>{summary.job_title} · {summary.company_name}</div>
                             </div>
 
                             <div className="lib-proj-tech">
@@ -3318,6 +3372,10 @@ function LearningPage() {
     const router = useRouter()
     const jobId = searchParams.get('jobId')
     const skillParam = searchParams.get('skill')  // skill the user clicked "Learn it" on (Build Plan)
+    // Project's "Learn it" (Build Plan) deep-links here with no jobId/skill —
+    // just ?section=projects — so it opens the Projects tab directly instead
+    // of falling into the skills learning-path generation flow below.
+    const sectionParam = searchParams.get('section') === 'projects' ? 'projects' : 'skills'
 
     const [job, setJob] = useState<Job | null>(null)
     const [paths, setPaths] = useState<LearningPath[]>([])
@@ -3336,7 +3394,7 @@ function LearningPage() {
     // ── Mobile state ──
     const [isMobile, setIsMobile] = useState(false)
     const [showAllSkillsSheet, setShowAllSkillsSheet] = useState(false)
-    const [mobileSection, setMobileSection] = useState<'skills' | 'projects'>('skills')
+    const [mobileSection, setMobileSection] = useState<'skills' | 'projects'>(sectionParam)
     const [mobileRoadmapId, setMobileRoadmapId] = useState<string | null>(null)
     const [mobileProjectCount, setMobileProjectCount] = useState<number | null>(null)
     useEffect(() => {
@@ -4115,7 +4173,7 @@ function LearningPage() {
             </div>
         )
     }
-    if (phase === 'history') return <LearningHistoryIndex summaries={summaries} />
+    if (phase === 'history') return <LearningHistoryIndex summaries={summaries} initialSection={sectionParam} />
     if (phase === 'generating') return renderCenteredState(<GeneratingState />)
     if (phase === 'idle') return renderCenteredState(<EmptyState onGenerate={handleGenerate} count={missingSkills.length} />)
     if (phase === 'error') return renderCenteredState(
