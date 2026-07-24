@@ -6,7 +6,6 @@ import { Reorder } from 'framer-motion'
 import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume, ResumeEditorState, ExperienceEntry, EducationEntry, ProjectEntry, LeadershipEntry, UserJobMatch, ProjectEvidence } from '@/lib/types'
 import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes, fetchUserJobMatch, fetchConfirmedProjects, triggerTrimToFit } from '@/lib/api'
 import TemplatePickerModal, { type TemplateId } from '@/components/TemplatePickerModal'
-import MobilePreviewScaler from '@/components/MobilePreviewScaler'
 import { TEMPLATES, TEMPLATE_IMAGES } from '@/templates/catalog'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { usePreviewDecorations, decorationKey, PreviewDecorationsProvider } from '@/components/resume-editor/PreviewDecorations'
@@ -6876,9 +6875,9 @@ export default function ResumesPage() {
                     <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: '#fff' }}>
                             <PreviewDecorationsProvider decorations={assistant.decorations}>
-                                <MobilePreviewScaler>
+                                <div style={{ width: 700, zoom: 0.5, pointerEvents: 'none' }}>
                                     {renderPreviewForTemplate(templateId)}
-                                </MobilePreviewScaler>
+                                </div>
                             </PreviewDecorationsProvider>
                         </div>
                         <MobileAssistantSheet assistant={assistant} />
@@ -7204,9 +7203,9 @@ export default function ResumesPage() {
                         </div>
                         {previewTab === 'recruiters' ? (
                             <div className="mob-tmpl-preview-scroll">
-                                <MobilePreviewScaler>
+                                <div style={{ width: 700, zoom: 0.5, pointerEvents: 'none', background: '#fff' }}>
                                     {renderPreviewForTemplate(previewingTemplate.id)}
-                                </MobilePreviewScaler>
+                                </div>
                             </div>
                         ) : (
                             <div className="mob-tmpl-preview-scroll">
@@ -7260,9 +7259,9 @@ export default function ResumesPage() {
                             {previewTab === 'recruiters' ? (
                                 <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#f1f5f9', padding: '8px 6px 16px' }}>
                                     <div style={{ background: '#fff', borderRadius: 6, boxShadow: '0 2px 12px rgba(15,23,42,0.08)', overflow: 'hidden' }}>
-                                        <MobilePreviewScaler>
+                                        <div style={{ width: 700, zoom: 0.45, pointerEvents: 'none' }}>
                                             {renderPreviewForTemplate(templateId)}
-                                        </MobilePreviewScaler>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
