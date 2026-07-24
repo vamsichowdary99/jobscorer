@@ -778,6 +778,29 @@ export async function fetchOptimizedResumesByResume(userId: string, resumeId: st
     }))
 }
 
+// ── Resume Edit (Trim to Fit) ───────────────────────────────
+
+export interface TrimToFitPayload {
+	optimizedResumeId: string
+	editorState: import('./types').ResumeEditorState
+	pageTarget: number
+	currentPages: number
+}
+
+/** Calls POST /api/resume-edit/trim-to-fit — the "Trim with AI" One-Page Optimizer action. */
+export async function triggerTrimToFit(payload: TrimToFitPayload): Promise<{ success: boolean; changes?: import('./resume-edit/trimToFit').TrimChanges; empty?: boolean; error?: string }> {
+	const res = await fetch('/api/resume-edit/trim-to-fit', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload),
+	})
+	const json = await res.json().catch(() => ({}))
+	if (!res.ok || !json.success) {
+		return { success: false, error: json.error || 'Trim generation failed' }
+	}
+	return json
+}
+
 // ── Build Plan (recommendation popup) ────────────────────────
 
 /**
