@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseTrimResponse, applyTrimChanges, isTrimEmpty, computeTrimFingerprint } from './trimToFit.ts'
+import { parseTrimResponse, applyTrimChanges, isTrimEmpty } from './trimToFit.ts'
+import { computeTrimFingerprint } from './trimFingerprint.ts'
 import type { ResumeEditorState } from '../types.ts'
 
 function baseState(): ResumeEditorState {

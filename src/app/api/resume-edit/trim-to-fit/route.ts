@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserLimit } from '@/lib/rate-limit'
 import { checkQuota } from '@/lib/plan'
 import { logUsage } from '@/lib/usage'
-import { buildTrimPrompt, parseTrimResponse, isTrimEmpty, computeTrimFingerprint, TRIM_SYSTEM_PROMPT, type TrimChanges, type TrimCache } from '@/lib/resume-edit/trimToFit'
+import { buildTrimPrompt, parseTrimResponse, isTrimEmpty, TRIM_SYSTEM_PROMPT, type TrimChanges } from '@/lib/resume-edit/trimToFit'
+import { computeTrimFingerprint, type TrimCache } from '@/lib/resume-edit/trimFingerprint'
 import type { ResumeEditorState } from '@/lib/types'
 
 function getOpenAI() {
