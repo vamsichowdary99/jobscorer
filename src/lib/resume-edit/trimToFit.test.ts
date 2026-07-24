@@ -107,6 +107,17 @@ test('parseTrimResponse accepts a certifications trim and a summary trim', () =>
     assert.equal(changes.summary?.after, 'Backend engineer focused on scalable APIs.')
 })
 
+test('parseTrimResponse drops a fabricated certification not already on the resume', () => {
+    const state = baseState()
+    const raw = {
+        certifications: ['AWS Certified Developer', 'Certified in leading 50+ engineers'],
+    }
+    const changes = parseTrimResponse(raw, state, [], [])
+    // The whole certifications change is dropped since one entry isn't a verbatim
+    // subset of the existing list — certs are thinned, never rewritten.
+    assert.equal(changes.certifications, undefined)
+})
+
 test('isTrimEmpty is true when nothing changed', () => {
     const state = baseState()
     const changes = parseTrimResponse({}, state, [], [])

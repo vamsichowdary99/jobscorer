@@ -128,9 +128,17 @@ export function parseTrimResponse(
         }
     }
 
-    if (typeof r.certifications !== 'undefined') {
-        const list = Array.isArray(r.certifications) ? r.certifications.filter((c): c is string => typeof c === 'string') : null
-        if (list && JSON.stringify(list) !== JSON.stringify(state.certifications)) {
+    if (Array.isArray(r.certifications)) {
+        // Design intent is thinning the list, not rewriting entries — every
+        // returned cert must already be verbatim on the resume, or the whole
+        // change is dropped (same "drop the whole thing, not just the bad
+        // line" convention as experience/project bullets above). This closes
+        // the one AI-authored path that otherwise bypassed validateProposedText
+        // entirely — a model could otherwise return a fabricated cert string
+        // with an invented number.
+        const list = r.certifications.filter((c): c is string => typeof c === 'string')
+        const allExisting = list.every(c => state.certifications.includes(c))
+        if (allExisting && JSON.stringify(list) !== JSON.stringify(state.certifications)) {
             changes.certifications = { before: state.certifications, after: list }
         }
     }
