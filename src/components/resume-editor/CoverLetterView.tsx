@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { CoverLetter } from '@/lib/types'
 import { handleQuota } from '@/lib/quota'
 import { M } from '@/lib/meridianTokens'
+import MobilePreviewScaler from '@/components/MobilePreviewScaler'
 
 export type CoverLetterStatus = 'idle' | 'loading' | 'ready' | 'error' | 'quota' | 'not_optimized'
 
@@ -421,18 +422,19 @@ export function CoverLetterView({ controller, entry, job, profileState, compact 
         </div>
     )
 
-    // Compact (mobile overlay) — same `zoom` shrink-to-fit technique the resume
-    // preview uses, so the whole letter is visible without scrolling. Actions
-    // stay outside the zoomed box, at normal tappable size, like the resume
-    // overlay's own "Change Template" / "Download PDF" footer.
+    // Compact (mobile overlay) — scaled with MobilePreviewScaler (see that
+    // component for why: a fixed `zoom` factor doesn't adapt to screen width),
+    // so the whole letter is visible without scrolling. Actions stay outside
+    // the scaled box, at normal tappable size, like the resume overlay's own
+    // "Change Template" / "Download PDF" footer.
     if (compact) {
         return (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#f1f5f9', padding: '8px 6px 16px' }}>
                     <div style={{ background: '#fff', borderRadius: 6, boxShadow: '0 2px 12px rgba(15,23,42,0.08)', overflow: 'hidden' }}>
-                        <div style={{ width: 700, zoom: 0.45, pointerEvents: 'none' }}>
+                        <MobilePreviewScaler>
                             {letterCard}
-                        </div>
+                        </MobilePreviewScaler>
                     </div>
                 </div>
                 <div style={{ flexShrink: 0, padding: '10px 14px', display: 'flex', gap: 8, borderTop: `1px solid ${M.borderLight}`, background: M.white }}>
