@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseTrimResponse, applyTrimChanges, isTrimEmpty } from './trimToFit.ts'
+import { parseTrimResponse, applyTrimChanges, isTrimEmpty, computeTrimFingerprint } from './trimToFit.ts'
 import type { ResumeEditorState } from '../types.ts'
 
 function baseState(): ResumeEditorState {
@@ -142,4 +142,26 @@ test('applyTrimChanges splices experience, projects, certifications, and summary
     assert.deepEqual(next.projects[0].bullets, state.projects[0].bullets)
     // Original state object is never mutated.
     assert.deepEqual(state.experience[0].bullets, baseState().experience[0].bullets)
+})
+
+test('computeTrimFingerprint is identical for identical inputs', () => {
+    const state = baseState()
+    const a = computeTrimFingerprint(state, 2, 1)
+    const b = computeTrimFingerprint(baseState(), 2, 1)
+    assert.equal(a, b)
+})
+
+test('computeTrimFingerprint changes when the resume content changes', () => {
+    const state = baseState()
+    const before = computeTrimFingerprint(state, 2, 1)
+    const edited = { ...state, summary: 'A different summary.' }
+    const after = computeTrimFingerprint(edited, 2, 1)
+    assert.notEqual(before, after)
+})
+
+test('computeTrimFingerprint changes when currentPages or pageTarget changes', () => {
+    const state = baseState()
+    const base = computeTrimFingerprint(state, 2, 1)
+    assert.notEqual(base, computeTrimFingerprint(state, 3, 1))
+    assert.notEqual(base, computeTrimFingerprint(state, 2, 2))
 })

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserLimit } from '@/lib/rate-limit'
 import { checkQuota } from '@/lib/plan'
 import { logUsage } from '@/lib/usage'
-import { buildTrimPrompt, parseTrimResponse, isTrimEmpty, TRIM_SYSTEM_PROMPT, type TrimChanges } from '@/lib/resume-edit/trimToFit'
+import { buildTrimPrompt, parseTrimResponse, isTrimEmpty, computeTrimFingerprint, TRIM_SYSTEM_PROMPT, type TrimChanges, type TrimCache } from '@/lib/resume-edit/trimToFit'
 import type { ResumeEditorState } from '@/lib/types'
 
 function getOpenAI() {
@@ -58,13 +58,24 @@ export async function POST(request: NextRequest) {
     const sb = supabase as any
     const { data: row } = await sb
         .from('optimized_resumes')
-        .select('job_id')
+        .select('job_id, trim_cache')
         .eq('id', optimizedResumeId)
         .eq('user_id', user.id)
         .maybeSingle()
     if (!row?.job_id) {
         return NextResponse.json({ success: false, error: 'No job found for this resume' }, { status: 404 })
     }
+
+    // Identical repeat of a prior trim request (same resume content, same
+    // page counts) — return the cached result for free instead of paying
+    // for another generation. Self-invalidating: any real edit changes the
+    // fingerprint, so there's no separate cache-busting to maintain.
+    const fingerprint = computeTrimFingerprint(editorState, currentPages, pageTarget)
+    const cached = row.trim_cache as TrimCache | null
+    if (cached?.fingerprint === fingerprint) {
+        return NextResponse.json({ success: true, changes: cached.changes, cached: true, empty: isTrimEmpty(cached.changes) })
+    }
+
     const { data: job } = await sb
         .from('jobs')
         .select('title, description')
@@ -100,6 +111,9 @@ export async function POST(request: NextRequest) {
             cachedTokens: response.usage?.prompt_tokens_details?.cached_tokens ?? 0,
             latencyMs: Date.now() - t0,
         })
+
+        const newCache: TrimCache = { fingerprint, changes, cachedAt: new Date().toISOString() }
+        void sb.from('optimized_resumes').update({ trim_cache: newCache }).eq('id', optimizedResumeId)
 
         if (isTrimEmpty(changes)) {
             return NextResponse.json({ success: true, changes, empty: true })

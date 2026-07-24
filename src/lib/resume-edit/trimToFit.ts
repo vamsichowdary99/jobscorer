@@ -5,6 +5,7 @@
 // in isolation: building the prompt, validating+parsing the model's raw JSON
 // reply, and splicing accepted changes back into ResumeEditorState.
 
+import { createHash } from 'node:crypto'
 import type { ResumeEditorState } from '../types.ts'
 import { validateProposedText, type MetricSource } from './validator.ts'
 
@@ -32,6 +33,26 @@ export interface TrimChanges {
 
 export function isTrimEmpty(changes: TrimChanges): boolean {
     return !changes.summary && !changes.certifications && changes.experience.length === 0 && changes.projects.length === 0
+}
+
+/** Cached on optimized_resumes.trim_cache — the last trim result, addressed by fingerprint. */
+export interface TrimCache {
+    fingerprint: string
+    changes: TrimChanges
+    cachedAt: string
+}
+
+/**
+ * Content-addresses a trim request so an identical repeat (same resume
+ * content, same page counts) can skip the OpenAI call entirely and return
+ * the prior result for free — no quota charge, no cost. Not a security
+ * hash, just cheap content-addressing; self-invalidating (any real edit
+ * changes the resume JSON, which changes the fingerprint, so there's no
+ * separate cache-busting logic to maintain).
+ */
+export function computeTrimFingerprint(state: ResumeEditorState, currentPages: number, pageTarget: number): string {
+    const raw = `${JSON.stringify(state)}|${currentPages}|${pageTarget}`
+    return createHash('sha256').update(raw).digest('hex')
 }
 
 // Kept as the ENTIRE system message — never mixed with the mutable resume
