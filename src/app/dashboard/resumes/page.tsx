@@ -4,8 +4,9 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Reorder } from 'framer-motion'
 import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume, ResumeEditorState, ExperienceEntry, EducationEntry, ProjectEntry, LeadershipEntry, UserJobMatch, ProjectEvidence } from '@/lib/types'
-import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes, fetchUserJobMatch, fetchConfirmedProjects } from '@/lib/api'
+import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes, fetchUserJobMatch, fetchConfirmedProjects, triggerTrimToFit } from '@/lib/api'
 import TemplatePickerModal, { type TemplateId } from '@/components/TemplatePickerModal'
+import MobilePreviewScaler from '@/components/MobilePreviewScaler'
 import { TEMPLATES, TEMPLATE_IMAGES } from '@/templates/catalog'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { usePreviewDecorations, decorationKey, PreviewDecorationsProvider } from '@/components/resume-editor/PreviewDecorations'
@@ -21,6 +22,8 @@ import { LAYOUT_PRESETS, detectPresetKey } from '@/lib/resume-edit/layoutPresets
 import { measureBudget, type BudgetResult } from '@/lib/resume-edit/budget'
 import { rankSectionsForTrim, type SectionTrimSuggestion } from '@/lib/resume-edit/budgetOptimizer'
 import { findProjectSwapNudge, type ProjectSwapNudge } from '@/lib/resume-edit/projectNudge'
+import { applyTrimChanges, isTrimEmpty, type TrimChanges } from '@/lib/resume-edit/trimToFit'
+import TrimReviewPanel from '@/components/resume-editor/TrimReviewPanel'
 import { M } from '@/lib/meridianTokens'
 
 interface SavedResumeEntry {
@@ -647,10 +650,12 @@ function ProjectSwapNudgeCard({
 }
 
 function OnePageOptimizerPanel({
-    suggestions, onHide,
+    suggestions, onHide, onTrimWithAI, trimLoading,
 }: {
     suggestions: SectionTrimSuggestion[]
     onHide: (key: string) => void
+    onTrimWithAI: () => void
+    trimLoading: boolean
 }) {
     if (suggestions.length === 0) return null
     const top = suggestions[0]
@@ -667,12 +672,21 @@ function OnePageOptimizerPanel({
             <div style={{ fontSize: '0.75rem', color: M.textMuted, fontFamily: M.fontBody, lineHeight: 1.4, marginBottom: 10 }}>
                 {top.reason}
             </div>
-            <button
-                onClick={() => onHide(top.key)}
-                style={{ background: M.amber, color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}
-            >
-                Hide {labelFor(top.key)}
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                    onClick={() => onHide(top.key)}
+                    style={{ background: M.amber, color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: M.fontBody }}
+                >
+                    Hide {labelFor(top.key)}
+                </button>
+                <button
+                    onClick={onTrimWithAI}
+                    disabled={trimLoading}
+                    style={{ background: '#fff', color: M.amber, border: `1px solid ${M.amber}`, borderRadius: 7, padding: '5px 12px', fontSize: '0.75rem', fontWeight: 700, cursor: trimLoading ? 'default' : 'pointer', fontFamily: M.fontBody, opacity: trimLoading ? 0.6 : 1 }}
+                >
+                    {trimLoading ? 'Trimming…' : '✦ Trim with AI'}
+                </button>
+            </div>
             <div style={{ fontSize: '0.6875rem', color: M.textFaint, fontFamily: M.fontBody, marginTop: 8 }}>
                 Reversible any time via the eye icon below. Your master resume is never changed.
             </div>
@@ -6516,6 +6530,47 @@ export default function ResumesPage() {
         )
     }, [selectedEntry, layout, effectiveState, assistant.atsKeywords, jobMatch])
 
+    // ── Trim with AI (One-Page Optimizer) ──
+    const [trimChanges, setTrimChanges] = useState<TrimChanges | null>(null)
+    const [trimLoading, setTrimLoading] = useState(false)
+    const [trimError, setTrimError] = useState<string | null>(null)
+
+    const handleTrimWithAI = useCallback(async () => {
+        if (!selectedEntry || !layout || !budget || trimLoading) return
+        setTrimLoading(true)
+        setTrimError(null)
+        try {
+            const result = await triggerTrimToFit({
+                optimizedResumeId: selectedEntry.id,
+                editorState,
+                pageTarget: layout.pageTarget,
+                currentPages: budget.pages,
+            })
+            if (!result.success) {
+                setTrimError(result.error || 'Trim generation failed')
+                return
+            }
+            if (result.empty || !result.changes || isTrimEmpty(result.changes)) {
+                setTrimError('Nothing to trim — this resume is already tight.')
+                return
+            }
+            setTrimChanges(result.changes)
+        } catch (err) {
+            setTrimError(err instanceof Error ? err.message : 'Trim generation failed')
+        } finally {
+            setTrimLoading(false)
+        }
+    }, [selectedEntry, layout, budget, editorState, trimLoading])
+
+    const applyTrimWithAI = useCallback(() => {
+        if (!trimChanges) return
+        const before = editorState
+        const nextState = applyTrimChanges(editorState, trimChanges)
+        setEditorState(nextState)
+        saveManualEdit('layout-trim', before, nextState, nextState)
+        setTrimChanges(null)
+    }, [trimChanges, editorState, saveManualEdit])
+
     // ── Project-Evidence Integration (plans/25 Phase 6) — completed AI
     // projects surfaced as a resume swap-in. Fetched once per user (a
     // "confirmed projects" list is shared across all resumes/jobs), then
@@ -6821,9 +6876,9 @@ export default function ResumesPage() {
                     <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
                         <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', background: '#fff' }}>
                             <PreviewDecorationsProvider decorations={assistant.decorations}>
-                                <div style={{ width: 700, zoom: 0.5, pointerEvents: 'none' }}>
+                                <MobilePreviewScaler>
                                     {renderPreviewForTemplate(templateId)}
-                                </div>
+                                </MobilePreviewScaler>
                             </PreviewDecorationsProvider>
                         </div>
                         <MobileAssistantSheet assistant={assistant} />
@@ -7045,6 +7100,8 @@ export default function ResumesPage() {
                                                 <OnePageOptimizerPanel
                                                     suggestions={trimSuggestions}
                                                     onHide={(key) => updateLayout(layout.sectionOrder, [...layout.hiddenSections, key])}
+                                                    onTrimWithAI={handleTrimWithAI}
+                                                    trimLoading={trimLoading}
                                                 />
                                             )}
                                         </>
@@ -7147,9 +7204,9 @@ export default function ResumesPage() {
                         </div>
                         {previewTab === 'recruiters' ? (
                             <div className="mob-tmpl-preview-scroll">
-                                <div style={{ width: 700, zoom: 0.5, pointerEvents: 'none', background: '#fff' }}>
+                                <MobilePreviewScaler>
                                     {renderPreviewForTemplate(previewingTemplate.id)}
-                                </div>
+                                </MobilePreviewScaler>
                             </div>
                         ) : (
                             <div className="mob-tmpl-preview-scroll">
@@ -7203,9 +7260,9 @@ export default function ResumesPage() {
                             {previewTab === 'recruiters' ? (
                                 <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', background: '#f1f5f9', padding: '8px 6px 16px' }}>
                                     <div style={{ background: '#fff', borderRadius: 6, boxShadow: '0 2px 12px rgba(15,23,42,0.08)', overflow: 'hidden' }}>
-                                        <div style={{ width: 700, zoom: 0.45, pointerEvents: 'none' }}>
+                                        <MobilePreviewScaler>
                                             {renderPreviewForTemplate(templateId)}
-                                        </div>
+                                        </MobilePreviewScaler>
                                     </div>
                                 </div>
                             ) : (
@@ -7468,6 +7525,8 @@ export default function ResumesPage() {
                                                 <OnePageOptimizerPanel
                                                     suggestions={trimSuggestions}
                                                     onHide={(key) => updateLayout(layout.sectionOrder, [...layout.hiddenSections, key])}
+                                                    onTrimWithAI={handleTrimWithAI}
+                                                    trimLoading={trimLoading}
                                                 />
                                             )}
                                         </>
@@ -7523,6 +7582,21 @@ export default function ResumesPage() {
                 onSelect={handleTemplateSelect}
                 onClose={() => setShowTemplatePicker(false)}
             />
+        )}
+
+        {trimChanges && (
+            <TrimReviewPanel
+                changes={trimChanges}
+                onApply={applyTrimWithAI}
+                onCancel={() => setTrimChanges(null)}
+            />
+        )}
+        {trimError && (
+            <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0F172A', color: '#fff', padding: '10px 18px', borderRadius: 9999, fontSize: 13, zIndex: 500 }}
+                 onClick={() => setTrimError(null)}
+            >
+                {trimError}
+            </div>
         )}
         </>
     )
