@@ -561,11 +561,12 @@ const LAYOUT_SECTION_DEFS = M_SECTION_DEFS.filter(s => s.key !== 'profile')
 // word-count guess. Crossing the page_target boundary flips to "Needs
 // Optimization" instead of ever reporting a raw over-100% number.
 function ResumeBudgetMeter({
-    pageTarget, onPageTargetChange, budget,
+    pageTarget, onPageTargetChange, budget, failed,
 }: {
     pageTarget: number
     onPageTargetChange: (n: number) => void
     budget: BudgetResult | null
+    failed?: boolean
 }) {
     const overBudget = budget?.overBudget ?? false
     const fill = budget ? Math.min(100, budget.fullnessPercent) : 0
@@ -602,7 +603,7 @@ function ResumeBudgetMeter({
 
             <div style={{ fontSize: '0.75rem', color: M.textMuted, fontFamily: M.fontBody }}>
                 {!budget
-                    ? 'Measuring…'
+                    ? (failed ? "Couldn't measure page count on this device — try reloading, or check on desktop." : 'Measuring…')
                     : overBudget
                         ? `Needs Optimization — spans ${budget.pages} pages (target ${pageTarget})`
                         : `${budget.fullnessPercent}% full · Target ${pageTarget} page${pageTarget > 1 ? 's' : ''} · ${Math.max(0, 100 - budget.fullnessPercent)}% left`}
@@ -696,7 +697,7 @@ function OnePageOptimizerPanel({
 function LayoutManagerPanel({
     order, hidden, onChange, defaultOrder, saveStatus, unsupported,
     activePresetKey, onSelectPreset, recommendation, onApplyRecommendation, onDismissRecommendation,
-    pageTarget, onPageTargetChange, budget, optimizer, isMobile,
+    pageTarget, onPageTargetChange, budget, budgetFailed, optimizer, isMobile,
 }: {
     order: string[]
     hidden: string[]
@@ -712,6 +713,7 @@ function LayoutManagerPanel({
     pageTarget: number
     onPageTargetChange: (n: number) => void
     budget: BudgetResult | null
+    budgetFailed?: boolean
     optimizer?: React.ReactNode
     // Touch dragging fights vertical page scroll, so the mobile tab swaps the
     // drag handle for tap targets — same order/hidden state either way.
@@ -732,7 +734,7 @@ function LayoutManagerPanel({
     }
 
     const budgetMeter = (
-        <ResumeBudgetMeter pageTarget={pageTarget} onPageTargetChange={onPageTargetChange} budget={budget} />
+        <ResumeBudgetMeter pageTarget={pageTarget} onPageTargetChange={onPageTargetChange} budget={budget} failed={budgetFailed} />
     )
 
     if (unsupported) {
@@ -6461,9 +6463,11 @@ export default function ResumesPage() {
         setLayout(prev => prev ? { ...prev, pageTarget: n } : prev)
     }, [])
     const [budget, setBudget] = useState<BudgetResult | null>(null)
+    const [budgetFailed, setBudgetFailed] = useState(false)
     useEffect(() => {
         if (!layout) return
         setBudget(null)
+        setBudgetFailed(false)
         let cancelled = false
         const t = setTimeout(async () => {
             try {
@@ -6472,8 +6476,13 @@ export default function ResumesPage() {
                 const blob = await renderer.pdf(doc as any).toBlob()
                 const result = await measureBudget(blob, layout.pageTarget)
                 if (!cancelled) setBudget(result)
-            } catch {
-                if (!cancelled) setBudget(null)
+            } catch (err) {
+                // Was a bare `catch { setBudget(null) }` — indistinguishable from
+                // "still measuring" in the UI, so a real failure (e.g. pdfjs's
+                // worker failing to load under a stricter CSP on some browsers)
+                // showed "Measuring…" forever with zero signal to diagnose from.
+                console.error('[ResumeBudget] page-count measurement failed:', err)
+                if (!cancelled) { setBudget(null); setBudgetFailed(true) }
             }
         }, 900)
         return () => { cancelled = true; clearTimeout(t) }
@@ -7090,6 +7099,7 @@ export default function ResumesPage() {
                                     pageTarget={layout.pageTarget}
                                     onPageTargetChange={updatePageTarget}
                                     budget={budget}
+                                    budgetFailed={budgetFailed}
                                     optimizer={selectedEntry && (projectNudge || budget?.overBudget) ? (
                                         <>
                                             {projectNudge && (
@@ -7515,6 +7525,7 @@ export default function ResumesPage() {
                                     pageTarget={layout.pageTarget}
                                     onPageTargetChange={updatePageTarget}
                                     budget={budget}
+                                    budgetFailed={budgetFailed}
                                     optimizer={selectedEntry && (projectNudge || budget?.overBudget) ? (
                                         <>
                                             {projectNudge && (

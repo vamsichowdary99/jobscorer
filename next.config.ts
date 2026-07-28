@@ -34,7 +34,13 @@ const nextConfig: NextConfig = {
     // without it these fall back to default-src 'self', which blocks blob:.
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.i.posthog.com https://checkout.razorpay.com https://cdn.razorpay.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://*.i.posthog.com https://checkout.razorpay.com https://cdn.razorpay.com",
+      // Without an explicit worker-src, Safari/WebKit does not reliably fall back to
+      // script-src for the module Worker pdfjs-dist spins up to parse the Resume
+      // Budget PDF (src/lib/resume-edit/budget.ts) — it silently fails to load the
+      // worker on real iOS devices (not reproducible via Chrome's device emulation,
+      // which is still Chromium). blob: covers pdfjs's internal worker fallback path.
+      "worker-src 'self' blob:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
