@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
 
         const newEntry: TrimCache = { fingerprint, changes, cachedAt: new Date().toISOString(), applied: false }
         const nextTrimCacheByTemplate: TrimCacheByTemplate = { ...trimCacheByTemplate, [templateId]: newEntry }
-        const { error: cacheWriteError } = await sb.from('optimized_resumes').update({ trim_cache: nextTrimCacheByTemplate }).eq('id', optimizedResumeId)
+        const { error: cacheWriteError } = await sb.from('optimized_resumes').update({ trim_cache: nextTrimCacheByTemplate }).eq('id', optimizedResumeId).eq('user_id', user.id)
         if (cacheWriteError) {
             console.error('[resume-edit/trim-to-fit] trim_cache write failed:', cacheWriteError)
         }
