@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import * as Sentry from '@sentry/nextjs'
 import { Reorder } from 'framer-motion'
 import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume, ResumeEditorState, ExperienceEntry, EducationEntry, ProjectEntry, LeadershipEntry, UserJobMatch, ProjectEvidence } from '@/lib/types'
 import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes, fetchUserJobMatch, fetchConfirmedProjects, triggerTrimToFit } from '@/lib/api'
@@ -6470,18 +6471,21 @@ export default function ResumesPage() {
         setBudgetFailed(false)
         let cancelled = false
         const t = setTimeout(async () => {
+            // Tagged by stage so Sentry tells us WHICH step fails on a given
+            // device/browser (react-pdf render vs. pdfjs-dist measurement)
+            // instead of guessing blind — this was a bare `catch { setBudget(null) }`
+            // that showed "Measuring…" forever with zero signal on failure.
+            let stage = 'render-pdf'
             try {
                 const { renderer, PdfComp } = await loadPdfRenderer(templateId)
                 const doc = React.createElement(PdfComp, { state: effectiveState })
                 const blob = await renderer.pdf(doc as any).toBlob()
+                stage = 'measure-budget'
                 const result = await measureBudget(blob, layout.pageTarget)
                 if (!cancelled) setBudget(result)
             } catch (err) {
-                // Was a bare `catch { setBudget(null) }` — indistinguishable from
-                // "still measuring" in the UI, so a real failure (e.g. pdfjs's
-                // worker failing to load under a stricter CSP on some browsers)
-                // showed "Measuring…" forever with zero signal to diagnose from.
-                console.error('[ResumeBudget] page-count measurement failed:', err)
+                console.error(`[ResumeBudget] page-count measurement failed at stage=${stage}:`, err)
+                Sentry.captureException(err, { tags: { feature: 'resume-budget', stage } })
                 if (!cancelled) { setBudget(null); setBudgetFailed(true) }
             }
         }, 900)
@@ -7251,7 +7255,7 @@ export default function ResumesPage() {
             {showMobilePreview && (
                 <>
                     <div onClick={() => setShowMobilePreview(false)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(15,23,42,0.78)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 10px' }}>
-                        <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 366, height: '88vh', maxHeight: 720, background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 28px 70px rgba(0,0,0,0.55)', display: 'flex', flexDirection: 'column' }}>
+                        <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 366, height: '88dvh', maxHeight: 720, background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 28px 70px rgba(0,0,0,0.55)', display: 'flex', flexDirection: 'column' }}>
                             <div style={{ background: '#fff', padding: '12px 14px 11px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
                                 <div>
                                     <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>Resume Preview</div>
