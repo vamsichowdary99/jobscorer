@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
             latencyMs: Date.now() - t0,
         })
 
-        const newCache: TrimCache = { fingerprint, changes, cachedAt: new Date().toISOString() }
+        const newCache: TrimCache = { fingerprint, changes, cachedAt: new Date().toISOString(), applied: false }
         const { error: cacheWriteError } = await sb.from('optimized_resumes').update({ trim_cache: newCache }).eq('id', optimizedResumeId)
         if (cacheWriteError) {
             console.error('[resume-edit/trim-to-fit] trim_cache write failed:', cacheWriteError)
