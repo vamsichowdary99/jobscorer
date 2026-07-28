@@ -6547,6 +6547,17 @@ export default function ResumesPage() {
     const [trimChanges, setTrimChanges] = useState<TrimChanges | null>(null)
     const [trimLoading, setTrimLoading] = useState(false)
     const [trimError, setTrimError] = useState<string | null>(null)
+    // A pending trim review is computed against ONE resume's editorState by
+    // array index (experience[2], projects[0], ...). Nothing previously tied
+    // it to that resume — switching the source resume while a review was
+    // still open left trimChanges pointing at stale indices, and clicking
+    // Apply spliced resume A's trimmed bullets into resume B's (now-loaded)
+    // editorState, then saved that under resume B's id. Clearing on every
+    // resume switch makes a stale review impossible to apply.
+    useEffect(() => {
+        setTrimChanges(null)
+        setTrimError(null)
+    }, [selectedEntry?.id])
 
     const handleTrimWithAI = useCallback(async () => {
         if (!selectedEntry || !layout || !budget || trimLoading) return
