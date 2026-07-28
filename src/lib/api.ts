@@ -782,13 +782,14 @@ export async function fetchOptimizedResumesByResume(userId: string, resumeId: st
 
 export interface TrimToFitPayload {
 	optimizedResumeId: string
+	templateId: string
 	editorState: import('./types').ResumeEditorState
 	pageTarget: number
 	currentPages: number
 }
 
-/** Calls POST /api/resume-edit/trim-to-fit — the "Trim with AI" One-Page Optimizer action. */
-export async function triggerTrimToFit(payload: TrimToFitPayload): Promise<{ success: boolean; changes?: import('./resume-edit/trimToFit').TrimChanges; empty?: boolean; error?: string }> {
+/** Calls POST /api/resume-edit/trim-to-fit — the "Trim with AI" One-Page Optimizer action. Result is cached server-side per templateId but NOT yet applied to any render — see applyTrimResult. */
+export async function triggerTrimToFit(payload: TrimToFitPayload): Promise<{ success: boolean; changes?: import('./resume-edit/trimToFit').TrimChanges; applied?: boolean; empty?: boolean; error?: string }> {
 	const res = await fetch('/api/resume-edit/trim-to-fit', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -797,6 +798,20 @@ export async function triggerTrimToFit(payload: TrimToFitPayload): Promise<{ suc
 	const json = await res.json().catch(() => ({}))
 	if (!res.ok || !json.success) {
 		return { success: false, error: json.error || 'Trim generation failed' }
+	}
+	return json
+}
+
+/** Calls POST /api/resume-edit/trim-to-fit/apply — flips whether a template's already-generated trim is actually rendered. No OpenAI call. */
+export async function applyTrimResult(payload: { optimizedResumeId: string; templateId: string; applied: boolean }): Promise<{ success: boolean; trim_cache?: import('./resume-edit/trimFingerprint').TrimCacheByTemplate; error?: string }> {
+	const res = await fetch('/api/resume-edit/trim-to-fit/apply', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload),
+	})
+	const json = await res.json().catch(() => ({}))
+	if (!res.ok || !json.success) {
+		return { success: false, error: json.error || 'Failed to save' }
 	}
 	return json
 }
