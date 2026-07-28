@@ -11,7 +11,36 @@ export interface BudgetResult {
 
 let workerConfigured = false
 
+// pdfjs-dist's getTextContent() does `for await (const value of readableStream)`
+// internally — native async iteration over a ReadableStream. WebKit (all iOS
+// browsers, including "Chrome Mobile iOS" — Apple requires the same engine)
+// doesn't implement ReadableStream's async iterator protocol, so this throws
+// "undefined is not a function" on real iPhones (confirmed via Sentry
+// JAVASCRIPT-NEXTJS-5) — not reproducible via Chrome DevTools' iPhone
+// emulation, which is still real Chromium under the hood. Polyfilling once,
+// client-side only, before pdfjs ever runs.
+function polyfillReadableStreamAsyncIterator() {
+    if (typeof ReadableStream === 'undefined') return
+    const proto = ReadableStream.prototype as ReadableStream & { [Symbol.asyncIterator]?: unknown }
+    if (typeof proto[Symbol.asyncIterator] === 'function') return
+    proto[Symbol.asyncIterator] = function (this: ReadableStream) {
+        const reader = this.getReader()
+        return {
+            async next() {
+                const { done, value } = await reader.read()
+                return { done, value }
+            },
+            async return(value?: unknown) {
+                await reader.cancel()
+                return { done: true, value }
+            },
+            [Symbol.asyncIterator]() { return this },
+        }
+    }
+}
+
 async function getPdfjs() {
+    polyfillReadableStreamAsyncIterator()
     const pdfjs = await import('pdfjs-dist')
     if (!workerConfigured) {
         pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
