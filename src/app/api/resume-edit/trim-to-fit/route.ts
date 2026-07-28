@@ -5,7 +5,7 @@ import { requireUserLimit } from '@/lib/rate-limit'
 import { checkQuota } from '@/lib/plan'
 import { logUsage } from '@/lib/usage'
 import { buildTrimPrompt, parseTrimResponse, isTrimEmpty, TRIM_SYSTEM_PROMPT, type TrimChanges } from '@/lib/resume-edit/trimToFit'
-import { computeTrimFingerprint, type TrimCache } from '@/lib/resume-edit/trimFingerprint'
+import { computeTrimFingerprint, type TrimCache, type TrimCacheByTemplate } from '@/lib/resume-edit/trimFingerprint'
 import type { ResumeEditorState } from '@/lib/types'
 
 function getOpenAI() {
@@ -14,6 +14,7 @@ function getOpenAI() {
 
 interface TrimRequestBody {
     optimizedResumeId?: string
+    templateId?: string
     editorState?: ResumeEditorState
     pageTarget?: number
     currentPages?: number
@@ -21,11 +22,15 @@ interface TrimRequestBody {
 
 /**
  * POST /api/resume-edit/trim-to-fit — the "Trim with AI" action in the
- * One-Page Optimizer (see docs/superpowers/specs/2026-07-24-trim-with-ai-design.md).
- * One non-streaming gpt-4.1-mini JSON-mode call, no tool-calling loop —
- * deliberately NOT routed through the chat assistant's propose_edit tool
- * (apply.ts can't resize a bullets array; this is a one-shot structural
- * rewrite reviewed as a single batch, not a conversation).
+ * One-Page Optimizer (see docs/superpowers/specs/2026-07-24-trim-with-ai-design.md
+ * and docs/superpowers/specs/2026-07-28-template-scoped-trim-design.md).
+ * One non-streaming gpt-4.1-mini JSON-mode call, no tool-calling loop.
+ *
+ * Cached PER TEMPLATE (plans/27) — trim_cache is keyed by templateId, since
+ * page count depends on which template is rendering the resume, not just its
+ * content. A fresh generation is cached immediately with applied:false; the
+ * frontend only starts rendering it once the user hits Apply (see the
+ * sibling apply/route.ts), which just flips that flag — no regeneration.
  *
  * Job title/description are looked up server-side from optimizedResumeId
  * (same two-query pattern as /api/resume-edit/audit) rather than trusted
@@ -50,9 +55,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 })
     }
 
-    const { optimizedResumeId, editorState, pageTarget, currentPages } = body
-    if (!optimizedResumeId || !editorState || !pageTarget || !currentPages) {
-        return NextResponse.json({ success: false, error: 'optimizedResumeId, editorState, pageTarget, and currentPages are required' }, { status: 400 })
+    const { optimizedResumeId, templateId, editorState, pageTarget, currentPages } = body
+    if (!optimizedResumeId || !templateId || !editorState || !pageTarget || !currentPages) {
+        return NextResponse.json({ success: false, error: 'optimizedResumeId, templateId, editorState, pageTarget, and currentPages are required' }, { status: 400 })
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,14 +72,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'No job found for this resume' }, { status: 404 })
     }
 
-    // Identical repeat of a prior trim request (same resume content, same
-    // page counts) — return the cached result for free instead of paying
-    // for another generation. Self-invalidating: any real edit changes the
-    // fingerprint, so there's no separate cache-busting to maintain.
+    // Identical repeat of a prior trim request FOR THIS TEMPLATE (same resume
+    // content, same page counts) — return the cached result for free instead
+    // of paying for another generation. Self-invalidating: any real edit
+    // changes the fingerprint, so there's no separate cache-busting to
+    // maintain. A different template gets its own independent cache slot.
     const fingerprint = computeTrimFingerprint(editorState, currentPages, pageTarget)
-    const cached = row.trim_cache as TrimCache | null
+    const trimCacheByTemplate = (row.trim_cache ?? null) as TrimCacheByTemplate | null
+    const cached = trimCacheByTemplate?.[templateId]
     if (cached?.fingerprint === fingerprint) {
-        return NextResponse.json({ success: true, changes: cached.changes, cached: true, empty: isTrimEmpty(cached.changes) })
+        // fingerprint is echoed back on every success response (cache hit or
+        // fresh generation) — the frontend (Task 5) has no client-side way to
+        // compute it itself (this module is server-only, see the node:crypto
+        // comment above), so it stores whatever fingerprint the server used
+        // to decide whether ITS cached overlay is still fresh to render.
+        return NextResponse.json({ success: true, changes: cached.changes, applied: cached.applied, cached: true, empty: isTrimEmpty(cached.changes), fingerprint })
     }
 
     const { data: job } = await sb
@@ -113,16 +125,17 @@ export async function POST(request: NextRequest) {
             latencyMs: Date.now() - t0,
         })
 
-        const newCache: TrimCache = { fingerprint, changes, cachedAt: new Date().toISOString(), applied: false }
-        const { error: cacheWriteError } = await sb.from('optimized_resumes').update({ trim_cache: newCache }).eq('id', optimizedResumeId)
+        const newEntry: TrimCache = { fingerprint, changes, cachedAt: new Date().toISOString(), applied: false }
+        const nextTrimCacheByTemplate: TrimCacheByTemplate = { ...trimCacheByTemplate, [templateId]: newEntry }
+        const { error: cacheWriteError } = await sb.from('optimized_resumes').update({ trim_cache: nextTrimCacheByTemplate }).eq('id', optimizedResumeId)
         if (cacheWriteError) {
             console.error('[resume-edit/trim-to-fit] trim_cache write failed:', cacheWriteError)
         }
 
         if (isTrimEmpty(changes)) {
-            return NextResponse.json({ success: true, changes, empty: true })
+            return NextResponse.json({ success: true, changes, applied: false, empty: true, fingerprint })
         }
-        return NextResponse.json({ success: true, changes })
+        return NextResponse.json({ success: true, changes, applied: false, fingerprint })
     } catch (err) {
         console.error('[resume-edit/trim-to-fit] generation failed:', err)
         return NextResponse.json({ success: false, error: 'Trim generation failed' }, { status: 502 })
