@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import * as Sentry from '@sentry/nextjs'
 import { Reorder } from 'framer-motion'
 import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume, ResumeEditorState, ExperienceEntry, EducationEntry, ProjectEntry, LeadershipEntry, UserJobMatch, ProjectEvidence } from '@/lib/types'
-import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes, fetchUserJobMatch, fetchConfirmedProjects, triggerTrimToFit } from '@/lib/api'
+import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes, fetchUserJobMatch, fetchConfirmedProjects, triggerTrimToFit, applyTrimResult } from '@/lib/api'
 import TemplatePickerModal, { type TemplateId } from '@/components/TemplatePickerModal'
 import { TEMPLATES, TEMPLATE_IMAGES } from '@/templates/catalog'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -23,7 +23,7 @@ import { LAYOUT_PRESETS, detectPresetKey } from '@/lib/resume-edit/layoutPresets
 import { measureBudget, type BudgetResult } from '@/lib/resume-edit/budget'
 import { rankSectionsForTrim, type SectionTrimSuggestion } from '@/lib/resume-edit/budgetOptimizer'
 import { findProjectSwapNudge, type ProjectSwapNudge } from '@/lib/resume-edit/projectNudge'
-import { applyTrimChanges, isTrimEmpty, type TrimChanges } from '@/lib/resume-edit/trimToFit'
+import { applyTrimChanges, isTrimEmpty, getActiveTrim, type TrimChanges, type TrimCacheByTemplate } from '@/lib/resume-edit/trimToFit'
 import TrimReviewPanel from '@/components/resume-editor/TrimReviewPanel'
 import { M } from '@/lib/meridianTokens'
 
@@ -35,6 +35,7 @@ interface SavedResumeEntry {
     optimized_data: OptimizedResumeData
     keyword_alignment_score: number | null
     job: { id: string; title: string; company: string; location: string } | null
+    trim_cache: TrimCacheByTemplate | null
 }
 
 // ── Meridian Design Tokens ── moved to '@/lib/meridianTokens' (imported above)
@@ -6328,6 +6329,24 @@ export default function ResumesPage() {
     const [selectedEntry, setSelectedEntry] = useState<SavedResumeEntry | null>(null)
     const [localOptimizedData, setLocalOptimizedData] = useState<OptimizedResumeData | null>(null)
     const [templateId, setTemplateId] = useState<string>('classic')
+    // Fingerprint of the trim last generated for EACH template (keyed by
+    // template id, not a single scalar — see Task 5 Step 0 in
+    // plans/27-template-scoped-trim.md for why a shared scalar would lose
+    // one template's overlay as soon as a different template got trimmed).
+    // Read by effectiveState below to decide whether a given template's
+    // cached trim is still fresh enough to render. Empty until the user has
+    // generated a trim THIS session for a given template — this can't be
+    // recomputed client-side from editorState alone (trimFingerprint.ts is
+    // server-only, see its file header).
+    const [activeTrimFingerprints, setActiveTrimFingerprints] = useState<Record<string, string>>({})
+    // A fingerprint computed against one resume's content is meaningless for
+    // a different resume, even under the same template id — clear the whole
+    // map on resume switch. Deliberately NOT reset on template switch (that's
+    // the entire point: switching between two already-trimmed templates on
+    // the same resume should show each one's own trim).
+    useEffect(() => {
+        setActiveTrimFingerprints({})
+    }, [selectedEntry?.id])
     const [showTemplatePicker, setShowTemplatePicker] = useState(false)
     // ── Source-resume filter (uploaded resume → which one drives the editor) ──
     const [uploadedResumes, setUploadedResumes] = useState<Resume[]>([])
@@ -6417,12 +6436,20 @@ export default function ResumesPage() {
     // already treats a missing key as "don't render", so no renderer changes
     // are needed to support hiding.
     const effectiveState = useMemo<ResumeEditorState>(() => {
-        if (!layout) return editorState
-        return {
+        const base = !layout ? editorState : {
             ...editorState,
             sectionOrder: layout.sectionOrder.filter(k => !layout.hiddenSections.includes(k)),
         }
-    }, [editorState, layout])
+        // Layer in this template's applied trim, if any and still fresh —
+        // never mutates editorState itself, so switching to a different
+        // template (or a template with no trim applied) always renders the
+        // full original content untouched. See
+        // docs/superpowers/specs/2026-07-28-template-scoped-trim-design.md.
+        const fingerprint = activeTrimFingerprints[templateId]
+        if (!fingerprint) return base
+        const activeTrim = getActiveTrim(selectedEntry?.trim_cache, templateId, fingerprint)
+        return activeTrim ? applyTrimChanges(base, activeTrim) : base
+    }, [editorState, layout, selectedEntry, templateId, activeTrimFingerprints])
 
     // ── Layout presets (plans/25 Phase 3) ──
     const activePresetKey = useMemo(() => layout ? detectPresetKey(layout.sectionOrder) : null, [layout])
@@ -6547,17 +6574,14 @@ export default function ResumesPage() {
     const [trimChanges, setTrimChanges] = useState<TrimChanges | null>(null)
     const [trimLoading, setTrimLoading] = useState(false)
     const [trimError, setTrimError] = useState<string | null>(null)
-    // A pending trim review is computed against ONE resume's editorState by
-    // array index (experience[2], projects[0], ...). Nothing previously tied
-    // it to that resume — switching the source resume while a review was
-    // still open left trimChanges pointing at stale indices, and clicking
-    // Apply spliced resume A's trimmed bullets into resume B's (now-loaded)
-    // editorState, then saved that under resume B's id. Clearing on every
-    // resume switch makes a stale review impossible to apply.
+    // A pending trim review belongs to ONE (resume, template) pair. Switching
+    // either means any stale pending review must be discarded — otherwise
+    // clicking Apply could persist a review computed for a different resume
+    // or a different template than the one currently being viewed.
     useEffect(() => {
         setTrimChanges(null)
         setTrimError(null)
-    }, [selectedEntry?.id])
+    }, [selectedEntry?.id, templateId])
 
     const handleTrimWithAI = useCallback(async () => {
         if (!selectedEntry || !layout || !budget || trimLoading) return
@@ -6566,6 +6590,7 @@ export default function ResumesPage() {
         try {
             const result = await triggerTrimToFit({
                 optimizedResumeId: selectedEntry.id,
+                templateId,
                 editorState,
                 pageTarget: layout.pageTarget,
                 currentPages: budget.pages,
@@ -6579,21 +6604,23 @@ export default function ResumesPage() {
                 return
             }
             setTrimChanges(result.changes)
+            if (result.fingerprint) setActiveTrimFingerprints(prev => ({ ...prev, [templateId]: result.fingerprint! }))
         } catch (err) {
             setTrimError(err instanceof Error ? err.message : 'Trim generation failed')
         } finally {
             setTrimLoading(false)
         }
-    }, [selectedEntry, layout, budget, editorState, trimLoading])
+    }, [selectedEntry, layout, budget, editorState, templateId, trimLoading])
 
     const applyTrimWithAI = useCallback(() => {
-        if (!trimChanges) return
-        const before = editorState
-        const nextState = applyTrimChanges(editorState, trimChanges)
-        setEditorState(nextState)
-        saveManualEdit('layout-trim', before, nextState, nextState)
+        if (!trimChanges || !selectedEntry) return
+        void applyTrimResult({ optimizedResumeId: selectedEntry.id, templateId, applied: true }).then(res => {
+            if (res.success && res.trim_cache) {
+                setSelectedEntry(prev => (prev && prev.id === selectedEntry.id ? { ...prev, trim_cache: res.trim_cache! } : prev))
+            }
+        })
         setTrimChanges(null)
-    }, [trimChanges, editorState, saveManualEdit])
+    }, [trimChanges, selectedEntry, templateId])
 
     // ── Project-Evidence Integration (plans/25 Phase 6) — completed AI
     // projects surfaced as a resume swap-in. Fetched once per user (a

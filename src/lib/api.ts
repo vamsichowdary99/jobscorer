@@ -789,7 +789,7 @@ export interface TrimToFitPayload {
 }
 
 /** Calls POST /api/resume-edit/trim-to-fit — the "Trim with AI" One-Page Optimizer action. Result is cached server-side per templateId but NOT yet applied to any render — see applyTrimResult. */
-export async function triggerTrimToFit(payload: TrimToFitPayload): Promise<{ success: boolean; changes?: import('./resume-edit/trimToFit').TrimChanges; applied?: boolean; empty?: boolean; error?: string }> {
+export async function triggerTrimToFit(payload: TrimToFitPayload): Promise<{ success: boolean; changes?: import('./resume-edit/trimToFit').TrimChanges; applied?: boolean; empty?: boolean; fingerprint?: string; error?: string }> {
 	const res = await fetch('/api/resume-edit/trim-to-fit', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
