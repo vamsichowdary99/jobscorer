@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseTrimResponse, applyTrimChanges, isTrimEmpty } from './trimToFit.ts'
-import { computeTrimFingerprint } from './trimFingerprint.ts'
+import { computeTrimFingerprint, getActiveTrim } from './trimFingerprint.ts'
 import type { ResumeEditorState } from '../types.ts'
 
 function baseState(): ResumeEditorState {
@@ -165,4 +165,28 @@ test('computeTrimFingerprint changes when currentPages or pageTarget changes', (
     const base = computeTrimFingerprint(state, 2, 1)
     assert.notEqual(base, computeTrimFingerprint(state, 3, 1))
     assert.notEqual(base, computeTrimFingerprint(state, 2, 2))
+})
+
+test('getActiveTrim returns null when there is no cache entry for this template', () => {
+    assert.equal(getActiveTrim(null, 'classic', 'fp-1'), null)
+    assert.equal(getActiveTrim({}, 'classic', 'fp-1'), null)
+    assert.equal(getActiveTrim({ rezi: { fingerprint: 'fp-1', changes: { experience: [], projects: [] }, cachedAt: '', applied: true } }, 'classic', 'fp-1'), null)
+})
+
+test('getActiveTrim returns null when the entry exists but was never applied', () => {
+    const changes = { experience: [], projects: [] }
+    const cache = { classic: { fingerprint: 'fp-1', changes, cachedAt: '', applied: false } }
+    assert.equal(getActiveTrim(cache, 'classic', 'fp-1'), null)
+})
+
+test('getActiveTrim returns null when applied but the fingerprint no longer matches (content changed since)', () => {
+    const changes = { experience: [], projects: [] }
+    const cache = { classic: { fingerprint: 'fp-old', changes, cachedAt: '', applied: true } }
+    assert.equal(getActiveTrim(cache, 'classic', 'fp-new'), null)
+})
+
+test('getActiveTrim returns the changes when applied and the fingerprint matches', () => {
+    const changes = { experience: [{ index: 0, company: 'Acme', before: ['a', 'b'], after: ['a'] }], projects: [] }
+    const cache = { classic: { fingerprint: 'fp-1', changes, cachedAt: '', applied: true } }
+    assert.deepEqual(getActiveTrim(cache, 'classic', 'fp-1'), changes)
 })

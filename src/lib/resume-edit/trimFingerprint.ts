@@ -11,12 +11,30 @@ import { createHash } from 'node:crypto'
 import type { ResumeEditorState } from '../types.ts'
 import type { TrimChanges } from './trimToFit.ts'
 
-/** Cached on optimized_resumes.trim_cache — the last trim result, addressed by fingerprint. */
+/**
+ * Cached on optimized_resumes.trim_cache — one entry per template id (see
+ * TrimCacheByTemplate below). `applied` distinguishes "this generation is
+ * cached server-side" (true for every generation, regardless of whether the
+ * user has reviewed it yet — cheap, avoids re-paying OpenAI for an unchanged
+ * re-request) from "the user clicked Apply and this should actually be
+ * rendered" (only true after that click). A Cancel in TrimReviewPanel leaves
+ * applied false forever for that generation.
+ */
 export interface TrimCache {
     fingerprint: string
     changes: TrimChanges
     cachedAt: string
+    applied: boolean
 }
+
+/**
+ * trim_cache column shape. Was a single TrimCache | null before
+ * template-scoped trim (plans/27) — trimming an overflowing template used to
+ * shorten the shared resume content for every template. Now each template
+ * gets its own independent cached result, so trimming one template can never
+ * affect how a different template renders.
+ */
+export type TrimCacheByTemplate = Partial<Record<string, TrimCache>>
 
 /**
  * Content-addresses a trim request so an identical repeat (same resume
@@ -29,4 +47,21 @@ export interface TrimCache {
 export function computeTrimFingerprint(state: ResumeEditorState, currentPages: number, pageTarget: number): string {
     const raw = `${JSON.stringify(state)}|${currentPages}|${pageTarget}`
     return createHash('sha256').update(raw).digest('hex')
+}
+
+/**
+ * The single rule for whether a template's cached trim should actually be
+ * layered into its render: the entry must exist, the user must have clicked
+ * Apply for it (not just generated-but-cancelled-or-unreviewed), and the
+ * fingerprint must still match the resume's current content (otherwise the
+ * resume changed since this trim was computed and it's stale).
+ */
+export function getActiveTrim(
+    trimCacheByTemplate: TrimCacheByTemplate | null | undefined,
+    templateId: string,
+    fingerprint: string,
+): TrimChanges | null {
+    const entry = trimCacheByTemplate?.[templateId]
+    if (!entry || !entry.applied || entry.fingerprint !== fingerprint) return null
+    return entry.changes
 }
