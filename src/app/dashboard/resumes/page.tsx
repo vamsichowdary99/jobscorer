@@ -6347,6 +6347,21 @@ export default function ResumesPage() {
     useEffect(() => {
         setActiveTrimFingerprints({})
     }, [selectedEntry?.id])
+    // Both sides of getActiveTrim's fingerprint comparison are frozen at
+    // generation time (the server-stored fingerprint, and this client's echoed
+    // copy of that same value) — neither is ever recomputed from the CURRENT
+    // editorState, so an edit made after applying a trim would otherwise keep
+    // matching and silently render stale trimmed content. Any genuine edit to
+    // editorState invalidates every template's active trim overlay — falls
+    // back to full untouched content everywhere until the user re-clicks
+    // "Trim with AI" (a free cache-hit if the resume is unchanged since that
+    // generation). Safe on initial resume load: activeTrimFingerprints is
+    // already {} at that point (the resume-switch effect above just reset it,
+    // and nothing sets editorState from a trim anymore), so this fires but has
+    // nothing to clear.
+    useEffect(() => {
+        setActiveTrimFingerprints({})
+    }, [editorState])
     const [showTemplatePicker, setShowTemplatePicker] = useState(false)
     // ── Source-resume filter (uploaded resume → which one drives the editor) ──
     const [uploadedResumes, setUploadedResumes] = useState<Resume[]>([])
@@ -6603,7 +6618,19 @@ export default function ResumesPage() {
                 setTrimError('Nothing to trim — this resume is already tight.')
                 return
             }
-            setTrimChanges(result.changes)
+            // A cache-hit for a generation already applied (result.applied)
+            // has nothing new to review — it's already the active overlay via
+            // the fingerprint recorded below. Opening the review panel here
+            // would be misleading (Cancel wouldn't actually undo anything
+            // active). Only open the panel for a genuinely new, not-yet-
+            // applied generation.
+            // Known accepted limitation (not fixed here — needs a real design
+            // decision): regenerating a trim for a template that already has
+            // an applied entry unconditionally overwrites that entry's
+            // `applied:false` on the server before the user decides, so an
+            // in-progress "already trimmed" state can be clobbered by a fresh
+            // generation click.
+            if (!result.applied) setTrimChanges(result.changes)
             if (result.fingerprint) setActiveTrimFingerprints(prev => ({ ...prev, [templateId]: result.fingerprint! }))
         } catch (err) {
             setTrimError(err instanceof Error ? err.message : 'Trim generation failed')
@@ -6614,12 +6641,16 @@ export default function ResumesPage() {
 
     const applyTrimWithAI = useCallback(() => {
         if (!trimChanges || !selectedEntry) return
-        void applyTrimResult({ optimizedResumeId: selectedEntry.id, templateId, applied: true }).then(res => {
+        applyTrimResult({ optimizedResumeId: selectedEntry.id, templateId, applied: true }).then(res => {
             if (res.success && res.trim_cache) {
                 setSelectedEntry(prev => (prev && prev.id === selectedEntry.id ? { ...prev, trim_cache: res.trim_cache! } : prev))
+                setTrimChanges(null)
+            } else {
+                setTrimError(res.error || 'Could not apply trim — try again.')
             }
+        }).catch(() => {
+            setTrimError('Could not apply trim — try again.')
         })
-        setTrimChanges(null)
     }, [trimChanges, selectedEntry, templateId])
 
     // ── Project-Evidence Integration (plans/25 Phase 6) — completed AI
