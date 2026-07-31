@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { ACTIVE_TEMPLATES, TEMPLATE_IMAGES } from '@/templates/catalog'
 
-export type TemplateId = 'classic' | 'rezi' | 'london' | 'harvard' | 'open-resume' | 'cobalt' | 'onyx' | 'jade' | 'lapis' | 'executive' | 'amber' | 'athens' | 'axis' | 'beacon'
+export type TemplateId = 'classic' | 'rezi' | 'london' | 'harvard' | 'open-resume' | 'cobalt' | 'onyx' | 'jade' | 'lapis' | 'executive' | 'amber' | 'athens' | 'axis' | 'beacon' | 'jake'
 
 interface TemplatePickerModalProps {
   onSelect: (id: TemplateId) => void

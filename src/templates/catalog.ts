@@ -193,6 +193,22 @@ export const TEMPLATES: TemplateMeta[] = [
     sectionOrder: ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'achievements', 'leadership'],
   },
 
+  {
+    id: 'jake',
+    name: 'Jake',
+    tagline: 'The classic CS/SWE resume — icon contact bar, coursework grid, boxed skills',
+    category: 'academic',
+    atsScore: 'full',
+    source: 'competitor',
+    fonts: ['Times-Roman'],
+    accent: null,
+    status: 'active',
+    rendererPath: '@/components/ResumeRenderer/JakePdfDocument',
+    tags: ['serif', 'times-roman', 'icon contacts', 'coursework grid', 'boxed skills', 'academic', 'built-in font', 'most popular'],
+    notes: 'Built 2026-07-19, pixel-faithful recreation of a user-supplied screenshot of "Jake\'s Resume" (Jake Gutierrez\'s LaTeX template) — one of the most-forked resume templates on Overleaf among CS/SWE job seekers. Deliberate exception to the "don\'t clone an existing look" rule used for every other template pick in this catalog: the ask here was fidelity to a specific named reference, not a new design. Font is Times-Roman (PDF base-14 built-in, same as Harvard) — closest built-in match to the source\'s classic LaTeX Computer Modern serif, zero font-file risk. Contact icons (phone/email/github) are hand-drawn Feather-style stroke Svg/Path primitives, NOT Unicode glyphs — sidesteps the font-glyph-coverage bug class already fixed for Executive\'s diamond bullets. LinkedIn has no universal outline glyph so it\'s a small solid badge with real "in" text. Distinctive vs. every other active template: Relevant Coursework is its own full section (heading + rule) directly under Education, rendered as a 4-column bullet grid — not nested inside the degree entry and not a Label:value line like every other template\'s skills. Technical Skills has NO border box (corrected 2026-07-19 after comparing against a clearer reference image — an earlier pass wrongly added one). Project rows put "Name | tech" inline on one title line. Technical Skills intentionally omits soft/core-competency skills — the reference never shows them, only Languages/Developer Tools/Technologies-Frameworks.',
+    sectionOrder: ['education', 'experience', 'projects', 'skills', 'certifications', 'achievements', 'leadership', 'summary'],
+  },
+
   // ── PENDING — Original 7 (view-original-7.html) ───────────────────────────
 
   {
@@ -491,6 +507,7 @@ export const TEMPLATE_IMAGES: Record<string, string> = {
   athens: '/template-previews/athens.png', // new template, 2026-07-19
   axis: '/template-previews/axis.png', // new template, 2026-07-19
   beacon: '/template-previews/beacon.png', // new template, 2026-07-19
+  jake: '/template-previews/jake.png', // new template, 2026-07-19
 }
 
 /** Get all pending templates grouped by source */
