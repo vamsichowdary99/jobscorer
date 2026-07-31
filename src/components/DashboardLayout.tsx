@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState, Suspense } from 'react'
 import PendingResearchToaster from './PendingResearchToaster'
 import UpgradeToast from './billing/UpgradeToast'
+import OnboardingModal from './OnboardingModal'
 
 /* Pages that manage their own full-height layout (no padding) */
 const FULL_BLEED_PAGES = [
@@ -66,6 +67,9 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
 
             {/* Global upgrade prompt — fires on any 402 quota block or stored-cap hit. */}
             <UpgradeToast />
+
+            {/* First-login personalization wizard — no-ops once profiles.onboarding_completed is true. */}
+            <OnboardingModal />
         </main>
     )
 }
