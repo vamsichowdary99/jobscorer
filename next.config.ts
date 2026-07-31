@@ -45,7 +45,11 @@ const nextConfig: NextConfig = {
       "font-src 'self' data: https://fonts.gstatic.com",
       "img-src 'self' data: blob: https:",
       // data: is required for pdfjs-dist, which fetches its compiled WASM module via a data: URI.
-      "connect-src 'self' data: https://*.supabase.co wss://*.supabase.co https://*.upstash.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io https://*.i.posthog.com https://api.razorpay.com https://lumberjack.razorpay.com",
+      // https://api.trigger.dev is required for the browser-side Trigger.dev
+      // Realtime hooks (useRealtimeRun/useRun in the AI Matches scoring banner) —
+      // without it the CSP silently blocks every run-status fetch, so the banner
+      // never learns a run finished and spins forever even after it completes.
+      "connect-src 'self' data: https://*.supabase.co wss://*.supabase.co https://*.upstash.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io https://*.ingest.us.sentry.io https://*.i.posthog.com https://api.razorpay.com https://lumberjack.razorpay.com https://api.trigger.dev",
       "frame-src 'self' blob: https://checkout.razorpay.com https://api.razorpay.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
