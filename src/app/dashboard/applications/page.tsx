@@ -18,6 +18,7 @@ import {
     type ApplicationRejectionReason,
 } from '@/lib/api'
 import type { Job, Resume, UserJobMatch } from '@/lib/types'
+import ConfirmModal from '@/components/ConfirmModal'
 
 type FullMatch = UserJobMatch & { job: Job }
 
@@ -149,6 +150,7 @@ function displayUrl(a: Application): string | null {
 export default function ApplicationsPage() {
     const { user } = useAuth()
     const [apps, setApps] = useState<Application[]>([])
+    const [confirmDeleteAppId, setConfirmDeleteAppId] = useState<string | null>(null)
     const [matches, setMatches] = useState<FullMatch[]>([])
     const [resumes, setResumes] = useState<Resume[]>([])
     const [primaryResumeId, setPrimaryResumeIdState] = useState<string | null>(null)
@@ -305,8 +307,10 @@ export default function ApplicationsPage() {
         setRejectPopover(null)
     }
 
-    const handleDeleteApplication = async (id: string) => {
-        if (!confirm('Delete this application permanently? This cannot be undone.')) return
+    const handleDeleteApplication = (id: string) => setConfirmDeleteAppId(id)
+
+    const performDeleteApplication = async (id: string) => {
+        setConfirmDeleteAppId(null)
         const app = apps.find(a => a.id === id)
         setApps(curr => curr.filter(a => a.id !== id))
         await deleteApplication(id)
@@ -996,6 +1000,15 @@ export default function ApplicationsPage() {
                     {toast.msg}
                 </div>
             )}
+
+            <ConfirmModal
+                open={confirmDeleteAppId !== null}
+                title="Delete this application?"
+                message="This removes it from your tracker for good. It won't touch the job listing or your resume."
+                confirmLabel="Delete application"
+                onConfirm={() => confirmDeleteAppId && performDeleteApplication(confirmDeleteAppId)}
+                onCancel={() => setConfirmDeleteAppId(null)}
+            />
 
             <style>{`
                 @keyframes rsToastIn { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
