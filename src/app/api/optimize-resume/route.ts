@@ -82,12 +82,31 @@ export async function POST(req: NextRequest) {
     const timeout = setTimeout(() => controller.abort(), 120_000)
 
     try {
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, resume_id, job_id, gap_data: gap_data ?? null, accepted_recommendations: hasAccepted ? accepted_recommendations : [], completed_projects: hasCompleted ? completed_projects : [] }),
-        signal: controller.signal,
-      })
+      const requestBody = JSON.stringify({ user_id, resume_id, job_id, gap_data: gap_data ?? null, accepted_recommendations: hasAccepted ? accepted_recommendations : [], completed_projects: hasCompleted ? completed_projects : [] })
+
+      // Node's fetch (undici) occasionally throws a bare "fetch failed" TypeError
+      // when it reuses a stale keep-alive socket from its connection pool on a
+      // long-lived server process — the socket was fine seconds ago and is fine
+      // again on the very next attempt. One immediate retry on a fresh connection
+      // absorbs this without surfacing a false failure to the user.
+      let response: Response
+      try {
+        response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: requestBody,
+          signal: controller.signal,
+        })
+      } catch (firstAttemptError: any) {
+        if (firstAttemptError.name === 'AbortError') throw firstAttemptError
+        console.warn('[/api/optimize-resume] n8n fetch failed, retrying once:', firstAttemptError.message)
+        response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: requestBody,
+          signal: controller.signal,
+        })
+      }
 
       clearTimeout(timeout)
 

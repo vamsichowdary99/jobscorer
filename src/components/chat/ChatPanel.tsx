@@ -389,7 +389,7 @@ export default function ChatPanel() {
         // 2+ resumes — defer the message and show the picker.
         setPendingPick({ message: trimmed, resumes: list });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load your resumes.');
+        setError("We couldn't load your resumes. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -407,7 +407,7 @@ export default function ChatPanel() {
       const reply = await callChatApi(trimmed, sessionResumeId, messages);
       setMessages([...updatedHistory, { role: 'assistant', content: reply }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -433,7 +433,7 @@ export default function ChatPanel() {
       const reply = await callChatApi(deferred, resume.id, historyWithConfirm);
       setMessages([...historyWithConfirm, { role: 'assistant', content: reply }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }

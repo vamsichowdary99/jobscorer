@@ -611,6 +611,36 @@ export async function triggerCompanyResearch(payload: {
     return safeJson(res, 'Company research')
 }
 
+// ── Last Score Run Helpers ───────────────────────────────────
+// Tracks exactly which job_ids were sent to the scorer on the most recent
+// "Find Best Jobs" click, so the matches page can offer a "Recent" filter
+// that shows only that batch instead of every match ever accumulated for
+// the resume.
+
+const LAST_SCORE_RUN_KEY = 'ag_last_score_run'
+
+export interface LastScoreRun {
+    resumeId: string
+    jobIds: string[]
+    ts: number
+}
+
+export function saveLastScoreRun(run: LastScoreRun): void {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(LAST_SCORE_RUN_KEY, JSON.stringify(run))
+}
+
+export function getLastScoreRun(): LastScoreRun | null {
+    if (typeof window === 'undefined') return null
+    const raw = localStorage.getItem(LAST_SCORE_RUN_KEY)
+    if (!raw) return null
+    try {
+        return JSON.parse(raw) as LastScoreRun
+    } catch {
+        return null
+    }
+}
+
 // ── Primary Resume Helpers ───────────────────────────────────
 
 const PRIMARY_RESUME_KEY = 'ag_primary_resume_id'
@@ -1364,6 +1394,13 @@ export type UserSettings = {
     email_frequency: string
     notification_prefs: NotificationPrefs
     joined_at: string | null
+    // Onboarding answers — distinct from experience_level/target_roles/target_locations
+    // above (those are job-search filters; these are the user's own career profile).
+    career_experience_level: string | null
+    career_challenges: string[]
+    career_challenge_other: string | null
+    job_search_timeline: string | null
+    onboarding_completed: boolean
 }
 
 const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -1379,35 +1416,30 @@ const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
  * never ran for legacy accounts (we don't want UI showing zero data).
  */
 export async function fetchUserSettings(userId: string, email: string | null): Promise<UserSettings> {
-    if (!userId) {
-        return {
-            full_name: null, email, avatar_url: null,
-            phone: null, headline: null, linkedin_url: null, github_url: null,
-            target_roles: [], target_locations: [],
-            experience_level: null, remote_preference: null,
-            default_template: null, email_frequency: 'daily',
-            notification_prefs: DEFAULT_NOTIFICATION_PREFS,
-            joined_at: null,
-        }
+    const emptyDefaults: UserSettings = {
+        full_name: null, email, avatar_url: null,
+        phone: null, headline: null, linkedin_url: null, github_url: null,
+        target_roles: [], target_locations: [],
+        experience_level: null, remote_preference: null,
+        default_template: null, email_frequency: 'daily',
+        notification_prefs: DEFAULT_NOTIFICATION_PREFS,
+        joined_at: null,
+        career_experience_level: null, career_challenges: [],
+        career_challenge_other: null, job_search_timeline: null,
+        onboarding_completed: false,
     }
+    if (!userId) return emptyDefaults
+
     const { data, error } = await supabase
         .from('profiles' as any)
-        .select('full_name, email, avatar_url, phone, headline, linkedin_url, github_url, target_roles, target_locations, experience_level, remote_preference, default_template, email_frequency, notification_prefs, created_at')
+        .select('full_name, email, avatar_url, phone, headline, linkedin_url, github_url, target_roles, target_locations, experience_level, remote_preference, default_template, email_frequency, notification_prefs, created_at, career_experience_level, career_challenges, career_challenge_other, job_search_timeline, onboarding_completed')
         .eq('id', userId)
         .maybeSingle()
 
     if (error || !data) {
         // Auto-create the row so subsequent saves don't fail.
         await supabase.from('profiles' as any).upsert({ id: userId, email } as any)
-        return {
-            full_name: null, email, avatar_url: null,
-            phone: null, headline: null, linkedin_url: null, github_url: null,
-            target_roles: [], target_locations: [],
-            experience_level: null, remote_preference: null,
-            default_template: null, email_frequency: 'daily',
-            notification_prefs: DEFAULT_NOTIFICATION_PREFS,
-            joined_at: null,
-        }
+        return emptyDefaults
     }
     const row = data as any
     return {
@@ -1426,6 +1458,11 @@ export async function fetchUserSettings(userId: string, email: string | null): P
         email_frequency: row.email_frequency ?? 'daily',
         notification_prefs: { ...DEFAULT_NOTIFICATION_PREFS, ...(row.notification_prefs ?? {}) },
         joined_at: row.created_at ?? null,
+        career_experience_level: row.career_experience_level ?? null,
+        career_challenges: Array.isArray(row.career_challenges) ? row.career_challenges : [],
+        career_challenge_other: row.career_challenge_other ?? null,
+        job_search_timeline: row.job_search_timeline ?? null,
+        onboarding_completed: row.onboarding_completed ?? false,
     }
 }
 
@@ -1452,6 +1489,14 @@ export async function updateUserSettings(
     if (patch.default_template !== undefined) dbPatch.default_template = patch.default_template
     if (patch.email_frequency !== undefined) dbPatch.email_frequency = patch.email_frequency
     if (patch.notification_prefs !== undefined) dbPatch.notification_prefs = patch.notification_prefs
+    if (patch.career_experience_level !== undefined) dbPatch.career_experience_level = patch.career_experience_level
+    if (patch.career_challenges !== undefined) dbPatch.career_challenges = patch.career_challenges
+    if (patch.career_challenge_other !== undefined) dbPatch.career_challenge_other = patch.career_challenge_other
+    if (patch.job_search_timeline !== undefined) dbPatch.job_search_timeline = patch.job_search_timeline
+    if (patch.onboarding_completed !== undefined) {
+        dbPatch.onboarding_completed = patch.onboarding_completed
+        if (patch.onboarding_completed) dbPatch.onboarding_completed_at = new Date().toISOString()
+    }
 
     const { error } = await supabase.from('profiles' as any).upsert(dbPatch as any)
     if (error) {

@@ -155,7 +155,7 @@ function PasteJobModal({ onClose }: { onClose: () => void }) {
         } catch (err) {
             console.error('[paste-job] step 0 failed:', err)
             if (signal.aborted) return  // user closed; nothing to do
-            setErrorMsg(err instanceof Error ? err.message : 'Could not save the job. Try again.')
+            setErrorMsg('Could not save the job. Please try again.')
             setPhase('error')
             return
         }
@@ -178,7 +178,7 @@ function PasteJobModal({ onClose }: { onClose: () => void }) {
             if (err instanceof RateLimitError) {
                 setErrorMsg(`Slow down — try again in ${err.retryAfterSec}s.`)
             } else {
-                setErrorMsg(err instanceof Error ? err.message : 'Scoring failed.')
+                setErrorMsg('Scoring failed. Please try again.')
             }
             setPhase('error')
             return

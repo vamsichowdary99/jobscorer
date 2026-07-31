@@ -2112,7 +2112,7 @@ export default function AIChatPage() {
                 // favor of an old primary). The picker below covers this.
                 setPendingPick({ message: trimmed, resumes: list })
             } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load your resumes.')
+                setError("We couldn't load your resumes. Please try again.")
             } finally {
                 setIsLoading(false)
             }
@@ -2128,7 +2128,7 @@ export default function AIChatPage() {
             const final = await runStream(trimmed, sessionResumeId, updatedHistory)
             persist(final, sessionResumeId)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Something went wrong.')
+            setError('Something went wrong. Please try again.')
         } finally {
             setIsLoading(false)
         }
@@ -2155,7 +2155,7 @@ export default function AIChatPage() {
             const final = await runStream(deferred, r.id, afterConfirm)
             persist(final, r.id)
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Something went wrong.')
+            setError('Something went wrong. Please try again.')
         } finally {
             setIsLoading(false)
         }

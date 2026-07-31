@@ -87,7 +87,7 @@ export function useQueueJob(jobId: string | null | undefined): QueueJobState {
                         jobId,
                         status: 'failed',
                         terminal: true,
-                        error: `HTTP ${resp.status}`,
+                        error: "We couldn't check this job's status. Please try again.",
                         raw: null,
                     })
                     return true
@@ -120,7 +120,7 @@ export function useQueueJob(jobId: string | null | undefined): QueueJobState {
                     jobId,
                     status: 'failed',
                     terminal: true,
-                    error: err instanceof Error ? err.message : 'poll failed',
+                    error: "We lost track of this job's progress. Please refresh to check again.",
                     raw: null,
                 })
                 return true

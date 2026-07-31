@@ -3269,6 +3269,227 @@ function BeaconResumePreview({ state }: { state: ResumeEditorState }) {
     )
 }
 
+// ── Jake Resume Preview (HTML) ────────────────────────────
+// Faithful recreation of "Jake's Resume" (Jake Gutierrez's LaTeX template),
+// built 2026-07-19 from a user-supplied screenshot. Icons are inline SVG
+// (mirrors the Feather-style stroke paths in JakePdfDocument.tsx), not icon
+// fonts. Mirrors JakePdfDocument.tsx's section structure: coursework grid,
+// bordered skills box, inline "Name | tech" project title line.
+const JAKE_INK = '#111111'
+const JAKE_MUTED = '#333333'
+
+function JakeSectionHeader({ title }: { title: string }) {
+    return (
+        <div style={{ marginTop: '9pt', marginBottom: '3pt' }}>
+            <div style={{ fontWeight: 700, fontSize: '11.5pt', color: JAKE_INK }}>{title}</div>
+            <div style={{ borderBottom: '1px solid #000', marginTop: '1.5pt' }} />
+        </div>
+    )
+}
+
+const JakeIconPhone = () => (
+    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={JAKE_INK} strokeWidth={2}>
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+)
+const JakeIconMail = () => (
+    <svg width="9.5" height="9.5" viewBox="0 0 24 24" fill="none" stroke={JAKE_INK} strokeWidth={2}>
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="M22 6l-10 7L2 6" />
+    </svg>
+)
+const JakeIconGithub = () => (
+    <svg width="9.5" height="9.5" viewBox="0 0 24 24" fill="none" stroke={JAKE_INK} strokeWidth={1.6}>
+        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+    </svg>
+)
+const JakeIconLinkedin = () => (
+    <span style={{ display: 'inline-flex', width: 10, height: 10, background: JAKE_INK, color: '#fff', fontSize: 7, fontWeight: 700, alignItems: 'center', justifyContent: 'center' }}>in</span>
+)
+
+function JakeContactItem({ icon, text }: { icon: React.ReactNode; text: string }) {
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+            {icon}<span style={{ fontSize: '9pt', color: JAKE_INK, textDecoration: 'underline' }}>{text}</span>
+        </span>
+    )
+}
+
+function JakeResumePreview({ state }: { state: ResumeEditorState }) {
+    const { profile, summary, education, experience, projects, skills, leadership, certifications, achievements } = state
+    const decorations = usePreviewDecorations()
+    const decoFor = (section: string, index?: number, bulletIndex?: number, skillsField?: string) => decorations.get(decorationKey(section, index, bulletIndex, skillsField))
+    const decoStyle = (deco: ReturnType<typeof decoFor>): React.CSSProperties =>
+        deco?.kind === 'flash' ? { animation: 'ra-flash-green 0.5s ease', borderRadius: 3 } : {}
+
+    const dateRange = (a?: string, b?: string) => [a, b].filter(Boolean).join(' – ')
+    const splitItems = (csv: string) => (csv || '').split(/,(?![^(]*\))|[•\n]/).map(s => s.trim()).filter(Boolean)
+
+    const skillRows = [
+        { field: 'languages' as const, label: 'Languages', value: skills.languages },
+        { field: 'tools' as const, label: 'Developer Tools', value: skills.tools },
+        { field: 'frameworks' as const, label: 'Technologies/Frameworks', value: skills.frameworks },
+    ].filter(r => (r.value && r.value.trim()) || decoFor('skills', undefined, undefined, r.field)?.kind === 'ghost')
+
+    const bullets = (items: string[], sectionKey: string, entryIdx: number) => (
+        <div style={{ marginTop: '1.5pt' }}>
+            {items.map((b, j) => {
+                const deco = decoFor(sectionKey, entryIdx, j)
+                if (!b.trim() && deco?.kind !== 'ghost') return null
+                if (deco?.kind === 'ghost') return <div key={j} style={{ marginBottom: '1pt' }}><GhostBox text={deco.text} /></div>
+                return (
+                    <div key={j} style={{ display: 'flex', marginBottom: '1pt', fontSize: '9.5pt', lineHeight: 1.28, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                        <span style={{ width: 9, flexShrink: 0 }}>•</span><span style={{ color: JAKE_INK }}><BoldRender text={b} /></span>
+                    </div>
+                )
+            })}
+        </div>
+    )
+
+    const order = state.sectionOrder ?? ['education', 'experience', 'projects', 'skills', 'certifications', 'achievements', 'leadership', 'summary']
+    const sections: Record<string, () => React.ReactNode> = {
+        summary: () => {
+            const deco = decoFor('summary')
+            if (deco?.kind === 'ghost') return <section><JakeSectionHeader title="Summary" /><GhostBox text={deco.text} /></section>
+            if (!summary) return null
+            return <section><JakeSectionHeader title="Summary" /><div style={{ fontSize: '9.5pt', lineHeight: 1.35, color: JAKE_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}><BoldRender text={summary} /></div></section>
+        },
+
+        education: () => {
+            if (education.length === 0) return null
+            const allCourses = education.flatMap(edu => splitItems(edu.coursework))
+            return (
+                <section>
+                    <JakeSectionHeader title="Education" />
+                    {education.map((edu, i) => {
+                        const eduTop = edu.school || 'University'
+                        const showDegree = edu.degree && !sameText(edu.degree, eduTop)
+                        return (
+                            <div key={i} style={{ marginBottom: '6pt' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span style={{ fontWeight: 700, fontSize: '10.3pt', color: JAKE_INK }}>{eduTop}</span>
+                                    <span style={{ fontWeight: 700, fontSize: '9pt', color: JAKE_INK, marginLeft: 8 }}>{edu.date}</span>
+                                </div>
+                                <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: JAKE_MUTED }}>
+                                    {showDegree ? edu.degree : edu.gpa ? `GPA: ${edu.gpa}` : ''}
+                                </div>
+                            </div>
+                        )
+                    })}
+                    {allCourses.length > 0 && (
+                        <section>
+                            <JakeSectionHeader title="Relevant Coursework" />
+                            <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+                                {allCourses.map((c, j) => (
+                                    <div key={j} style={{ width: '25%', display: 'flex', marginBottom: '2pt', paddingRight: 4 }}>
+                                        <span style={{ width: 8, flexShrink: 0, fontSize: '9pt' }}>•</span><span style={{ fontSize: '9pt', color: JAKE_INK }}>{c}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                </section>
+            )
+        },
+
+        experience: () => experience.length > 0 && (
+            <section>
+                <JakeSectionHeader title="Experience" />
+                {experience.map((exp, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, fontSize: '10.3pt', color: JAKE_INK }}>{exp.company || 'Company'}</span>
+                            <span style={{ fontWeight: 700, fontSize: '9pt', color: JAKE_INK, marginLeft: 8 }}>{dateRange(exp.startDate, exp.endDate)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontStyle: 'italic', fontSize: '9.3pt', color: JAKE_MUTED }}>{exp.title || 'Role'}</span>
+                            <span style={{ fontStyle: 'italic', fontSize: '9pt', color: JAKE_MUTED, marginLeft: 8 }}>{exp.location}</span>
+                        </div>
+                        {bullets(exp.bullets, 'experience', i)}
+                    </div>
+                ))}
+            </section>
+        ),
+
+        projects: () => projects.length > 0 && (
+            <section>
+                <JakeSectionHeader title="Projects" />
+                {projects.map((proj, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontSize: '10.3pt', color: JAKE_INK }}>
+                                <span style={{ fontWeight: 700 }}>{proj.name}</span>
+                                {proj.tech && <span style={{ fontStyle: 'italic' }}>{` | ${proj.tech}`}</span>}
+                            </span>
+                            {proj.date && <span style={{ fontWeight: 700, fontSize: '9pt', color: JAKE_INK, marginLeft: 8 }}>{proj.date}</span>}
+                        </div>
+                        {bullets(proj.bullets, 'projects', i)}
+                    </div>
+                ))}
+            </section>
+        ),
+
+        skills: () => skillRows.length > 0 && (
+            <section>
+                <JakeSectionHeader title="Technical Skills" />
+                {skillRows.map((row, i) => {
+                    const deco = decoFor('skills', undefined, undefined, row.field)
+                    if (deco?.kind === 'ghost') {
+                        return <div key={i}><GhostBox text={deco.text} inline={<span style={{ fontWeight: 700 }}>{row.label}: </span>} /></div>
+                    }
+                    return (
+                        <div key={i} style={{ fontSize: '9.5pt', lineHeight: 1.4, color: JAKE_INK, background: deco?.kind === 'amber' ? A.amberWash : undefined, ...decoStyle(deco) }}>
+                            <span style={{ fontWeight: 700 }}>{row.label}: </span>{row.value}
+                        </div>
+                    )
+                })}
+            </section>
+        ),
+
+        certifications: () => certifications.filter(c => c.trim()).length > 0 && (
+            <section><JakeSectionHeader title="Certifications" />{bullets(certifications, 'certifications', 0)}</section>
+        ),
+
+        achievements: () => achievements.filter(a => a.trim()).length > 0 && (
+            <section><JakeSectionHeader title="Achievements" />{bullets(achievements, 'achievements', 0)}</section>
+        ),
+
+        leadership: () => leadership.length > 0 && (
+            <section>
+                <JakeSectionHeader title="Leadership / Extracurricular" />
+                {leadership.map((lead, i) => (
+                    <div key={i} style={{ marginBottom: '6pt' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontWeight: 700, color: JAKE_INK }}>{lead.org}</span>
+                            <span style={{ fontWeight: 700, fontSize: '9pt', color: JAKE_INK, marginLeft: 8 }}>{lead.date}</span>
+                        </div>
+                        {lead.role && <div style={{ fontStyle: 'italic', fontSize: '9.3pt', color: JAKE_MUTED }}>{lead.role}</div>}
+                        {bullets(lead.bullets, 'leadership', i)}
+                    </div>
+                ))}
+            </section>
+        ),
+    }
+
+    return (
+        <div style={{ fontFamily: "'Times New Roman', Times, serif", fontSize: '10pt', lineHeight: 1.35, color: JAKE_INK, padding: '34pt 50pt', minHeight: '100%', background: '#fff' }}>
+            <style>{`@keyframes ra-flash-green { 0% { background: #d1fae5; } 60% { background: #d1fae5; } 100% { background: transparent; } }`}</style>
+            <div style={{ textAlign: 'center' }}>
+                <div style={{ fontWeight: 700, fontSize: '24pt', letterSpacing: '0.5px', color: JAKE_INK }}>{(profile.name || 'Your Name').toUpperCase()}</div>
+                {profile.location && <div style={{ fontSize: '10pt', color: JAKE_INK, marginTop: 2 }}>{profile.location}</div>}
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 5 }}>
+                    {profile.phone && <JakeContactItem icon={<JakeIconPhone />} text={profile.phone} />}
+                    {profile.email && <JakeContactItem icon={<JakeIconMail />} text={profile.email} />}
+                    {profile.linkedin && <JakeContactItem icon={<JakeIconLinkedin />} text={profile.linkedin} />}
+                    {profile.github && <JakeContactItem icon={<JakeIconGithub />} text={profile.github} />}
+                </div>
+            </div>
+
+            {order.map(key => <React.Fragment key={key}>{sections[key]?.()}</React.Fragment>)}
+        </div>
+    )
+}
+
 // ── Lapis Resume Preview (HTML) ───────────────────────────
 // Modern single-column indigo. Section headers = thin divider rule + vertical
 // indigo bar + indigo uppercase label; skills as a wrapping cloud of outlined
@@ -4617,6 +4838,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
     athens: 'Athens',
     axis: 'Axis',
     beacon: 'Beacon',
+    jake: 'Jake',
 }
 
 async function loadPdfRenderer(templateId: string) {
@@ -4634,6 +4856,8 @@ async function loadPdfRenderer(templateId: string) {
             ? import('@/components/ResumeRenderer/AxisPdfDocument')
             : templateId === 'beacon'
             ? import('@/components/ResumeRenderer/BeaconPdfDocument')
+            : templateId === 'jake'
+            ? import('@/components/ResumeRenderer/JakePdfDocument')
             : templateId === 'jade'
             ? import('@/components/ResumeRenderer/JadePdfDocument')
             : templateId === 'onyx'
@@ -5868,6 +6092,7 @@ function MeridianPreviewPanel({
             case 'athens': return <AthensResumePreview state={state} />
             case 'axis': return <AxisResumePreview state={state} />
             case 'beacon': return <BeaconResumePreview state={state} />
+            case 'jake': return <JakeResumePreview state={state} />
             case 'rezi': return <ReziResumePreview state={state} />
             case 'london': return <LondonResumePreview state={state} />
             case 'harvard': return <HarvardResumePreview state={state} />
@@ -6633,7 +6858,7 @@ export default function ResumesPage() {
             if (!result.applied) setTrimChanges(result.changes)
             if (result.fingerprint) setActiveTrimFingerprints(prev => ({ ...prev, [templateId]: result.fingerprint! }))
         } catch (err) {
-            setTrimError(err instanceof Error ? err.message : 'Trim generation failed')
+            setTrimError("We couldn't shorten this resume. Please try again.")
         } finally {
             setTrimLoading(false)
         }
@@ -6912,7 +7137,7 @@ export default function ResumesPage() {
             classic: '#0f1e40', london: '#1d6af5', rezi: '#1e1e3f',
             harvard: '#9b1c1c', 'open-resume': '#374151',
             cobalt: '#1d4ed8', onyx: '#18181b', jade: '#6d28d9', lapis: '#c2410c', executive: '#292524',
-            amber: '#b8912f', athens: '#c0392b', axis: '#7c3aed', beacon: '#0f3460',
+            amber: '#b8912f', athens: '#c0392b', axis: '#7c3aed', beacon: '#0f3460', jake: '#111111',
         }
 
         // Uses effectiveState (editorState + the Layout tab's live order/hidden
@@ -6929,6 +7154,7 @@ export default function ResumesPage() {
                 case 'athens':       return <AthensResumePreview state={effectiveState} />
                 case 'axis':         return <AxisResumePreview state={effectiveState} />
                 case 'beacon':       return <BeaconResumePreview state={effectiveState} />
+                case 'jake':         return <JakeResumePreview state={effectiveState} />
                 case 'rezi':         return <ReziResumePreview state={effectiveState} />
                 case 'london':       return <LondonResumePreview state={effectiveState} />
                 case 'harvard':      return <HarvardResumePreview state={effectiveState} />

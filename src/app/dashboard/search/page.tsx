@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { searchJobs, fetchJobsSince, fetchJobsByIds, triggerJobIngestion, triggerScoring, getPrimaryResumeId, RateLimitError, reportJobStatus } from '@/lib/api'
+import { searchJobs, fetchJobsSince, fetchJobsByIds, triggerJobIngestion, triggerScoring, getPrimaryResumeId, saveLastScoreRun, RateLimitError, reportJobStatus } from '@/lib/api'
 import { jobStatusLabel } from '@/lib/jobs/applicationStatus'
 import type { QueueJobState } from '@/lib/hooks/useQueueJob'
 import { useQueueJob } from '@/lib/hooks/useQueueJob'
@@ -1370,6 +1370,20 @@ type PersistedSearchState = {
     hasSearched: boolean
 }
 
+// User-facing summary for a completed Deep Search. Previously read like a raw
+// log line ("0 new jobs added · Showing all 30 fetched results") — reworded to
+// read as a normal product message regardless of which case fires.
+function formatIngestSummary(totalCount: number, addedCount: number, isCacheHit: boolean): string {
+    const jobWord = (n: number) => (n === 1 ? 'job' : 'jobs')
+    if (isCacheHit) {
+        return `Showing ${totalCount} matching ${jobWord(totalCount)} — this search was refreshed recently, so results are already up to date.`
+    }
+    if (addedCount > 0) {
+        return `Found ${addedCount} new ${jobWord(addedCount)} — showing all ${totalCount} matching ${jobWord(totalCount)}.`
+    }
+    return `No new listings today — showing all ${totalCount} matching ${jobWord(totalCount)} already in our database.`
+}
+
 // A Deep Search run tracked separately from the above — it needs to resume
 // polling (not just redisplay stale results) if the user tabs away mid-search.
 const DEEP_SEARCH_STATE_PREFIX = 'deepSearchState:'
@@ -1577,12 +1591,9 @@ export default function SearchPage() {
             if (jobs.length > 0) setSelected(jobs[0])
             rememberIngestion(queryStart, locStart, lvlStart, jobs.map(j => j.id))
             const addedCount = log?.new_jobs_added ?? 0
-            const statusMsg = isCacheHit
-                ? `Showing ${jobs.length} results from last search (results are fresh, no new jobs added)`
-                : `${addedCount} new jobs added · Showing all ${jobs.length} fetched results`
-            setIngestStatus(statusMsg)
+            setIngestStatus(formatIngestSummary(jobs.length, addedCount, isCacheHit))
         } catch {
-            setIngestStatus(`${log?.new_jobs_added ?? 0} new jobs added. Click "Search" to view.`)
+            setIngestStatus('Search complete — click "Search" to view your results.')
         } finally {
             ingestingRef.current = false
             setIngesting(false)
@@ -1595,7 +1606,7 @@ export default function SearchPage() {
         ingestingRef.current = false
         setIngesting(false)
         setIngestSuccess(false)
-        setIngestStatus('Ingestion failed. Check n8n logs.')
+        setIngestStatus("This search didn't complete. Please try again.")
         setIngestJobId(null)
     }
 
@@ -1742,7 +1753,7 @@ export default function SearchPage() {
             if (err instanceof RateLimitError) {
                 setIngestStatus(`Slow down — try again in ${err.retryAfterSec}s.`)
             } else {
-                setIngestStatus('Failed to trigger ingestion. Check n8n cloud is active and webhook URLs are correct.')
+                setIngestStatus("We couldn't start this search right now. Please try again in a moment.")
             }
             ingestingRef.current = false
             setIngesting(false)
@@ -1805,6 +1816,10 @@ export default function SearchPage() {
             }
 
             if (res.success) {
+                // Record exactly this batch of job_ids as "the last run" so the
+                // matches page can offer a "Recent" filter scoped to just this
+                // click, separate from every match ever accumulated for this resume.
+                saveLastScoreRun({ resumeId: primaryResumeId, jobIds, ts: Date.now() })
                 const totalSearched = jobIds.length
                 const scored = res.jobs_scored ?? totalSearched
                 const skipped = totalSearched - scored
@@ -1819,13 +1834,13 @@ export default function SearchPage() {
                     : '/dashboard/matches'
                 setTimeout(() => router.push(matchesUrl), skipped > 0 ? 2800 : 1500)
             } else {
-                setScoreError('Scoring returned an error. Check n8n logs.')
+                setScoreError("Scoring didn't complete. Please try again in a moment.")
             }
         } catch (err) {
             if (err instanceof RateLimitError) {
                 setScoreError(`Slow down — try again in ${err.retryAfterSec}s.`)
             } else {
-                setScoreError(err instanceof Error ? err.message : 'Scoring failed. Is n8n running?')
+                setScoreError('Scoring failed. Please try again.')
             }
             setScoreStatus('')
         } finally {
@@ -1910,8 +1925,7 @@ export default function SearchPage() {
         } catch (err) {
             const message =
                 err instanceof RateLimitError ? `Rate limited — retry in ${err.retryAfterSec}s` :
-                    err instanceof Error ? err.message :
-                        'Scoring failed'
+                    'Scoring failed. Please try again.'
             setSingleScores(s => ({ ...s, [jobId]: { state: 'error', jobId, message } }))
         }
     }

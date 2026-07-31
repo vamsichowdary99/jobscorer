@@ -2450,7 +2450,7 @@ function OptimizePageInner() {
             if (err instanceof RateLimitError) {
                 setError(`Slow down — try again in ${err.retryAfterSec}s.`)
             } else {
-                setError(err.message || 'Optimization failed')
+                setError('Optimization failed. Please try again.')
             }
             setPhase('error')
         }
@@ -2544,7 +2544,7 @@ function OptimizePageInner() {
             if (err instanceof RateLimitError) {
                 setError(`Slow down — try again in ${err.retryAfterSec}s.`)
             } else {
-                setError(err.message || 'Optimization failed')
+                setError('Optimization failed. Please try again.')
             }
             setPhase('error')
         }
@@ -2870,11 +2870,11 @@ function OptimizePageInner() {
                                     Redo
                                 </button>
                                 <button
-                                    onClick={() => openBuildPlan()}
+                                    onClick={handleGenerateResume}
                                     style={{ flex: 1.4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '9px 8px', borderRadius: 9, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#135bec', color: '#fff', border: '1.5px solid #135bec', boxShadow: '0 4px 14px -4px rgba(19,91,236,0.4)', whiteSpace: 'nowrap' as const }}
                                 >
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                    Build My Resume
+                                    Show Resume
                                 </button>
                             </div>
                         </div>

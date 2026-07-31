@@ -191,7 +191,26 @@ export async function POST(request: NextRequest) {
     }
 
     const text = await n8nResponse.text()
+
+    // Cache-write helper for this fallback path. The queue path (step 2) writes
+    // its own cache entry at enqueue time and again on confirmed completion —
+    // this path has no equivalent step, so identical searches kept re-triggering
+    // a full n8n/Apify run every time (confirmed live: job_queue had zero rows
+    // for 9+ days, meaning every ingestion since then silently used THIS path
+    // and never cached anything). Mirror the queue path's shape so /api/ingest-status
+    // and the search page's onIngestComplete handler both work unchanged.
+    const writeCache = (payload: Record<string, unknown>) =>
+        safeRedis(async (r) => {
+            await r.set(
+                cacheKey,
+                { new_jobs_added: payload.new_jobs_added ?? 0, total_jobs_fetched: payload.total_jobs_fetched ?? 0, cached_at: Date.now() },
+                { ex: TTL.JOBS }
+            )
+            return true
+        })
+
     if (n8nResponse.ok && !text.trim()) {
+        await writeCache({})
         return NextResponse.json({ success: true, message: 'Job ingestion triggered' })
     }
     let data: unknown
@@ -199,6 +218,7 @@ export async function POST(request: NextRequest) {
         data = JSON.parse(text)
     } catch {
         if (n8nResponse.ok) {
+            await writeCache({})
             return NextResponse.json({ success: true, message: text || 'Job ingestion triggered' })
         }
         return NextResponse.json({ success: false, error: text }, { status: n8nResponse.status })
@@ -206,5 +226,6 @@ export async function POST(request: NextRequest) {
     if (!n8nResponse.ok) {
         return NextResponse.json({ success: false, error: data }, { status: n8nResponse.status })
     }
+    await writeCache(data as Record<string, unknown>)
     return NextResponse.json(data)
 }

@@ -3,8 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useRealtimeRun } from '@trigger.dev/react-hooks'
-import { fetchMatches, fetchResumes, fetchResumeById, getPrimaryResumeId, triggerCompanyResearch, RateLimitError, CompanyResearchPendingError, countActiveScoreJobs } from '@/lib/api'
+import { useRealtimeRun, useRun } from '@trigger.dev/react-hooks'
+import { fetchMatches, fetchResumes, fetchResumeById, getPrimaryResumeId, triggerCompanyResearch, RateLimitError, CompanyResearchPendingError, countActiveScoreJobs, getLastScoreRun } from '@/lib/api'
 import { addPending } from '@/lib/pendingResearch'
 import { locationFacets, matchInLocation, ALL_LOCATION_KEY } from '@/lib/locations'
 import { isJobClosed } from '@/lib/jobs/applicationStatus'
@@ -80,12 +80,17 @@ function iconColor(name: string) {
 
 function formatDate(d: string | null): string {
     if (!d) return ''
-    const diff = Math.floor((Date.now() - new Date(d).getTime()) / 86400000)
+    const parsed = new Date(d)
+    // Some sources store posted_date as a relative-time string ("3 days ago")
+    // instead of an ISO date — pass those through as-is instead of showing
+    // "Invalid Date".
+    if (isNaN(parsed.getTime())) return d
+    const diff = Math.floor((Date.now() - parsed.getTime()) / 86400000)
     if (diff === 0) return 'Today'
     if (diff === 1) return 'Yesterday'
     if (diff < 7) return `${diff} days ago`
     if (diff < 30) return `${Math.floor(diff / 7)} weeks ago`
-    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function matchLabel(s: number) {
@@ -1103,7 +1108,7 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
             if (err instanceof RateLimitError) {
                 setResearchError(`Slow down — try again in ${err.retryAfterSec}s.`)
             } else {
-                setResearchError(err.message || 'Failed to research company')
+                setResearchError("We couldn't research this company right now. Please try again.")
             }
         } finally {
             setResearchLoading(false)
@@ -1516,21 +1521,22 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                         })}
                                     </div>
                                 )}
-                                <Link href={`/dashboard/learning?jobId=${match.job_id}`}>
+                                <Link href={`/dashboard/learning?jobId=${match.job_id}`} style={{ display: isMobile ? 'block' : 'inline-block' }}>
                                     <button style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: isMobile ? 5 : 6,
-                                        padding: isMobile ? '0' : '7px 14px',
-                                        borderRadius: isMobile ? 0 : 8,
-                                        background: isMobile ? 'none' : '#fff7ed',
-                                        color: isMobile ? '#135bec' : '#c2410c',
-                                        border: isMobile ? 'none' : '1px solid #fed7aa',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                        width: isMobile ? '100%' : 'auto',
+                                        padding: isMobile ? '11px 16px' : '7px 14px',
+                                        borderRadius: isMobile ? 10 : 8,
+                                        background: '#fff7ed',
+                                        color: '#c2410c',
+                                        border: '1px solid #fed7aa',
                                         cursor: 'pointer',
-                                        fontSize: isMobile ? '12.5px' : '0.8125rem',
-                                        fontWeight: isMobile ? 600 : 700,
+                                        fontSize: isMobile ? '13.5px' : '0.8125rem',
+                                        fontWeight: 700,
                                         marginTop: isMobile ? 12 : 0,
                                         fontFamily: "'Manrope', sans-serif",
                                     }}>
-                                        {!isMobile && '🗺️ '}Generate full learning plan →
+                                        🗺️ Generate full learning plan →
                                     </button>
                                 </Link>
                             </div>
@@ -1552,21 +1558,22 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                                         }}>{s}</span>
                                     ))}
                                 </div>
-                                <Link href={`/dashboard/learning?jobId=${match.job_id}`}>
+                                <Link href={`/dashboard/learning?jobId=${match.job_id}`} style={{ display: isMobile ? 'block' : 'inline-block' }}>
                                     <button style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: isMobile ? 5 : 6,
-                                        padding: isMobile ? '0' : '7px 14px',
-                                        borderRadius: isMobile ? 0 : 8,
-                                        background: isMobile ? 'none' : '#fff7ed',
-                                        color: isMobile ? '#135bec' : '#c2410c',
-                                        border: isMobile ? 'none' : '1px solid #fed7aa',
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                        width: isMobile ? '100%' : 'auto',
+                                        padding: isMobile ? '11px 16px' : '7px 14px',
+                                        borderRadius: isMobile ? 10 : 8,
+                                        background: '#fff7ed',
+                                        color: '#c2410c',
+                                        border: '1px solid #fed7aa',
                                         cursor: 'pointer',
-                                        fontSize: isMobile ? '12.5px' : '0.8125rem',
-                                        fontWeight: isMobile ? 600 : 700,
+                                        fontSize: isMobile ? '13.5px' : '0.8125rem',
+                                        fontWeight: 700,
                                         marginTop: isMobile ? 12 : 0,
                                         fontFamily: "'Manrope', sans-serif",
                                     }}>
-                                        {!isMobile && '🗺️ '}Generate full learning plan →
+                                        🗺️ Generate full learning plan →
                                     </button>
                                 </Link>
                             </div>
@@ -1641,11 +1648,11 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
                             </div>
                             <div style={{ flex: 1 }}>
                                 <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'white', marginBottom: 2 }}>
-                                    {researchLoading ? 'Researching company...' : 'Optimize your resume for this role'}
+                                    {researchLoading ? 'Researching company…' : 'Optimize your resume for this role'}
                                 </p>
                                 <p style={{ fontSize: '0.775rem', color: 'rgba(255,255,255,0.75)' }}>
                                     {researchLoading
-                                        ? `Firecrawl is browsing ${job.company ?? 'the company'}'s website for insights`
+                                        ? `We're looking into ${job.company ?? 'the company'} to tailor your resume`
                                         : `AI will research ${job.company ?? 'this company'} and help optimize your resume.`}
                                 </p>
                             </div>
@@ -2239,9 +2246,11 @@ function ResumeSelector({
 /* ══════════════════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════════════════ */
-type FilterType = 'all' | 'high' | 'medium' | 'low'
+type FilterType = 'all' | 'high' | 'medium' | 'low' | 'recent'
 
 type TriggerProgress = { scored: number; total: number; batchDone: number; totalBatches: number }
+
+const TERMINAL_RUN_STATUSES = new Set(['COMPLETED', 'FAILED', 'CANCELED', 'CRASHED', 'SYSTEM_FAILURE', 'TIMED_OUT', 'INTERRUPTED'])
 
 function TriggerProgressBanner({ runId, accessToken, onComplete }: {
     runId: string
@@ -2249,14 +2258,30 @@ function TriggerProgressBanner({ runId, accessToken, onComplete }: {
     onComplete: () => void
 }) {
     const { run } = useRealtimeRun(runId, { accessToken, onComplete })
+    // Backstop: the websocket subscription above can silently stop delivering
+    // updates (dropped connection, tab throttling) while the run itself
+    // finishes fine — leaving this banner spinning forever with no error.
+    // A cheap SWR poll every 5s catches that case even when Realtime is dark.
+    const { run: polledRun } = useRun(runId, { accessToken, refreshInterval: 5000 })
+    const onCompleteFiredRef = useRef(false)
+    useEffect(() => {
+        if (polledRun?.status && TERMINAL_RUN_STATUSES.has(polledRun.status) && !onCompleteFiredRef.current) {
+            onCompleteFiredRef.current = true
+            onComplete()
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [polledRun?.status])
+
     const progress = run?.metadata?.progress as TriggerProgress | undefined
-    const isScoring = !run || run.status === 'QUEUED' || run.status === 'EXECUTING'
+    const realtimeDone = !!run && TERMINAL_RUN_STATUSES.has(run.status)
+    const polledDone = !!polledRun && TERMINAL_RUN_STATUSES.has(polledRun.status)
+    const isScoring = !realtimeDone && !polledDone
     if (!isScoring) return null
     return (
-        <div style={{ padding: '10px 12px', marginBottom: 12, borderRadius: 9, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+        <div style={{ padding: '14px 18px', borderRadius: 12, background: 'white', border: '1px solid #bfdbfe', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: progress ? 8 : 0 }}>
-                <div style={{ width: 15, height: 15, flexShrink: 0, border: '2px solid #bfdbfe', borderTopColor: '#135bec', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
+                <div style={{ width: 16, height: 16, flexShrink: 0, border: '2px solid #bfdbfe', borderTopColor: '#135bec', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
                     {progress ? `Scored ${progress.scored} of ${progress.total} jobs` : 'Scoring your matches'}
                 </span>
             </div>
@@ -2297,6 +2322,13 @@ export default function MatchesPage() {
     const [loading, setLoading] = useState(true)
     const [selected, setSelected] = useState<FullMatch | null>(null)
     const [filter, setFilter] = useState<FilterType>('all')
+    // The exact job_ids sent on the most recent "Find Best Jobs" click (set by
+    // the search page via saveLastScoreRun). Powers the "Recent" filter tab so
+    // the user can see just that batch instead of every match ever accumulated.
+    const [lastScoreRun, setLastScoreRun] = useState<{ resumeId: string; jobIds: string[] } | null>(null)
+    useEffect(() => {
+        setLastScoreRun(getLastScoreRun())
+    }, [])
     // Location facet — lets the user narrow a resume's accumulated matches to a
     // single metro (Bangalore vs Hyderabad vs …) since matches pile up across
     // every search. Keyed by metro bucket; 'all' shows everything.
@@ -2428,6 +2460,11 @@ export default function MatchesPage() {
         let cancelled = false
         let timer: ReturnType<typeof setTimeout> | undefined
         const deadline = Date.now() + 6 * 60 * 1000
+        // Tracks the previous tick's in-flight state. Can't use scoringInFlight
+        // directly here — this closure is only recreated on [user] change, so a
+        // React-state read would stay stuck at whatever it was on the first tick
+        // across every recursive setTimeout call. A ref always sees the latest write.
+        const prevActiveRef = { current: false }
 
         const tick = async () => {
             if (cancelled) return
@@ -2437,9 +2474,11 @@ export default function MatchesPage() {
             } catch {
                 // Transient query failure — treat as "unknown", try once more
                 // next tick rather than tearing down the whole backstop.
-                active = scoringInFlight ? 1 : 0
+                active = prevActiveRef.current ? 1 : 0
             }
             if (cancelled) return
+            const wasInFlight = prevActiveRef.current
+            prevActiveRef.current = active > 0
             setScoringInFlight(active > 0)
             if (active > 0) {
                 await reload(user.id).catch(() => { /* keep prior data */ })
@@ -2449,6 +2488,10 @@ export default function MatchesPage() {
                 } else {
                     setScoringInFlight(false)
                 }
+            } else if (wasInFlight) {
+                // Same reasoning as TriggerProgressBanner's onComplete: don't leave
+                // the just-finished batch buried under this resume's older matches.
+                setFilter('recent')
             }
         }
 
@@ -2476,8 +2519,19 @@ export default function MatchesPage() {
     const locationOptions = locationFacets(openResumeScoped)
     const locationScoped = openResumeScoped.filter(m => matchInLocation(m, locationFilter))
 
+    // Only offer "Recent" when the last recorded scoring click was for the
+    // resume currently selected — otherwise it'd silently show a stale batch
+    // from a different resume.
+    const recentJobIds = lastScoreRun && lastScoreRun.resumeId === selectedResumeId
+        ? new Set(lastScoreRun.jobIds)
+        : null
+    const recentCount = recentJobIds
+        ? locationScoped.filter(m => recentJobIds.has(m.job_id ?? '')).length
+        : 0
+
     const filtered = locationScoped.filter(m => {
         const s = m.relevance_score ?? 0
+        if (filter === 'recent') return recentJobIds ? recentJobIds.has(m.job_id ?? '') : true
         if (filter === 'high') return s >= 80
         if (filter === 'medium') return s >= 60 && s < 80
         if (filter === 'low') return s < 60
@@ -2518,8 +2572,17 @@ export default function MatchesPage() {
         setLocationFilter(ALL_LOCATION_KEY)
     }, [selectedResumeId])
 
+    // Fall back to "All" if the user switches to a resume with no recorded
+    // recent run — otherwise the "Recent" tab stays selected but disappears,
+    // leaving the list looking broken.
+    useEffect(() => {
+        if (filter === 'recent' && !recentJobIds) setFilter('all')
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedResumeId, recentJobIds])
+
     const FILTERS: { key: FilterType; label: string; count: number }[] = [
         { key: 'all',    label: 'All',    count: locationScoped.length },
+        ...(recentJobIds ? [{ key: 'recent' as FilterType, label: 'Recent', count: recentCount }] : []),
         { key: 'high',   label: 'High',   count: highFit },
         { key: 'medium', label: 'Medium', count: medFit },
         { key: 'low',    label: 'Low',    count: lowFit },
@@ -2587,6 +2650,45 @@ export default function MatchesPage() {
                 fontFamily: "'Manrope', -apple-system, sans-serif",
             }}>
 
+                {/* Scoring status — floats centered over the whole screen so it's
+                    visible regardless of which panel has focus. */}
+                {triggerRunId && triggerPublicToken && (
+                    <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 50, width: 320 }}>
+                        <TriggerProgressBanner
+                            runId={triggerRunId}
+                            accessToken={triggerPublicToken}
+                            onComplete={() => {
+                                if (user) reload(user.id).catch(() => {})
+                                // Land on "Recent" so the just-scored batch isn't buried
+                                // under months of previously-accumulated matches for this
+                                // resume (the exact confusion a fresh scoring run used to
+                                // cause — see recentJobIds below).
+                                setFilter('recent')
+                            }}
+                        />
+                    </div>
+                )}
+
+                {scoringInFlight && !triggerRunId && (
+                    <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 50, width: 320 }}>
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 9,
+                            padding: '14px 18px', borderRadius: 12,
+                            background: 'white', border: '1px solid #bfdbfe',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                        }}>
+                            <div style={{
+                                width: 16, height: 16, flexShrink: 0,
+                                border: '2px solid #bfdbfe', borderTopColor: '#135bec',
+                                borderRadius: '50%', animation: 'spin 0.8s linear infinite',
+                            }} />
+                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
+                                Scoring your matches…
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {/* ════════ LEFT PANEL ════════ */}
                 <div className="left-scroll" style={{
                     width: isMobile ? '100%' : 380,
@@ -2620,31 +2722,6 @@ export default function MatchesPage() {
                             primaryResumeId={primaryResumeId}
                             loading={resumesLoading}
                         />
-
-                        {triggerRunId && triggerPublicToken && (
-                            <TriggerProgressBanner
-                                runId={triggerRunId}
-                                accessToken={triggerPublicToken}
-                                onComplete={() => { if (user) reload(user.id).catch(() => {}) }}
-                            />
-                        )}
-
-                        {scoringInFlight && !triggerRunId && (
-                            <div style={{
-                                display: 'flex', alignItems: 'center', gap: 9,
-                                padding: '9px 12px', marginBottom: 12, borderRadius: 9,
-                                background: '#eff6ff', border: '1px solid #bfdbfe',
-                            }}>
-                                <div style={{
-                                    width: 15, height: 15, flexShrink: 0,
-                                    border: '2px solid #bfdbfe', borderTopColor: '#135bec',
-                                    borderRadius: '50%', animation: 'spin 0.8s linear infinite',
-                                }} />
-                                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
-                                    Scoring your matches…
-                                </span>
-                            </div>
-                        )}
 
                         {/* Count + sort row */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -2686,7 +2763,7 @@ export default function MatchesPage() {
                                             transition: 'all 0.15s',
                                         }}
                                     >
-                                        {f.key === 'all' ? 'All' : f.key === 'high' ? '80%+' : f.key === 'medium' ? '60–79%' : '<60%'}
+                                        {f.key === 'all' ? 'All' : f.key === 'recent' ? 'Recent' : f.key === 'high' ? '80%+' : f.key === 'medium' ? '60–79%' : '<60%'}
                                         {' '}{f.count}
                                     </button>
                                 )

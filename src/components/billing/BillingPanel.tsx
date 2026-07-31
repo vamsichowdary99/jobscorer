@@ -143,7 +143,7 @@ export default function BillingPanel() {
             setCelebrate(plan);
             void refreshPlan();
           } catch (e) {
-            if (mounted.current) setError(e instanceof Error ? e.message : 'Verification failed.');
+            if (mounted.current) setError("We couldn't verify your payment. Please refresh, or contact support if this continues.");
           } finally {
             if (mounted.current) setBusy(null);
           }
@@ -154,7 +154,7 @@ export default function BillingPanel() {
       });
       rzp.open();
     } catch (e) {
-      if (mounted.current) { setError(e instanceof Error ? e.message : 'Something went wrong.'); setBusy(null); }
+      if (mounted.current) { setError('Something went wrong. Please try again.'); setBusy(null); }
     }
   }
 
@@ -168,7 +168,7 @@ export default function BillingPanel() {
       if (!res.ok || !d.success) throw new Error(d.error || 'Could not cancel.');
       await refreshPlan();
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : 'Could not cancel.');
+      if (mounted.current) setError("We couldn't cancel your subscription. Please try again or contact support.");
     } finally {
       if (mounted.current) setCancelling(false);
     }

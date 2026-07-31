@@ -2801,7 +2801,7 @@ function ProjectsSection({ onOpen, onCount, active }: { onOpen: (roadmapId: stri
                 setGenError(e => ({ ...e, [entry.key]: res.error || 'Failed to generate roadmap' }))
             }
         } catch (err) {
-            setGenError(e => ({ ...e, [entry.key]: err instanceof Error ? err.message : 'Failed to generate roadmap' }))
+            setGenError(e => ({ ...e, [entry.key]: "We couldn't generate this roadmap. Please try again." }))
         } finally {
             setGenerating(g => ({ ...g, [entry.key]: false }))
         }
@@ -3489,7 +3489,7 @@ function LearningPage() {
                 setActiveId((m ?? fresh[0])?.id ?? null)
                 setPhase(fresh.length > 0 ? 'done' : 'idle')
             } catch (e) {
-                setError(e instanceof Error ? e.message : 'Generation failed')
+                setError("We couldn't generate your learning path. Please try again.")
                 setPhase('error')
             }
         }
@@ -3516,8 +3516,58 @@ function LearningPage() {
         }
 
         setPaths(existing)
-        if (existing.length > 0) setActiveId(existing[0].id)
-        setPhase(existing.length > 0 ? 'done' : 'idle')
+        if (existing.length > 0) {
+            setActiveId(existing[0].id)
+            setPhase('done')
+            return
+        }
+
+        // Plain `?jobId=` deep-link (the "Generate full learning plan" button on
+        // AI Matches) with nothing generated yet for this job — previously this
+        // landed on the empty "No Learning Paths Yet" state, which told the user
+        // to go back to AI Matches and click "Generate Learning Path" again, even
+        // though that's exactly the click that brought them here. Auto-trigger
+        // the full-plan generation instead, same on-demand pattern as
+        // generateForSkill above, using the just-fetched job/gap data directly
+        // rather than reading missingSkills/gaps React state (not yet committed
+        // this tick).
+        const genKey = `${jobId}::__full__`
+        if (genTriggeredRef.current === genKey) {
+            setPhase('generating')
+            return
+        }
+        genTriggeredRef.current = genKey
+        setPhase('generating')
+        try {
+            let company_research = null
+            if (jobObj?.company) {
+                const { data: cr } = await supabase
+                    .from('company_research')
+                    .select('overview, tech_stack, culture, industry')
+                    .ilike('company_name', `%${jobObj.company}%`)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single()
+                if (cr) company_research = cr
+            }
+            await triggerLearningPathGeneration({
+                userId: user?.id ?? '',
+                jobId,
+                resumeId: getPrimaryResumeId() ?? undefined,
+                missingSkills: mMissing.length > 0 ? mMissing : ['General IT Skills'],
+                gaps: mGaps && mGaps.length > 0 ? mGaps : undefined,
+                jobTitle: jobObj?.title ?? 'Software Engineer',
+                companyName: jobObj?.company ?? 'the company',
+                company_research,
+            })
+            const fresh = await fetchLearningPaths(user?.id ?? '', jobId)
+            setPaths(fresh)
+            if (fresh.length > 0) setActiveId(fresh[0].id)
+            setPhase(fresh.length > 0 ? 'done' : 'idle')
+        } catch (e) {
+            setError("We couldn't generate your learning path. Please try again.")
+            setPhase('error')
+        }
     }, [jobId, user?.id, skillParam])
 
     useEffect(() => { loadData() }, [loadData])
@@ -3552,7 +3602,7 @@ function LearningPage() {
             if (fresh.length > 0) setActiveId((findPathForSkill(fresh, skillParam) ?? fresh[0]).id)
             setPhase('done')
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Generation failed')
+            setError("We couldn't generate your learning path. Please try again.")
             setPhase('error')
         }
     }

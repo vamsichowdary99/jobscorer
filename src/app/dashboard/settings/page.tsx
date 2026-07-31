@@ -18,7 +18,9 @@ import {
 import type { Resume } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { INDIA_LOCATIONS } from '@/lib/locations'
+import { CAREER_EXPERIENCE_OPTIONS, CAREER_CHALLENGE_OPTIONS, JOB_TIMELINE_OPTIONS } from '@/lib/onboarding'
 import BillingPanel from '@/components/billing/BillingPanel'
+import ConfirmModal from '@/components/ConfirmModal'
 
 const SANS = "'Plus Jakarta Sans', system-ui, sans-serif"
 
@@ -174,6 +176,7 @@ export default function SettingsPage() {
     const [settings, setSettings] = useState<UserSettings | null>(null)
     const [original, setOriginal] = useState<UserSettings | null>(null)
     const [resumes, setResumes] = useState<Resume[]>([])
+    const [confirmDeleteResumeId, setConfirmDeleteResumeId] = useState<string | null>(null)
     const [usage, setUsage] = useState<UsageStats | null>(null)
     const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null)
     const [loading, setLoading] = useState(true)
@@ -250,9 +253,13 @@ export default function SettingsPage() {
         prefs: JSON.stringify({
             r: settings.target_roles, l: settings.target_locations,
             e: settings.experience_level, p: settings.remote_preference,
+            ce: settings.career_experience_level, cc: settings.career_challenges,
+            co: settings.career_challenge_other, jt: settings.job_search_timeline,
         }) !== JSON.stringify({
             r: original.target_roles, l: original.target_locations,
             e: original.experience_level, p: original.remote_preference,
+            ce: original.career_experience_level, cc: original.career_challenges,
+            co: original.career_challenge_other, jt: original.job_search_timeline,
         }),
     } : { profile: false, prefs: false }
 
@@ -276,6 +283,10 @@ export default function SettingsPage() {
             target_locations: settings.target_locations,
             experience_level: settings.experience_level,
             remote_preference: settings.remote_preference,
+            career_experience_level: settings.career_experience_level,
+            career_challenges: settings.career_challenges,
+            career_challenge_other: settings.career_challenge_other,
+            job_search_timeline: settings.job_search_timeline,
         }
         await updateUserSettings(user.id, patch)
         setOriginal(s => s ? { ...s, ...patch } : s)
@@ -308,12 +319,16 @@ export default function SettingsPage() {
             setSettings(s => s ? {
                 ...s, target_roles: original.target_roles, target_locations: original.target_locations,
                 experience_level: original.experience_level, remote_preference: original.remote_preference,
+                career_experience_level: original.career_experience_level, career_challenges: original.career_challenges,
+                career_challenge_other: original.career_challenge_other, job_search_timeline: original.job_search_timeline,
             } : s)
         }
     }
 
-    const handleDeleteResume = async (id: string) => {
-        if (!confirm('Delete this resume permanently?')) return
+    const handleDeleteResume = (id: string) => setConfirmDeleteResumeId(id)
+
+    const performDeleteResume = async (id: string) => {
+        setConfirmDeleteResumeId(null)
         const ok = await deleteResume(id)
         if (ok) setResumes(r => r.filter(x => x.id !== id))
     }
@@ -539,6 +554,64 @@ export default function SettingsPage() {
                                         style={{ ...S.remoteTile, borderColor: active ? '#135bec' : '#e2e8f0', background: active ? '#eff6ff' : '#fff', color: active ? '#135bec' : '#475569', fontWeight: active ? 700 : 500 }}>
                                         <span style={{ width: 13, height: 13, borderRadius: '50%', border: `2px solid ${active ? '#135bec' : '#cbd5e1'}`, background: active ? '#135bec' : 'transparent', flexShrink: 0 }} />
                                         {opt}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    <div style={S.card}>
+                        <div style={S.cardEyebrow}>Your experience level</div>
+                        <div style={S.levelGrid} className="set-level-grid">
+                            {CAREER_EXPERIENCE_OPTIONS.map(opt => {
+                                const active = settings.career_experience_level === opt
+                                return (
+                                    <button key={opt} onClick={() => setSettings(s => s ? { ...s, career_experience_level: opt } : s)}
+                                        style={{ ...S.levelTile, alignItems: 'center', textAlign: 'center', borderColor: active ? '#135bec' : '#e2e8f0', background: active ? '#eff6ff' : '#fff', color: active ? '#135bec' : '#334155' }}>
+                                        <span style={{ fontSize: 13, fontWeight: 700 }}>{opt}</span>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    <div style={S.card}>
+                        <div style={S.cardEyebrow}>Biggest career challenge</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }} className="set-challenge-grid">
+                            {CAREER_CHALLENGE_OPTIONS.map(opt => {
+                                const active = settings.career_challenges.includes(opt.key)
+                                return (
+                                    <button key={opt.key}
+                                        onClick={() => setSettings(s => s ? {
+                                            ...s, career_challenges: active ? s.career_challenges.filter(k => k !== opt.key) : [...s.career_challenges, opt.key],
+                                        } : s)}
+                                        style={{ ...S.remoteTile, gap: 10, borderColor: active ? '#135bec' : '#e2e8f0', background: active ? '#eff6ff' : '#fff', color: active ? '#135bec' : '#334155', fontWeight: active ? 700 : 500 }}>
+                                        <span style={{ fontSize: 17, flexShrink: 0 }}>{opt.icon}</span>
+                                        {opt.label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        {settings.career_challenges.includes('other') && (
+                            <textarea
+                                value={settings.career_challenge_other ?? ''}
+                                onChange={e => setSettings(s => s ? { ...s, career_challenge_other: e.target.value } : s)}
+                                placeholder="Tell us a bit more about your challenge…"
+                                style={{ width: '100%', marginTop: 12, height: 80, border: '1.5px solid #135bec', borderRadius: 12, padding: '12px 14px', fontSize: 13.5, fontFamily: SANS, color: '#0f172a', outline: 'none', resize: 'none' }}
+                            />
+                        )}
+                    </div>
+
+                    <div style={S.card}>
+                        <div style={S.cardEyebrow}>When do you want your next job?</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {JOB_TIMELINE_OPTIONS.map(opt => {
+                                const active = settings.job_search_timeline === opt.key
+                                return (
+                                    <button key={opt.key} onClick={() => setSettings(s => s ? { ...s, job_search_timeline: opt.key } : s)}
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 9, border: `1.5px solid ${active ? '#135bec' : '#e2e8f0'}`, background: active ? '#eff6ff' : '#fff', color: active ? '#135bec' : '#334155', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>
+                                        {opt.label}
+                                        {active && <span style={{ width: 18, height: 18, borderRadius: '50%', background: '#135bec', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>✓</span>}
                                     </button>
                                 )
                             })}
@@ -923,6 +996,15 @@ export default function SettingsPage() {
                 </div>
             )}
 
+            <ConfirmModal
+                open={confirmDeleteResumeId !== null}
+                title="Delete this resume?"
+                message="This removes it from your account for good — any matches or tailored versions built from it stay untouched."
+                confirmLabel="Delete resume"
+                onConfirm={() => confirmDeleteResumeId && performDeleteResume(confirmDeleteResumeId)}
+                onCancel={() => setConfirmDeleteResumeId(null)}
+            />
+
             <style>{`
                 @keyframes setToastIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
                 .set-toast {
@@ -940,6 +1022,7 @@ export default function SettingsPage() {
                     .set-usage-grid { grid-template-columns: 1fr !important; }
                     .set-level-grid { grid-template-columns: repeat(2, 1fr) !important; }
                     .set-remote-grid { grid-template-columns: 1fr !important; }
+                    .set-challenge-grid { grid-template-columns: 1fr !important; }
                     .set-danger-row { display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
                     .set-danger-row button { width: 100% !important; }
                     .set-resume-row { flex-wrap: wrap !important; }

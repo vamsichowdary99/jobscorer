@@ -10,7 +10,21 @@ import { useAuth } from '@/components/providers/AuthProvider'
 import { createClient } from '@/lib/supabase/client'
 import { MorphingPopover, MorphingPopoverTrigger, MorphingPopoverContent } from '@/components/ui/morphing-popover'
 import { useClickOutside } from '@/hooks/use-click-outside'
+import ConfirmModal from '@/components/ConfirmModal'
 import { motion, AnimatePresence } from 'framer-motion'
+
+// triggerResumeUpload throws deliberately friendly Error messages for known
+// cases (plan-limit copy, "parser didn't return any data", etc.) — those
+// should show verbatim. But a network-level failure before any response
+// arrives (offline, timeout, CORS) throws a raw browser TypeError instead,
+// whose .message is the browser's own internal wording: Safari says
+// "Load failed", Chrome says "Failed to fetch" — neither reads as a real
+// product message. Only those get swapped for a friendly fallback.
+function uploadErrorMessage(err: unknown): string {
+    const msg = err instanceof Error ? err.message.trim() : ''
+    const isRawNetworkError = /^(load failed|failed to fetch|networkerror)/i.test(msg)
+    return msg && !isRawNetworkError ? msg : 'Upload failed. Please check your connection and try again.'
+}
 
 const POPOVER_VARIANTS = {
     initial: { opacity: 0, filter: 'blur(8px)' },
@@ -448,6 +462,7 @@ export default function UploadPage() {
     const [uploading, setUploading]         = useState(false)
     const [uploadError, setUploadError]     = useState('')
     const [deletingId, setDeletingId]       = useState<string | null>(null)
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
     // form entry state
     const [certEntries,    setCertEntries]    = useState<CertEntry[]>([EMPTY_CERT])
@@ -633,7 +648,7 @@ export default function UploadPage() {
             setLastSaved(new Date())
         } catch (e) {
             console.error(e)
-            alert(e instanceof Error ? e.message : 'Failed to save')
+            alert("We couldn't save your changes. Please try again.")
         } finally {
             setSavingSection(null)
         }
@@ -892,12 +907,14 @@ export default function UploadPage() {
             setFile(null)
             const resumeId = (result as any)?.data?.resume_id ?? fresh[0]?.id
             if (resumeId) fetch('/api/resume-sections-audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resume_id: resumeId }) }).catch(() => { })
-        } catch (err) { setUploadError(err instanceof Error ? err.message : 'Upload failed') }
+        } catch (err) { setUploadError(uploadErrorMessage(err)) }
         finally { setUploading(false) }
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Delete this resume?')) return
+    const handleDelete = (id: string) => setConfirmDeleteId(id)
+
+    const performDelete = async (id: string) => {
+        setConfirmDeleteId(null)
         setDeletingId(id)
         try {
             await deleteResume(id)
@@ -2270,6 +2287,15 @@ export default function UploadPage() {
                 </main>
 
             </div>{/* end body */}
+
+            <ConfirmModal
+                open={confirmDeleteId !== null}
+                title="Delete this resume?"
+                message="This removes it from your account for good — any matches or tailored versions built from it stay untouched."
+                confirmLabel="Delete resume"
+                onConfirm={() => confirmDeleteId && performDelete(confirmDeleteId)}
+                onCancel={() => setConfirmDeleteId(null)}
+            />
 
             <style>{`
                 .resume-item:hover .delete-btn { opacity: 1 !important; }
