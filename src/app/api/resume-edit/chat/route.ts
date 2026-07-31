@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireUserLimit } from '@/lib/rate-limit'
 import { logUsage } from '@/lib/usage'
 import { checkQuota } from '@/lib/plan'
+import { truncateHistory } from '@/lib/chat/truncateHistory'
 import type { AtsKeyword } from '@/lib/resume-edit/coverage'
 import type { ResumeEditorState } from '@/lib/types'
 
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
     // the comment on SYSTEM_PROMPT above for why (prompt-cache preservation).
     const messages: OpenAI.ChatCompletionMessageParam[] = [
         { role: 'system', content: SYSTEM_PROMPT },
-        ...(conversationHistory ?? []).map((msg) => ({
+        ...truncateHistory(conversationHistory ?? []).map((msg) => ({
             role: msg.role as 'user' | 'assistant',
             content: msg.content,
         })),

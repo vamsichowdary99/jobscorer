@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getRedis } from './rate-limit';
 
 /**
  * Token-cost logging for AI calls → public.usage_events.
@@ -97,12 +98,20 @@ export async function logEstimatedUsage(opts: {
   });
 }
 
+// Redis key for the global daily spend circuit breaker (see plan.ts's
+// checkDailySpendCap). One counter for the whole app, not per-user — this is
+// a last-resort ceiling against a runaway bug or abuse, not a per-user quota.
+export function dailySpendKey(): string {
+  return `spend:daily:${new Date().toISOString().slice(0, 10)}`;
+}
+
 /**
  * Insert one usage_events row. Never throws — logging must not break the
  * request it is measuring. Call with `void logUsage(...)` to fire-and-forget.
  */
 export async function logUsage(input: UsageLogInput): Promise<void> {
   const { userId, feature, model, promptTokens, completionTokens, cachedTokens, latencyMs } = input;
+  const costInr = Number(estimateCostInr(model, promptTokens, completionTokens).toFixed(4));
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (serviceClient() as any)
@@ -115,11 +124,23 @@ export async function logUsage(input: UsageLogInput): Promise<void> {
         completion_tokens: completionTokens,
         cached_tokens: cachedTokens ?? null,
         latency_ms: latencyMs ?? null,
-        cost_inr: Number(
-          estimateCostInr(model, promptTokens, completionTokens).toFixed(4),
-        ),
+        cost_inr: costInr,
       });
   } catch (err) {
     console.warn('[usage] failed to log usage event:', err);
+  }
+
+  // Best-effort — feeds the circuit breaker in plan.ts. If Redis is down this
+  // simply doesn't increment; the breaker degrades open in that case too,
+  // same as rate-limit.ts and checkQuota (see plan.ts comment for why).
+  try {
+    const redis = getRedis();
+    if (redis) {
+      const key = dailySpendKey();
+      await redis.incrbyfloat(key, costInr);
+      await redis.expire(key, 172_800); // 2 days
+    }
+  } catch (err) {
+    console.warn('[usage] failed to increment daily spend counter:', err);
   }
 }

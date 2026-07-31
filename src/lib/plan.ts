@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { getRedis } from './rate-limit';
+import { dailySpendKey } from './usage';
 
 /**
  * Plan entitlement layer — monthly per-feature quotas for Free / Pro / Max.
@@ -32,7 +34,10 @@ const UNLIMITED = -1;
 // review-work) combined — one monthly pool, not per-action. Cache hits on teach-me
 // never reach checkQuota() so they stay free regardless of this limit.
 export const PLAN_QUOTAS: Record<Plan, Record<Feature, number>> = {
-  free: { job_search: 5,   score: 3,  optimize: 1,  company_research: 2,  build_plan: 1,  chat: 10,  learning_path: 1,  project_roadmap: 1,  project_coach: 10,  resume_edit: 10,  cover_letter: 1 },
+  // chat/resume_edit cut 10→3 (2026-07-30): conversation history has no fixed
+  // token cost (see docs/AI_COST_OPTIMIZATION_AUDIT.md §9), so these were the
+  // least-bounded liability in the whole quota table.
+  free: { job_search: 5,   score: 3,  optimize: 1,  company_research: 2,  build_plan: 1,  chat: 3,   learning_path: 1,  project_roadmap: 1,  project_coach: 10,  resume_edit: 3,   cover_letter: 1 },
   pro:  { job_search: 60,  score: 30, optimize: 20, company_research: 20, build_plan: 10, chat: 200, learning_path: 15, project_roadmap: 10, project_coach: 75,  resume_edit: 150, cover_letter: 15 },
   max:  { job_search: 200, score: 80, optimize: 40, company_research: 40, build_plan: 30, chat: 600, learning_path: 30, project_roadmap: 30, project_coach: 250, resume_edit: 500, cover_letter: 30 },
 };
@@ -77,20 +82,67 @@ export function currentPeriodStart(): string {
   return `${y}-${m}-01`;
 }
 
-/** Read a user's plan from profiles. Defaults to 'free' if missing/unreadable. */
+// Billing states (written by /api/billing/webhook) that must NOT keep paid
+// quota — a past-due or paused subscription still has `profiles.plan` set to
+// 'pro'/'max' until the next webhook event, which otherwise silently grants
+// unlimited-duration paid AI quota to a non-paying user.
+const NON_ENTITLED_STATUSES = new Set(['past_due', 'paused', 'cancelled']);
+
+/** Read a user's plan from profiles. Defaults to 'free' if missing/unreadable,
+ *  or if the subscription is past-due/paused/cancelled. */
 export async function getUserPlan(userId: string): Promise<Plan> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (serviceClient() as any)
       .from('profiles')
-      .select('plan')
+      .select('plan, plan_status')
       .eq('id', userId)
       .maybeSingle();
+    if (data?.plan_status && NON_ENTITLED_STATUSES.has(data.plan_status)) return 'free';
     const plan = data?.plan as Plan | undefined;
     return plan === 'pro' || plan === 'max' ? plan : 'free';
   } catch {
     return 'free';
   }
+}
+
+// Global daily AI spend ceiling (₹), independent of any per-user quota — a
+// last-resort circuit breaker for a runaway bug or abuse burst, not a normal
+// operating limit. Override via env for a real launch; this default is sized
+// for the pre-launch/dev-only phase (see CLAUDE.md).
+const DAILY_SPEND_CAP_INR = Number(process.env.DAILY_AI_SPEND_CAP_INR ?? 3000);
+
+/**
+ * Hard-fail circuit breaker: blocks ALL metered AI calls once today's total
+ * estimated spend (summed by usage.ts's logUsage into Redis) crosses
+ * DAILY_SPEND_CAP_INR. Unlike checkQuota/requireUserLimit, this does NOT
+ * degrade open on a Redis read error in the sense of "assume fine and
+ * proceed forever" — but if Redis is unreachable there is no counter to
+ * check at all, so it allows the request (same posture as the rest of the
+ * app's rate-limit/quota layer during an outage — see
+ * docs/AI_COST_OPTIMIZATION_AUDIT.md §7 for why a stricter posture there
+ * would take down the whole app on a Redis blip instead of just capping
+ * spend).
+ */
+async function checkDailySpendCap(): Promise<NextResponse | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const spent = Number((await redis.get(dailySpendKey())) ?? 0);
+    if (spent >= DAILY_SPEND_CAP_INR) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'AI features are temporarily paused — daily usage cap reached. Try again after midnight UTC.',
+          spend_cap_tripped: true,
+        },
+        { status: 503 },
+      );
+    }
+  } catch (err) {
+    console.warn('[plan:spend-cap] check failed, allowing:', err);
+  }
+  return null;
 }
 
 /**
@@ -109,6 +161,13 @@ export async function checkQuota(
   feature: Feature,
   amount = 1,
 ): Promise<NextResponse | null> {
+  // Refund calls (amount < 0, e.g. cover-letter's failure refund) must never
+  // be blocked by the spend cap — that would leak the quota unit permanently.
+  if (amount > 0) {
+    const capped = await checkDailySpendCap();
+    if (capped) return capped;
+  }
+
   const plan = await getUserPlan(userId);
   const limit = PLAN_QUOTAS[plan][feature];
 

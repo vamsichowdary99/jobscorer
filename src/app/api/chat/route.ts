@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requireUserLimit } from '@/lib/rate-limit';
 import { logUsage } from '@/lib/usage';
 import { checkQuota } from '@/lib/plan';
+import { truncateHistory } from '@/lib/chat/truncateHistory';
 
 const CHAT_MODEL = 'gpt-4.1-mini';
 
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
 
   const messages: OpenAI.ChatCompletionMessageParam[] = [
     { role: 'system', content: SYSTEM_PROMPT },
-    ...conversationHistory.map((msg) => ({
+    ...truncateHistory(conversationHistory).map((msg) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
     })),
