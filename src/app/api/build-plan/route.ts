@@ -77,6 +77,16 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        const { data: ownedResume } = await userClient
+            .from('resumes')
+            .select('id')
+            .eq('id', resume_id)
+            .eq('user_id', user_id)
+            .maybeSingle()
+        if (!ownedResume) {
+            return NextResponse.json({ success: false, error: 'Resume not found' }, { status: 404 })
+        }
+
         // ── Check cache (unless force_refresh) ────────────────
         if (!force_refresh) {
             const supabase = serviceClient()

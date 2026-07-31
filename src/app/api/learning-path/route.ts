@@ -172,6 +172,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Missing required fields: job_id, and one of gaps[] or missing_skills[]' }, { status: 400 })
     }
 
+    if (typeof resume_id === 'string' && resume_id) {
+        const { data: ownedResume } = await userClient
+            .from('resumes')
+            .select('id')
+            .eq('id', resume_id)
+            .eq('user_id', user_id)
+            .maybeSingle()
+        if (!ownedResume) {
+            return NextResponse.json({ error: 'Resume not found' }, { status: 404 })
+        }
+    }
+
     const overQuota = await checkQuota(user_id, 'learning_path')
     if (overQuota) return overQuota
 

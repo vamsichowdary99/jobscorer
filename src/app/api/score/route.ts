@@ -66,6 +66,23 @@ export async function POST(req: NextRequest) {
     const experienceLevel = typeof body.experience_level === 'string' ? body.experience_level : ''
     const forceScore = body.force_score === true
 
+    // Ownership check — resumeId comes straight from the client and is used below
+    // to fetch resume content via a service-role client (RAG shortlist, years-of-
+    // experience) that bypasses RLS, so this is the only gate against scoring
+    // (and leaking, through the attacker's own user_job_matches row) someone
+    // else's resume.
+    if (resumeId) {
+        const { data: ownedResume } = await supabase
+            .from('resumes')
+            .select('id')
+            .eq('id', resumeId)
+            .eq('user_id', user.id)
+            .maybeSingle()
+        if (!ownedResume) {
+            return NextResponse.json({ success: false, error: 'Resume not found' }, { status: 404 })
+        }
+    }
+
     // RAG mode shortlists candidates first; legacy 'all' mode keeps the full job_ids list.
     let jobIdsToScore: string[]
     let ragShortlistSize: number | undefined

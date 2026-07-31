@@ -149,6 +149,7 @@ export const scoreJobs = task({
       .from("resumes")
       .select("structured_data")
       .eq("id", resumeId)
+      .eq("user_id", userId)
       .single();
 
     if (resumeErr || !resume) {

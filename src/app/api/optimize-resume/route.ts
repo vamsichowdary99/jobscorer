@@ -39,6 +39,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // ── Verify the resume belongs to the caller ───────────────────────────
+    const { data: ownedResume } = await supabase
+      .from('resumes')
+      .select('id')
+      .eq('id', resume_id)
+      .eq('user_id', user_id)
+      .maybeSingle()
+    if (!ownedResume) {
+      return NextResponse.json({ success: false, error: 'Resume not found' }, { status: 404 })
+    }
+
     // ── Check cache (unless force_refresh or items accepted) ────────────────
     if (!skipCache) {
       const { data: cached, error: cacheError } = await supabase
