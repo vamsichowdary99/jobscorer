@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useRealtimeRun, useRun } from '@trigger.dev/react-hooks'
-import { fetchMatches, fetchResumes, fetchResumeById, getPrimaryResumeId, triggerCompanyResearch, RateLimitError, CompanyResearchPendingError, countActiveScoreJobs, getLastScoreRun } from '@/lib/api'
+import { fetchMatches, fetchResumes, fetchResumeById, getPrimaryResumeId, triggerCompanyResearch, CompanyResearchPendingError, countActiveScoreJobs, getLastScoreRun } from '@/lib/api'
 import { addPending } from '@/lib/pendingResearch'
 import { locationFacets, matchInLocation, ALL_LOCATION_KEY } from '@/lib/locations'
 import { isJobClosed } from '@/lib/jobs/applicationStatus'
@@ -1042,77 +1042,69 @@ function JobDetail({ match, onReported }: { match: FullMatch; onReported?: (jobI
         return match.rejection_reason ?? ''
     })()
 
-    async function handleOptimize() {
-        setResearchLoading(true)
+    function handleOptimize() {
         setResearchError(null)
-        try {
-            // Use the resume the match was scored against — NOT the localStorage
-            // "primary" — otherwise picking Vamsi in the selector but having
-            // Khasim as primary sends the n8n research under the wrong resume,
-            // and the research page (which filters by selected resume) shows nothing.
-            const resumeId = match.resume_id ?? getPrimaryResumeId()
-            let resumeData = null
-            if (resumeId) {
-                resumeData = await fetchResumeById(resumeId)
-            }
-            const result = await triggerCompanyResearch({
-                job_id: match.job_id ?? job.id,
-                user_id: user?.id ?? '',
-                job: job,
-                resume: { structured_data: resumeData?.structured_data ?? null },
-                resume_id: resumeId ?? undefined,
+
+        // Use the resume the match was scored against — NOT the localStorage
+        // "primary" — otherwise picking Vamsi in the selector but having
+        // Khasim as primary sends the n8n research under the wrong resume,
+        // and the research page (which filters by selected resume) shows nothing.
+        const resumeId = match.resume_id ?? getPrimaryResumeId()
+
+        // Register the pending job so the global toaster can notify even if
+        // the user navigates away from /research before it finishes.
+        if (user?.id && job.company) {
+            addPending({
+                jobId: job.id,
+                userId: user.id,
+                companyName: job.company,
+                resumeId: resumeId ?? null,
             })
-            if (result.success && result.company_research) {
-                sessionStorage.setItem(
-                    `company_research_${job.id}`,
-                    JSON.stringify({ ...result.company_research, ai_analysis: result.ai_analysis })
-                )
-                // Pass resumeId so the research page defaults its selector to
-                // the same resume the match was scored against.
-                const url = resumeId
-                    ? `/dashboard/research?jobId=${job.id}&resumeId=${resumeId}`
-                    : `/dashboard/research?jobId=${job.id}`
-                router.push(url)
-            } else {
-                setResearchError('Research returned no data. Please try again.')
-            }
-        } catch (err: any) {
-            if (err instanceof CompanyResearchPendingError) {
-                // n8n + Firecrawl runs longer than our 60s client budget.
-                // The workflow still completes; it writes to `company_research`
-                // and `company_research_analysis`. Send the user to the research
-                // page so they can pick it up when it lands (page polls the table).
-                const resumeId = match.resume_id ?? getPrimaryResumeId()
-                // Register the pending job so the global toaster can notify
-                // even if the user navigates away from /research before it finishes.
-                if (user?.id && job.company) {
-                    addPending({
-                        jobId: job.id,
-                        userId: user.id,
-                        companyName: job.company,
-                        resumeId: resumeId ?? null,
-                    })
-                }
-                // Pass `company` through the URL so the research page can start
-                // polling immediately — without waiting for fetchResearchHistory
-                // (which won't return this brand-new job until the analysis row
-                // lands). Bug fix May 2026: poll was previously gated on
-                // matches.find(...).job.company being defined, which is a chicken
-                // -and-egg for brand-new researches.
-                const params = new URLSearchParams({ jobId: job.id, pending: '1' })
-                if (resumeId) params.set('resumeId', resumeId)
-                if (job.company) params.set('company', job.company)
-                router.push(`/dashboard/research?${params.toString()}`)
-                return
-            }
-            if (err instanceof RateLimitError) {
-                setResearchError(`Slow down — try again in ${err.retryAfterSec}s.`)
-            } else {
-                setResearchError("We couldn't research this company right now. Please try again.")
-            }
-        } finally {
-            setResearchLoading(false)
         }
+
+        // Navigate to the research page immediately instead of making the user
+        // wait out the full Firecrawl-scrape-plus-GPT-analysis round trip
+        // (10-15s typical, up to 60s+) before they see anything. The research
+        // page already has an adaptive poll (15s/20s/30s/60s cadence, 12min
+        // cap) built for exactly this — previously only reached via the
+        // CompanyResearchPendingError case below; now it's always the path.
+        // Passing `company` lets it start polling immediately without waiting
+        // for fetchResearchHistory (empty for a brand-new in-flight research).
+        const params = new URLSearchParams({ jobId: job.id, pending: '1' })
+        if (resumeId) params.set('resumeId', resumeId)
+        if (job.company) params.set('company', job.company)
+        router.push(`/dashboard/research?${params.toString()}`)
+
+        // Fire the actual research call in the background — the fetch keeps
+        // running after the SPA navigation above (same tab, same JS context).
+        // Any failure here is silent to the user: the research page's poll
+        // simply keeps retrying until the row lands or the 12-minute cap
+        // gives up, same as the pre-existing >60s-timeout behavior.
+        void (async () => {
+            try {
+                let resumeData = null
+                if (resumeId) {
+                    resumeData = await fetchResumeById(resumeId)
+                }
+                await triggerCompanyResearch({
+                    job_id: match.job_id ?? job.id,
+                    user_id: user?.id ?? '',
+                    job: job,
+                    resume: { structured_data: resumeData?.structured_data ?? null },
+                    resume_id: resumeId ?? undefined,
+                })
+            } catch (err) {
+                // CompanyResearchPendingError just means the workflow is still
+                // running past our 60s client budget — not a failure, and
+                // already the expected/handled case (the research page polls
+                // for it). Logging it as an error was the only bug here; it
+                // has no functional effect, it just spams the console/Next.js
+                // dev error overlay with a benign, already-handled signal.
+                if (!(err instanceof CompanyResearchPendingError)) {
+                    console.error('[matches] background company research failed:', err)
+                }
+            }
+        })()
     }
 
     return (
@@ -2650,45 +2642,6 @@ export default function MatchesPage() {
                 fontFamily: "'Manrope', -apple-system, sans-serif",
             }}>
 
-                {/* Scoring status — floats centered over the whole screen so it's
-                    visible regardless of which panel has focus. */}
-                {triggerRunId && triggerPublicToken && (
-                    <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 50, width: 320 }}>
-                        <TriggerProgressBanner
-                            runId={triggerRunId}
-                            accessToken={triggerPublicToken}
-                            onComplete={() => {
-                                if (user) reload(user.id).catch(() => {})
-                                // Land on "Recent" so the just-scored batch isn't buried
-                                // under months of previously-accumulated matches for this
-                                // resume (the exact confusion a fresh scoring run used to
-                                // cause — see recentJobIds below).
-                                setFilter('recent')
-                            }}
-                        />
-                    </div>
-                )}
-
-                {scoringInFlight && !triggerRunId && (
-                    <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 50, width: 320 }}>
-                        <div style={{
-                            display: 'flex', alignItems: 'center', gap: 9,
-                            padding: '14px 18px', borderRadius: 12,
-                            background: 'white', border: '1px solid #bfdbfe',
-                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                        }}>
-                            <div style={{
-                                width: 16, height: 16, flexShrink: 0,
-                                border: '2px solid #bfdbfe', borderTopColor: '#135bec',
-                                borderRadius: '50%', animation: 'spin 0.8s linear infinite',
-                            }} />
-                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
-                                Scoring your matches…
-                            </span>
-                        </div>
-                    </div>
-                )}
-
                 {/* ════════ LEFT PANEL ════════ */}
                 <div className="left-scroll" style={{
                     width: isMobile ? '100%' : 380,
@@ -2712,6 +2665,44 @@ export default function MatchesPage() {
                                 Scored against your active resume
                             </p>
                         </div>
+
+                        {/* Scoring status — rendered inline in normal document flow
+                            (not a fixed overlay) so it pushes content down instead of
+                            covering any text underneath it. */}
+                        {triggerRunId && triggerPublicToken && (
+                            <div style={{ marginBottom: 12 }}>
+                                <TriggerProgressBanner
+                                    runId={triggerRunId}
+                                    accessToken={triggerPublicToken}
+                                    onComplete={() => {
+                                        if (user) reload(user.id).catch(() => {})
+                                        // Land on "Recent" so the just-scored batch isn't buried
+                                        // under months of previously-accumulated matches for this
+                                        // resume (the exact confusion a fresh scoring run used to
+                                        // cause — see recentJobIds below).
+                                        setFilter('recent')
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                        {scoringInFlight && !triggerRunId && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: 9,
+                                padding: '14px 18px', borderRadius: 12, marginBottom: 12,
+                                background: 'white', border: '1px solid #bfdbfe',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                            }}>
+                                <div style={{
+                                    width: 16, height: 16, flexShrink: 0,
+                                    border: '2px solid #bfdbfe', borderTopColor: '#135bec',
+                                    borderRadius: '50%', animation: 'spin 0.8s linear infinite',
+                                }} />
+                                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e40af', lineHeight: 1.4 }}>
+                                    Scoring your matches…
+                                </span>
+                            </div>
+                        )}
 
                         {/* Resume selector — compact below heading */}
                         <ResumeSelector
