@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     // content, same page counts) — return the cached result for free instead
     // of paying for another generation. Self-invalidating: any real edit
     // changes the fingerprint, so there's no separate cache-busting to
-    // maintain. A different template gets its own independent cache slot.
+    // maintain.
     const fingerprint = computeTrimFingerprint(editorState, currentPages, pageTarget)
     const trimCacheByTemplate = (row.trim_cache ?? null) as TrimCacheByTemplate | null
     const cached = trimCacheByTemplate?.[templateId]
@@ -87,6 +87,30 @@ export async function POST(request: NextRequest) {
         // comment above), so it stores whatever fingerprint the server used
         // to decide whether ITS cached overlay is still fresh to render.
         return NextResponse.json({ success: true, changes: cached.changes, applied: cached.applied, cached: true, empty: isTrimEmpty(cached.changes), fingerprint })
+    }
+
+    // Cross-template reuse: the fingerprint already encodes content +
+    // currentPages + pageTarget, and the OpenAI prompt (buildTrimPrompt)
+    // carries no template-specific info at all — it only ever sees "this
+    // resume is N pages, target M, condense it." So if ANOTHER template's
+    // cache slot shows the same fingerprint (i.e. this template happens to
+    // paginate the same content to the same page count), that template's
+    // trim result is equally valid here. Reusing it skips a functionally
+    // duplicate OpenAI call. `applied` is intentionally NOT carried over —
+    // that flag tracks whether THIS template has had the trim applied, and
+    // a fresh templateId slot has not, even if the underlying decision is
+    // identical to one already applied elsewhere.
+    if (trimCacheByTemplate) {
+        const crossTemplateHit = Object.values(trimCacheByTemplate).find(entry => entry.fingerprint === fingerprint)
+        if (crossTemplateHit) {
+            const reusedEntry: TrimCache = { fingerprint, changes: crossTemplateHit.changes, cachedAt: new Date().toISOString(), applied: false }
+            const nextTrimCacheByTemplate: TrimCacheByTemplate = { ...trimCacheByTemplate, [templateId]: reusedEntry }
+            const { error: cacheWriteError } = await sb.from('optimized_resumes').update({ trim_cache: nextTrimCacheByTemplate }).eq('id', optimizedResumeId).eq('user_id', user.id)
+            if (cacheWriteError) {
+                console.error('[resume-edit/trim-to-fit] cross-template cache write failed:', cacheWriteError)
+            }
+            return NextResponse.json({ success: true, changes: crossTemplateHit.changes, applied: false, cached: true, reusedFromOtherTemplate: true, empty: isTrimEmpty(crossTemplateHit.changes), fingerprint })
+        }
     }
 
     const { data: job } = await sb
