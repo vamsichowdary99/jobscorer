@@ -405,6 +405,169 @@ function SkillRailItem({ path, idx, isActive, doneCount, onClick }: {
     )
 }
 
+/* ─── Rail item for a gap with no roadmap yet — visible so the user can see
+   everything still left to close. Clicking SELECTS it (shows a "Generate
+   roadmap" prompt on the right) rather than generating immediately, so a
+   misclick or curiosity-click doesn't burn an AI call. ────────────────── */
+function UngeneratedSkillRailItem({ choice, idx, isActive, onSelect }: {
+    choice: { skill: string; severity: 'hard_blocker' | 'nice_to_have'; scoreImpact: number | null }
+    idx: number
+    isActive: boolean
+    onSelect: () => void
+}) {
+    return (
+        <li>
+            <button
+                onClick={onSelect}
+                className="lp-skill"
+                style={{
+                    width: '100%',
+                    display: 'grid',
+                    gridTemplateColumns: 'auto 1fr auto',
+                    gap: 12,
+                    alignItems: 'flex-start',
+                    padding: '14px 14px',
+                    borderRadius: 10,
+                    textAlign: 'left',
+                    border: `1px dashed ${isActive ? T.blue : T.line}`,
+                    background: isActive ? T.blue50 : 'transparent',
+                    cursor: 'pointer',
+                    marginBottom: 4,
+                    fontFamily: 'inherit',
+                }}
+            >
+                <div style={{
+                    fontSize: '0.6875rem', fontWeight: 800, color: T.muted2,
+                    fontVariantNumeric: 'tabular-nums', letterSpacing: '0.06em', paddingTop: 3,
+                }}>{String(idx + 1).padStart(2, '0')}</div>
+
+                <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                        <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontSize: '0.625rem', fontWeight: 700,
+                            color: choice.severity === 'hard_blocker' ? T.redText : T.greenText,
+                            background: choice.severity === 'hard_blocker' ? T.redBg : T.greenBg,
+                            padding: '2px 7px', borderRadius: 99,
+                            letterSpacing: '0.06em', textTransform: 'uppercase',
+                        }}>
+                            {choice.severity === 'hard_blocker' ? 'Hard blocker' : 'Nice to have'}
+                        </span>
+                        {choice.scoreImpact != null && (
+                            <span style={{ fontSize: '0.6875rem', color: T.muted, fontWeight: 600 }}>
+                                +{choice.scoreImpact}% match
+                            </span>
+                        )}
+                    </div>
+                    <div style={{
+                        fontSize: '0.875rem', fontWeight: 700, color: T.ink,
+                        letterSpacing: '-0.005em', lineHeight: 1.35, marginBottom: 2,
+                    }}>{choice.skill}</div>
+                    <div style={{ fontSize: '0.6875rem', color: T.muted, fontWeight: 600 }}>
+                        Not generated yet
+                    </div>
+                </div>
+
+                <Icon.Sparkles width={14} height={14} style={{ color: isActive ? T.blue : T.muted2, alignSelf: 'center', flexShrink: 0 }} />
+            </button>
+        </li>
+    )
+}
+
+/* ─── Right-panel prompt for a selected-but-not-generated skill ─────────
+   Fills the panel (not a small card marooned in whitespace) — left side is
+   the decision (what/why/action), right side is a real preview of what
+   generating actually produces, since the panel already shows exactly that
+   structure (WHY NOW / SEVERITY / Curated resources) once a skill exists.
+   Two columns stacks to one on narrow viewports. ────────────────────── */
+function PendingSkillPanel({ skill, choice, job, onGenerate }: {
+    skill: string
+    choice: { skill: string; severity: 'hard_blocker' | 'nice_to_have'; scoreImpact: number | null } | null
+    job: Job | null
+    onGenerate: () => void
+}) {
+    const isBlocker = choice?.severity === 'hard_blocker'
+    const preview = [
+        { Icon: Icon.Lightbulb, title: 'Why it matters here', body: `Reasoning tied to ${job?.title ?? 'this role'}, not a generic blurb.` },
+        { Icon: Icon.Play, title: 'A sequenced resource list', body: 'Real videos, courses and labs — free-first, in the order to work through them.' },
+        { Icon: Icon.Check, title: 'One concrete "done" test', body: 'A specific, verifiable proof you can point to — not just "watched the video."' },
+    ] as const
+    return (
+        <div style={{ minHeight: '100%', display: 'flex', alignItems: 'stretch' }}>
+            <div style={{
+                display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)',
+                gap: 0, width: '100%',
+            }}>
+                {/* LEFT — the decision */}
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '56px' }}>
+                    <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+                        fontSize: '0.6875rem', fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+                        background: isBlocker ? T.redBg : T.greenBg,
+                        color: isBlocker ? T.redText : T.greenText,
+                        letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16,
+                    }}>
+                        {isBlocker ? 'Hard blocker' : 'Nice to have'}
+                    </div>
+
+                    <h2 style={{ fontSize: '2.25rem', fontWeight: 800, color: T.ink, letterSpacing: '-0.03em', margin: '0 0 14px', lineHeight: 1.1 }}>
+                        {skill}
+                    </h2>
+
+                    <p style={{ fontSize: '0.9375rem', color: T.muted, lineHeight: 1.65, margin: '0 0 6px', maxWidth: 380 }}>
+                        No roadmap built yet for this skill{job?.title ? <> on <b style={{ color: T.ink2 }}>{job.title}</b></> : ''}.
+                    </p>
+                    {choice?.scoreImpact != null && (
+                        <p style={{ fontSize: '0.8125rem', color: T.muted, margin: '0 0 30px', maxWidth: 380 }}>
+                            Closing this gap is worth an estimated <b style={{ color: T.ink2 }}>+{choice.scoreImpact}% match</b>.
+                        </p>
+                    )}
+
+                    <button
+                        onClick={onGenerate}
+                        className="lp-cta"
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                            alignSelf: 'flex-start', padding: '13px 26px', borderRadius: 10, marginTop: 8,
+                            background: T.blue, color: '#fff', border: 'none', cursor: 'pointer',
+                            fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.005em',
+                            boxShadow: '0 8px 20px -8px rgba(37,99,235,.45)',
+                        }}
+                    >
+                        <Icon.Sparkles width={14} height={14} /> Generate roadmap
+                    </button>
+                </div>
+
+                {/* RIGHT — preview of what generating actually builds */}
+                <div style={{
+                    background: T.bgAlt, borderLeft: `1px solid ${T.line2}`,
+                    display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                    padding: '56px', gap: 28,
+                }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: T.muted2, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                        What generating builds
+                    </div>
+                    {preview.map(({ Icon: PIcon, title, body }) => (
+                        <div key={title} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                            <div style={{
+                                width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                                background: '#fff', border: `1px solid ${T.line2}`,
+                                color: T.blue, display: 'grid', placeItems: 'center',
+                            }}>
+                                <PIcon width={16} height={16} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 700, color: T.ink, marginBottom: 3 }}>{title}</div>
+                                <div style={{ fontSize: '0.8125rem', color: T.muted, lineHeight: 1.5 }}>{body}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    )
+}
+
 /* ─── Right detail panel ─────────────────────────────────────── */
 function SkillDetail({ path, job, completedSet, onToggle }: {
     path: LearningPath; job: Job | null; completedSet: Set<number>; onToggle: (i: number) => void
@@ -776,6 +939,129 @@ function EmptyState({ onGenerate, count }: { onGenerate: () => void; count: numb
             >
                 <Icon.Sparkles width={14} height={14} /> Generate roadmap
             </button>
+        </div>
+    )
+}
+
+/* ─── Skill Picker ───────────────────────────────────────────────
+   Replaces the old behaviour of generating a roadmap for every missing
+   skill at once. The numbering here is a real recommendation, not
+   decoration — hard blockers first, then by score impact, same signal
+   the user already saw on AI Matches — so showing it as a ranked queue
+   is honest, not a template flourish. ────────────────────────────── */
+function SkillPickerState({
+    choices, selected, onSelect, onConfirm, jobTitle,
+}: {
+    choices: { skill: string; severity: 'hard_blocker' | 'nice_to_have'; scoreImpact: number | null }[]
+    selected: string
+    onSelect: (skill: string) => void
+    onConfirm: () => void
+    jobTitle?: string | null
+}) {
+    return (
+        <div style={{
+            background: '#fff', border: `1px solid ${T.line2}`, borderRadius: 14,
+            padding: '32px 28px 26px',
+        }}>
+            <div style={{
+                fontSize: '0.6875rem', fontWeight: 700, color: T.blue,
+                letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 8,
+            }}>
+                Pick where to start
+            </div>
+            <h3 style={{
+                fontSize: '1.375rem', fontWeight: 800, color: T.ink,
+                letterSpacing: '-0.02em', margin: '0 0 8px', lineHeight: 1.25,
+            }}>
+                {choices.length} skill{choices.length !== 1 ? 's' : ''} stand between you and {jobTitle || 'this role'}
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: T.muted, lineHeight: 1.55, margin: '0 0 22px', maxWidth: 540 }}>
+                We&apos;ll build a full roadmap — resources, milestones, everything — for one skill at a time,
+                starting with the one that unblocks you fastest. Add the rest whenever you&apos;re ready.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 22 }}>
+                {choices.map((c, i) => {
+                    const isSelected = c.skill === selected
+                    const isTop = i === 0
+                    return (
+                        <button
+                            key={c.skill}
+                            onClick={() => onSelect(c.skill)}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 14,
+                                padding: '14px 16px', borderRadius: 10, textAlign: 'left',
+                                cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+                                background: isSelected ? T.blue50 : '#fff',
+                                border: `1.5px solid ${isSelected ? T.blue : T.line}`,
+                                transition: 'background .15s, border-color .15s',
+                            }}
+                        >
+                            <span style={{
+                                flexShrink: 0, width: 26, height: 26, borderRadius: 7,
+                                display: 'grid', placeItems: 'center',
+                                fontSize: '0.75rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                                background: isSelected ? T.blue : T.sand,
+                                color: isSelected ? '#fff' : T.muted,
+                            }}>
+                                {String(i + 1).padStart(2, '0')}
+                            </span>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '0.9375rem', fontWeight: 700, color: T.ink }}>{c.skill}</span>
+                                    {isTop && (
+                                        <span style={{
+                                            fontSize: '0.625rem', fontWeight: 800, padding: '2px 7px', borderRadius: 999,
+                                            background: T.blue, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase',
+                                        }}>Recommended</span>
+                                    )}
+                                </span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                                    <span style={{
+                                        fontSize: '0.6875rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                                        background: c.severity === 'hard_blocker' ? T.redBg : T.greenBg,
+                                        color: c.severity === 'hard_blocker' ? T.redText : T.greenText,
+                                    }}>
+                                        {c.severity === 'hard_blocker' ? 'Hard blocker' : 'Nice to have'}
+                                    </span>
+                                    {c.scoreImpact != null && (
+                                        <span style={{ fontSize: '0.75rem', color: T.muted, fontWeight: 600 }}>
+                                            +{c.scoreImpact}% match if closed
+                                        </span>
+                                    )}
+                                </span>
+                            </span>
+                            <span style={{
+                                flexShrink: 0, width: 20, height: 20, borderRadius: '50%',
+                                border: `2px solid ${isSelected ? T.blue : T.line}`,
+                                background: isSelected ? T.blue : 'transparent',
+                                display: 'grid', placeItems: 'center',
+                            }}>
+                                {isSelected && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />}
+                            </span>
+                        </button>
+                    )
+                })}
+            </div>
+
+            <button
+                onClick={onConfirm}
+                className="lp-cta"
+                style={{
+                    width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    padding: '13px 24px', borderRadius: 10,
+                    background: T.blue, color: '#fff', border: 'none', cursor: 'pointer',
+                    fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.005em',
+                    boxShadow: '0 8px 20px -8px rgba(37,99,235,.45)',
+                }}
+            >
+                <Icon.Sparkles width={14} height={14} /> Start with {selected}
+            </button>
+            {choices.length > 1 && (
+                <p style={{ fontSize: '0.75rem', color: T.muted2, textAlign: 'center', margin: '10px 0 0' }}>
+                    The other {choices.length - 1} will be here whenever you want them.
+                </p>
+            )}
         </div>
     )
 }
@@ -3381,13 +3667,43 @@ function LearningPage() {
     const [paths, setPaths] = useState<LearningPath[]>([])
     const [missingSkills, setMissingSkills] = useState<string[]>([])
     const [gaps, setGaps] = useState<import('@/lib/types').JobGap[] | null>(null)
-    const [phase, setPhase] = useState<'loading' | 'idle' | 'history' | 'generating' | 'done' | 'error'>('loading')
+    const [phase, setPhase] = useState<'loading' | 'idle' | 'picking' | 'history' | 'generating' | 'done' | 'error'>('loading')
     const [error, setError] = useState<string | null>(null)
     const [activeId, setActiveId] = useState<string | null>(null)
     const [summaries, setSummaries] = useState<LearningPathSummary[]>([])
     // Guards on-demand generation so it fires at most once per (job, skill) — prevents a
     // duplicate paid generation when the load effect runs twice (auth hydration / re-render).
     const genTriggeredRef = useRef<string | null>(null)
+
+    // Ranked missing-skill choices for the "pick your first skill" screen —
+    // hard blockers first, then by score impact (mirrors the ordering already
+    // shown on AI Matches, so the recommendation feels consistent).
+    const rankedSkillChoices = useMemo(() => {
+        if (gaps && gaps.length > 0) {
+            return [...gaps]
+                .sort((a, b) => {
+                    const aHard = a.severity === 'hard_blocker' ? 0 : 1
+                    const bHard = b.severity === 'hard_blocker' ? 0 : 1
+                    if (aHard !== bHard) return aHard - bHard
+                    return (b.score_impact ?? 0) - (a.score_impact ?? 0)
+                })
+                .map(g => ({ skill: g.skill, severity: g.severity, scoreImpact: g.score_impact ?? null }))
+        }
+        return missingSkills.map(s => ({ skill: s, severity: 'nice_to_have' as const, scoreImpact: null as number | null }))
+    }, [gaps, missingSkills])
+    const [pickedSkill, setPickedSkill] = useState<string | null>(null)
+
+    // Gaps that don't have a generated roadmap yet — still shown in the skill
+    // list (so the user can see everything left to close) but not auto-built;
+    // clicking one calls handleGenerateOne on demand, same as "Learn it".
+    const pendingSkillChoices = useMemo(
+        () => rankedSkillChoices.filter(c => !findPathForSkill(paths, c.skill)),
+        [rankedSkillChoices, paths]
+    )
+    // A skill the user selected from the rail that has no roadmap yet — shown
+    // on the right with an explicit "Generate roadmap" button, instead of
+    // clicking the rail item immediately triggering a paid generation.
+    const [pendingSelectedSkill, setPendingSelectedSkill] = useState<string | null>(null)
 
     const { progress, toggle } = useProgress(jobId)
 
@@ -3523,51 +3839,13 @@ function LearningPage() {
         }
 
         // Plain `?jobId=` deep-link (the "Generate full learning plan" button on
-        // AI Matches) with nothing generated yet for this job — previously this
-        // landed on the empty "No Learning Paths Yet" state, which told the user
-        // to go back to AI Matches and click "Generate Learning Path" again, even
-        // though that's exactly the click that brought them here. Auto-trigger
-        // the full-plan generation instead, same on-demand pattern as
-        // generateForSkill above, using the just-fetched job/gap data directly
-        // rather than reading missingSkills/gaps React state (not yet committed
-        // this tick).
-        const genKey = `${jobId}::__full__`
-        if (genTriggeredRef.current === genKey) {
-            setPhase('generating')
-            return
-        }
-        genTriggeredRef.current = genKey
-        setPhase('generating')
-        try {
-            let company_research = null
-            if (jobObj?.company) {
-                const { data: cr } = await supabase
-                    .from('company_research')
-                    .select('overview, tech_stack, culture, industry')
-                    .ilike('company_name', `%${jobObj.company}%`)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .single()
-                if (cr) company_research = cr
-            }
-            await triggerLearningPathGeneration({
-                userId: user?.id ?? '',
-                jobId,
-                resumeId: getPrimaryResumeId() ?? undefined,
-                missingSkills: mMissing.length > 0 ? mMissing : ['General IT Skills'],
-                gaps: mGaps && mGaps.length > 0 ? mGaps : undefined,
-                jobTitle: jobObj?.title ?? 'Software Engineer',
-                companyName: jobObj?.company ?? 'the company',
-                company_research,
-            })
-            const fresh = await fetchLearningPaths(user?.id ?? '', jobId)
-            setPaths(fresh)
-            if (fresh.length > 0) setActiveId(fresh[0].id)
-            setPhase(fresh.length > 0 ? 'done' : 'idle')
-        } catch (e) {
-            setError("We couldn't generate your learning path. Please try again.")
-            setPhase('error')
-        }
+        // AI Matches) with nothing generated yet for this job. Previously this
+        // auto-generated a full roadmap for EVERY missing skill at once — one AI
+        // call per skill, most of which the user never acts on. Now: show a
+        // picker (pre-selected to the highest-impact skill) and let the user
+        // choose what to start with; handleGenerateOne below does the actual
+        // one-skill generation once they confirm.
+        setPhase((mMissing.length > 0 || (mGaps && mGaps.length > 0)) ? 'picking' : 'idle')
     }, [jobId, user?.id, skillParam])
 
     useEffect(() => { loadData() }, [loadData])
@@ -3607,6 +3885,50 @@ function LearningPage() {
         }
     }
 
+    // Generates a roadmap for exactly ONE skill — the on-demand path used by
+    // both the "Learn it" deep-link (existing) and the skill picker below
+    // (new). Every AI call stays scoped to a skill the user actually chose.
+    const handleGenerateOne = async (skill: string) => {
+        if (!jobId || !skill) return
+        setPhase('generating')
+        try {
+            let company_research = null
+            if (job?.company) {
+                const { data: cr } = await supabase
+                    .from('company_research')
+                    .select('overview, tech_stack, culture, industry')
+                    .ilike('company_name', `%${job.company}%`)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single()
+                if (cr) company_research = cr
+            }
+            const w = skill.toLowerCase()
+            const matchedGap = (gaps || []).find(g => {
+                const gs = String(g?.skill || '').toLowerCase()
+                return gs === w || gs.includes(w) || w.includes(gs)
+            })
+            await triggerLearningPathGeneration({
+                userId: user?.id ?? '',
+                jobId,
+                resumeId: getPrimaryResumeId() ?? undefined,
+                missingSkills: [skill],
+                gaps: matchedGap ? [matchedGap] : undefined,
+                jobTitle: job?.title ?? 'Software Engineer',
+                companyName: job?.company ?? 'the company',
+                company_research,
+            })
+            const fresh = await fetchLearningPaths(user?.id ?? '', jobId)
+            setPaths(fresh)
+            const m = findPathForSkill(fresh, skill)
+            setActiveId((m ?? fresh[0])?.id ?? null)
+            setPhase(fresh.length > 0 ? 'done' : 'idle')
+        } catch (e) {
+            setError("We couldn't generate your learning path. Please try again.")
+            setPhase('error')
+        }
+    }
+
     const orderedPaths = useMemo(() => {
         const rank: Record<string, number> = { high: 0, medium: 1, low: 2 }
         return [...paths].sort((a, b) => {
@@ -3618,7 +3940,11 @@ function LearningPage() {
         })
     }, [paths])
 
-    const activePath = orderedPaths.find(p => p.id === activeId) ?? orderedPaths[0] ?? null
+    // Falls back to the first generated path ONLY when nothing is explicitly
+    // selected — a cleared activeId while a pending (ungenerated) skill is
+    // selected must NOT snap back to showing the first generated path instead.
+    const activePath = orderedPaths.find(p => p.id === activeId)
+        ?? (pendingSelectedSkill ? null : orderedPaths[0] ?? null)
     const libProgress = useLibraryProgress(summaries)
 
     /* ─── MOBILE LAYOUT ─────────────────────────────────────────────────────── */
@@ -3685,6 +4011,23 @@ function LearningPage() {
                             ))}
                         </div>
                     </div>
+                </div>
+            )
+        }
+
+        // ── Skill picker ──
+        if (phase === 'picking') {
+            const choices = rankedSkillChoices
+            const sel = pickedSkill ?? choices[0]?.skill ?? ''
+            return (
+                <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', padding: '20px 14px 40px' }}>
+                    <SkillPickerState
+                        choices={choices}
+                        selected={sel}
+                        onSelect={setPickedSkill}
+                        onConfirm={() => handleGenerateOne(sel)}
+                        jobTitle={job?.title}
+                    />
                 </div>
             )
         }
@@ -3801,6 +4144,52 @@ function LearningPage() {
         }
 
         // ── Active / Done ──
+        // ── Skill selected but not generated yet — Generate prompt ──
+        if (phase === 'done' && !activePath && pendingSelectedSkill) {
+            const choice = rankedSkillChoices.find(c => c.skill === pendingSelectedSkill) ?? null
+            return (
+                <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '16px 16px 0' }}>
+                        <button
+                            onClick={() => {
+                                setPendingSelectedSkill(null)
+                                if (!activeId && orderedPaths.length > 0) setActiveId(orderedPaths[0].id)
+                            }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: T.muted, border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
+                        >
+                            <Icon.ArrowLeft />Back
+                        </button>
+                    </div>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' }}>
+                    <div style={{ textAlign: 'center', maxWidth: 320 }}>
+                        <div style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            fontSize: '0.6875rem', fontWeight: 700, padding: '3px 10px', borderRadius: 999,
+                            background: choice?.severity === 'hard_blocker' ? T.redBg : T.greenBg,
+                            color: choice?.severity === 'hard_blocker' ? T.redText : T.greenText,
+                            letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14,
+                        }}>
+                            {choice?.severity === 'hard_blocker' ? 'Hard blocker' : 'Nice to have'}
+                        </div>
+                        <h2 style={{ fontSize: '1.375rem', fontWeight: 800, color: T.ink, letterSpacing: '-0.02em', margin: '0 0 10px' }}>
+                            {pendingSelectedSkill}
+                        </h2>
+                        <p style={{ fontSize: '0.875rem', color: T.muted, lineHeight: 1.55, margin: '0 0 22px' }}>
+                            No roadmap built yet for this skill{job?.title ? <> on {job.title}</> : ''}.
+                            {choice?.scoreImpact != null && <> Closing it is worth an estimated <b>+{choice.scoreImpact}% match</b>.</>}
+                        </p>
+                        <button
+                            onClick={() => handleGenerateOne(pendingSelectedSkill)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 10, background: T.blue, color: '#fff', border: 'none', cursor: 'pointer', fontSize: '0.9375rem', fontWeight: 700, fontFamily: 'inherit', boxShadow: '0 8px 20px -8px rgba(37,99,235,.45)' }}
+                        >
+                            <Icon.Sparkles width={14} height={14} /> Generate roadmap
+                        </button>
+                    </div>
+                    </div>
+                </div>
+            )
+        }
+
         if (phase !== 'done' || !activePath) return null
 
         const mPri = (activePath.importance ?? 'medium') as keyof typeof PRIORITY
@@ -3858,7 +4247,7 @@ function LearningPage() {
                             const pRes = Array.isArray(p.resources) ? p.resources.length : 0
                             const pDone = progress.get(p.skill_name)?.size ?? 0
                             return (
-                                <div key={p.id} onClick={() => setActiveId(p.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', borderRadius: 9, border: `1.5px solid ${isSel ? T.blue : T.line}`, background: isSel ? T.blue50 : '#fff', cursor: 'pointer', flexShrink: 0, transition: 'border-color .13s,background .13s' }}>
+                                <div key={p.id} onClick={() => { setActiveId(p.id); setPendingSelectedSkill(null) }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', borderRadius: 9, border: `1.5px solid ${isSel ? T.blue : T.line}`, background: isSel ? T.blue50 : '#fff', cursor: 'pointer', flexShrink: 0, transition: 'border-color .13s,background .13s' }}>
                                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
                                     <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, color: T.muted2, flexShrink: 0 }}>{String(idx + 1).padStart(2, '0')}</span>
                                     <div style={{ minWidth: 0 }}>
@@ -3868,10 +4257,27 @@ function LearningPage() {
                                 </div>
                             )
                         })}
+                        {/* Fill remaining strip space with a few not-yet-generated
+                            skills too, so the user sees what's left without
+                            always having to open "All". Selecting one shows the
+                            Generate-roadmap prompt, same as tapping it in "All". */}
+                        {pendingSkillChoices.slice(0, 3).map((c, i) => {
+                            const isSel = pendingSelectedSkill === c.skill
+                            return (
+                                <div key={c.skill} onClick={() => { setPendingSelectedSkill(c.skill); setActiveId(null) }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', borderRadius: 9, border: `1.5px dashed ${isSel ? T.blue : T.line}`, background: isSel ? T.blue50 : '#fff', cursor: 'pointer', flexShrink: 0, transition: 'border-color .13s,background .13s' }}>
+                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: c.severity === 'hard_blocker' ? T.redText : T.greenText, flexShrink: 0 }} />
+                                    <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, color: T.muted2, flexShrink: 0 }}>{String(orderedPaths.length + i + 1).padStart(2, '0')}</span>
+                                    <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: '11.5px', fontWeight: 700, color: isSel ? T.blue : T.ink, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }}>{c.skill}</div>
+                                        <div style={{ fontSize: 10, color: T.muted, fontFamily: 'var(--font-mono,monospace)' }}>Not generated</div>
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                     <div onClick={() => setShowAllSkillsSheet(true)} style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, padding: '8px 10px', borderLeft: `1px solid ${T.line}`, background: T.blue50, cursor: 'pointer', minWidth: 58 }}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-                        <span style={{ fontSize: '9.5px', fontWeight: 700, color: T.blue, textAlign: 'center', lineHeight: 1.3 }}>All {orderedPaths.length}</span>
+                        <span style={{ fontSize: '9.5px', fontWeight: 700, color: T.blue, textAlign: 'center', lineHeight: 1.3 }}>All {orderedPaths.length + pendingSkillChoices.length}</span>
                     </div>
                 </div>
 
@@ -4085,7 +4491,7 @@ function LearningPage() {
                         <div style={{ width: 36, height: 4, borderRadius: 99, background: T.line, margin: '12px auto 0', flexShrink: 0 }} />
                         <div style={{ padding: '12px 16px 10px', borderBottom: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                             <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, flex: 1 }}>All Skill Gaps</span>
-                            <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: T.sand, color: T.muted }}>{orderedPaths.length}</span>
+                            <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: T.sand, color: T.muted }}>{orderedPaths.length + pendingSkillChoices.length}</span>
                             <button onClick={() => setShowAllSkillsSheet(false)} style={{ width: 27, height: 27, borderRadius: 8, background: T.sand, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                             </button>
@@ -4097,7 +4503,7 @@ function LearningPage() {
                                 const pRes = Array.isArray(p.resources) ? p.resources.length : 0
                                 const pDone = progress.get(p.skill_name)?.size ?? 0
                                 return (
-                                    <div key={p.id} onClick={() => { setActiveId(p.id); setShowAllSkillsSheet(false) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 10, border: `1.5px solid ${isOn ? T.blue : T.line}`, background: isOn ? T.blue50 : '#fff', cursor: 'pointer' }}>
+                                    <div key={p.id} onClick={() => { setActiveId(p.id); setShowAllSkillsSheet(false); setPendingSelectedSkill(null) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 10, border: `1.5px solid ${isOn ? T.blue : T.line}`, background: isOn ? T.blue50 : '#fff', cursor: 'pointer' }}>
                                         <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '9.5px', fontWeight: 700, color: T.muted2, flexShrink: 0, minWidth: 18 }}>{String(idx + 1).padStart(2, '0')}</span>
                                         <div style={{ width: 7, height: 7, borderRadius: '50%', background: sp.dot, flexShrink: 0 }} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -4108,6 +4514,21 @@ function LearningPage() {
                                     </div>
                                 )
                             })}
+                            {pendingSkillChoices.map((c, i) => (
+                                <div
+                                    key={c.skill}
+                                    onClick={() => { setShowAllSkillsSheet(false); setPendingSelectedSkill(c.skill); setActiveId(null) }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 10, border: `1.5px dashed ${T.line}`, background: '#fff', cursor: 'pointer' }}
+                                >
+                                    <span style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: '9.5px', fontWeight: 700, color: T.muted2, flexShrink: 0, minWidth: 18 }}>{String(orderedPaths.length + i + 1).padStart(2, '0')}</span>
+                                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: c.severity === 'hard_blocker' ? T.redText : T.greenText, flexShrink: 0 }} />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{c.skill}</div>
+                                        <div style={{ fontSize: 11, color: T.muted, fontWeight: 600 }}>Not generated yet</div>
+                                    </div>
+                                    <Icon.Sparkles width={13} height={13} style={{ color: T.muted2, flexShrink: 0 }} />
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </>
@@ -4225,6 +4646,18 @@ function LearningPage() {
     }
     if (phase === 'history') return <LearningHistoryIndex summaries={summaries} initialSection={sectionParam} />
     if (phase === 'generating') return renderCenteredState(<GeneratingState />)
+    if (phase === 'picking') {
+        const sel = pickedSkill ?? rankedSkillChoices[0]?.skill ?? ''
+        return renderCenteredState(
+            <SkillPickerState
+                choices={rankedSkillChoices}
+                selected={sel}
+                onSelect={setPickedSkill}
+                onConfirm={() => handleGenerateOne(sel)}
+                jobTitle={job?.title}
+            />
+        )
+    }
     if (phase === 'idle') return renderCenteredState(<EmptyState onGenerate={handleGenerate} count={missingSkills.length} />)
     if (phase === 'error') return renderCenteredState(
         <div style={{
@@ -4248,12 +4681,18 @@ function LearningPage() {
         </div>
     )
 
-    /* ─── Split layout: phase === 'done' ─── */
+    /* ─── Split layout: phase === 'done' ───
+       Fixed height + hidden overflow on the row, so the left rail and right
+       panel each get their own independent scroll instead of the whole page
+       (and the sidebar) scrolling together — DashboardLayout's <main> doesn't
+       actually clip full-bleed pages (minHeight, not height), so this
+       container has to be the one that bounds itself to the viewport. */
     return (
         <div style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 340px) minmax(0, 1fr)',
-            minHeight: 'calc(100vh - 64px)',
+            height: 'calc(100vh - 64px)',
+            overflow: 'hidden',
             background: T.bgAlt,
             color: T.ink,
             fontFamily: "'Inter', system-ui, sans-serif",
@@ -4264,9 +4703,7 @@ function LearningPage() {
             <aside style={{
                 background: '#fff',
                 borderRight: `1px solid ${T.line2}`,
-                position: 'sticky',
-                top: 64,
-                height: 'calc(100vh - 64px)',
+                height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
@@ -4315,7 +4752,8 @@ function LearningPage() {
                         marginBottom: 6,
                     }}>Your skill gaps</h2>
                     <div style={{ fontSize: '0.75rem', color: T.muted, lineHeight: 1.5 }}>
-                        {orderedPaths.length} skill{orderedPaths.length !== 1 ? 's' : ''} detected
+                        {orderedPaths.length + pendingSkillChoices.length} skill{(orderedPaths.length + pendingSkillChoices.length) !== 1 ? 's' : ''} detected
+                        {pendingSkillChoices.length > 0 && <> · {orderedPaths.length} generated</>}
                         {job?.title && <> for <b style={{ color: T.ink2, fontWeight: 700 }}>{job.title}</b></>}
                         {job?.company && <> at <b style={{ color: T.ink2, fontWeight: 700 }}>{job.company}</b></>}
                     </div>
@@ -4353,20 +4791,36 @@ function LearningPage() {
                             idx={idx}
                             isActive={p.id === activePath?.id}
                             doneCount={progress.get(p.skill_name)?.size ?? 0}
-                            onClick={() => setActiveId(p.id)}
+                            onClick={() => { setActiveId(p.id); setPendingSelectedSkill(null) }}
+                        />
+                    ))}
+                    {pendingSkillChoices.map((c, i) => (
+                        <UngeneratedSkillRailItem
+                            key={c.skill}
+                            choice={c}
+                            idx={orderedPaths.length + i}
+                            isActive={pendingSelectedSkill === c.skill}
+                            onSelect={() => { setPendingSelectedSkill(c.skill); setActiveId(null) }}
                         />
                     ))}
                 </ul>
             </aside>
 
             {/* ── RIGHT PANEL ── */}
-            <div style={{ minWidth: 0, overflowX: 'hidden' }}>
+            <div style={{ minWidth: 0, height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
                 {activePath ? (
                     <SkillDetail
                         path={activePath}
                         job={job}
                         completedSet={progress.get(activePath.skill_name) ?? new Set<number>()}
                         onToggle={(i) => toggle(activePath.skill_name, i)}
+                    />
+                ) : pendingSelectedSkill ? (
+                    <PendingSkillPanel
+                        skill={pendingSelectedSkill}
+                        choice={rankedSkillChoices.find(c => c.skill === pendingSelectedSkill) ?? null}
+                        job={job}
+                        onGenerate={() => handleGenerateOne(pendingSelectedSkill)}
                     />
                 ) : (
                     <div style={{ padding: 48, color: T.muted }}>Select a skill from the left to see resources.</div>
