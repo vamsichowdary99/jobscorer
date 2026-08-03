@@ -82,7 +82,6 @@ function useInjectStyles() {
         const style = document.createElement('style')
         style.id = 'optimize-keyframes'
         style.textContent = `
-            @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;600&display=swap');
             @keyframes optCardIn { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
             @keyframes optPulse { 0%,100% { opacity:0.4 } 50% { opacity:1 } }
             @keyframes optSlideUp { from { opacity:0; transform:translateY(20px) } to { opacity:1; transform:translateY(0) } }
@@ -2276,10 +2275,13 @@ function OptimizePageInner() {
                             try { sd = JSON.parse(sd) } catch { sd = null }
                         }
                     }
-                    const rawName = r.original_filename
-                        || sd?.personal_info?.full_name
+                    // Parsed candidate name takes priority — the raw uploaded
+                    // filename (e.g. "cv_1782134892671_...pdf") is only a
+                    // fallback for resumes the parser couldn't extract a name from.
+                    const rawName = sd?.personal_info?.full_name
                         || sd?.name
                         || sd?.basics?.name
+                        || r.original_filename
                         || null
                     const displayName = cleanDisplayName(rawName)
                     return { id: r.id, file_name: displayName, created_at: r.created_at ?? '' }

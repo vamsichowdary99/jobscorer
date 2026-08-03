@@ -18,22 +18,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const limited = await requireUserLimit(user.id, 'resume')
-    if (limited) return limited
-
-    // Stored-resource cap: Free 1 / Pro 5 / Max 20 résumés. Delete one to free a slot.
-    const capped = await checkStoredLimit(user.id, 'resumes')
-    if (capped) return capped
-
-    const webhookUrl = process.env.N8N_RESUME_WEBHOOK_URL
-    if (!webhookUrl) {
-        console.error('[resume-upload] N8N_RESUME_WEBHOOK_URL not configured')
-        return NextResponse.json(
-            { success: false, error: 'Resume upload is not configured' },
-            { status: 500 }
-        )
-    }
-
     let body: Record<string, unknown>
     try {
         body = await request.json()
@@ -68,6 +52,52 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
             { success: false, error: 'File must be non-empty and at most 10MB' },
             { status: 400 }
+        )
+    }
+
+    // Retry guard: the n8n parse takes 15-35s, and a dropped mobile connection
+    // during that window makes the client think the upload failed when it's
+    // still running server-side — the user then retaps upload with the same
+    // file. Without this check, checkStoredLimit's count-then-n8n-inserts-later
+    // race lets every retry slip through and each one creates a real duplicate
+    // resume row. Same user + same filename + created moments ago = a retry of
+    // an in-flight or just-finished upload, not a new resume — reuse it.
+    const RETRY_WINDOW_MS = 3 * 60 * 1000
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: recentDupe } = await (supabase as any)
+        .from('resumes')
+        .select('id, parsing_confidence')
+        .eq('user_id', user.id)
+        .eq('original_filename', filename)
+        .gte('created_at', new Date(Date.now() - RETRY_WINDOW_MS).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+    if (recentDupe) {
+        return NextResponse.json({
+            success: true,
+            data: {
+                resume_id: recentDupe.id,
+                parsing_confidence: recentDupe.parsing_confidence ?? 0,
+                parsed_preview: {},
+            },
+        })
+    }
+
+    const limited = await requireUserLimit(user.id, 'resume')
+    if (limited) return limited
+
+    // Stored-resource cap: Free 1 / Pro 5 / Max 20 résumés. Delete one to free a slot.
+    const capped = await checkStoredLimit(user.id, 'resumes')
+    if (capped) return capped
+
+    const webhookUrl = process.env.N8N_RESUME_WEBHOOK_URL
+    if (!webhookUrl) {
+        console.error('[resume-upload] N8N_RESUME_WEBHOOK_URL not configured')
+        return NextResponse.json(
+            { success: false, error: 'Resume upload is not configured' },
+            { status: 500 }
         )
     }
 

@@ -46,6 +46,17 @@ export function takePendingUpload(): PendingUpload | null {
     }
 }
 
+/** Discards any pending upload without consuming it. sessionStorage is
+ *  scoped to the browser tab, not to whichever account is logged in — so if
+ *  one account starts the landing-page upload and a *different* account then
+ *  signs into the same tab within the 10-minute window, that second account
+ *  would otherwise silently auto-upload the first account's file. Call this
+ *  on sign-out and on detecting an account switch to close that gap. */
+export function clearPendingUpload() {
+    if (typeof window === 'undefined') return
+    try { window.sessionStorage.removeItem(KEY) } catch { /* ignore */ }
+}
+
 export function base64ToFile(entry: PendingUpload): File {
     const bytes = atob(entry.base64)
     const buf = new Uint8Array(bytes.length)
