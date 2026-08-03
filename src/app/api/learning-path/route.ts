@@ -19,9 +19,12 @@ export async function GET(request: NextRequest) {
 
     const job_id = request.nextUrl.searchParams.get('job_id')
     const summary = request.nextUrl.searchParams.get('summary') === '1'
+    // General mode: profile-upskilling paths, scoped by resume instead of job (job_id IS NULL).
+    const general = request.nextUrl.searchParams.get('general') === '1'
+    const resume_id_param = request.nextUrl.searchParams.get('resume_id')
 
-    if (!summary && !job_id) {
-        return NextResponse.json({ error: 'Missing job_id (or pass summary=1)' }, { status: 400 })
+    if (!summary && !job_id && !(general && resume_id_param)) {
+        return NextResponse.json({ error: 'Missing job_id, or general=1&resume_id=..., or pass summary=1' }, { status: 400 })
     }
 
     const supabase = createClient(
@@ -41,7 +44,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: error.message }, { status: 500 })
         }
 
-        const byJob = new Map<string, {
+        type SummaryEntry = {
             job_id: string
             resume_id: string | null
             skill_count: number
@@ -50,13 +53,22 @@ export async function GET(request: NextRequest) {
             standard_count: number
             optional_count: number
             latest_created_at: string
-        }>()
+            is_general?: boolean
+        }
+        const byJob = new Map<string, SummaryEntry>()
+        // Profile-upskilling rows (job_id IS NULL) have no job to group by — group by
+        // resume instead, so "Learn Skills" clicks from the upload page's profile
+        // projects still show up as their own card in the library.
+        const byResume = new Map<string, SummaryEntry>()
 
         type LpRow = { id: string; job_id: string | null; resume_id: string | null; skill_name: string | null; importance: string | null; severity: string | null; priority_rank: number | null; created_at: string }
         for (const r of (data ?? []) as unknown as LpRow[]) {
-            if (!r.job_id) continue
-            const e = byJob.get(r.job_id) ?? {
-                job_id: r.job_id,
+            const isGeneral = !r.job_id
+            const groupKey = isGeneral ? (r.resume_id ?? '') : r.job_id!
+            if (isGeneral && !groupKey) continue // no job and no resume to key by — can't group, skip
+            const map = isGeneral ? byResume : byJob
+            const e = map.get(groupKey) ?? {
+                job_id: isGeneral ? `general:${groupKey}` : groupKey,
                 // resume_id captured from the FIRST row in the iteration (which is the most recent
                 // due to the ORDER BY created_at DESC). Subsequent rows for the same job in the
                 // same generation share the same resume_id; older generations may differ but the
@@ -68,6 +80,7 @@ export async function GET(request: NextRequest) {
                 standard_count: 0,
                 optional_count: 0,
                 latest_created_at: r.created_at,
+                is_general: isGeneral,
             }
             e.skill_count++
             if (r.skill_name && e.top_skills.length < 3) e.top_skills.push(r.skill_name)
@@ -77,22 +90,20 @@ export async function GET(request: NextRequest) {
             else if (sev === 'low' || sev === 'nice_to_have') e.optional_count++
             else e.standard_count++
             if (r.created_at > e.latest_created_at) e.latest_created_at = r.created_at
-            byJob.set(r.job_id, e)
+            map.set(groupKey, e)
         }
 
         const jobIds = [...byJob.keys()]
-        if (jobIds.length === 0) {
-            return NextResponse.json({ summaries: [] })
-        }
-
-        const { data: jobs } = await supabase
-            .from('jobs')
-            .select('id, title, company, location, source, source_url, experience_level')
-            .in('id', jobIds)
+        const { data: jobs } = jobIds.length > 0
+            ? await supabase
+                .from('jobs')
+                .select('id, title, company, location, source, source_url, experience_level')
+                .in('id', jobIds)
+            : { data: [] }
         const jobMap = new Map((jobs ?? []).map(j => [j.id, j]))
 
-        // Fetch resume names for all referenced resumes in one query.
-        const resumeIds = [...new Set([...byJob.values()].map(e => e.resume_id).filter((v): v is string => !!v))]
+        // Fetch resume names for all referenced resumes in one query (both job-based and general entries).
+        const resumeIds = [...new Set([...byJob.values(), ...byResume.values()].map(e => e.resume_id).filter((v): v is string => !!v))]
         const resumeMap = new Map<string, { id: string; original_filename: string | null; is_primary: boolean | null }>()
         if (resumeIds.length > 0) {
             const { data: resumes } = await supabase
@@ -104,10 +115,10 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        const summaries = [...byJob.values()]
+        const summaries = [...byJob.values(), ...byResume.values()]
             .map(e => ({
                 ...e,
-                job: jobMap.get(e.job_id) ?? null,
+                job: e.is_general ? null : (jobMap.get(e.job_id) ?? null),
                 resume: e.resume_id ? (resumeMap.get(e.resume_id) ?? null) : null,
             }))
             .sort((a, b) => b.latest_created_at.localeCompare(a.latest_created_at))
@@ -115,12 +126,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ summaries })
     }
 
-    // ── Detail mode: existing per-skill rows for the given job ──────────────
-    const { data, error } = await supabase
+    // ── Detail mode: per-skill rows for the given job, or (general mode) for a resume's profile-upskilling projects ──
+    let detailQuery = supabase
         .from('learning_paths')
         .select('id, skill_name, importance, why_it_matters, time_estimate, resources, prerequisites, key_takeaways, severity, priority_rank, provider, cost_inr, duration_weeks, india_specific, fresher_friendly, milestone_check, next_step_action, rationale, created_at')
         .eq('user_id', user_id)
-        .eq('job_id', job_id!)
+    detailQuery = general
+        ? detailQuery.is('job_id', null).eq('resume_id', resume_id_param!)
+        : detailQuery.eq('job_id', job_id!)
+    const { data, error } = await detailQuery
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
@@ -168,8 +182,11 @@ export async function POST(request: NextRequest) {
     const hasGaps = Array.isArray(gaps) && gaps.length > 0
     const hasMissing = Array.isArray(missing_skills) && missing_skills.length > 0
 
-    if (!job_id || (!hasGaps && !hasMissing)) {
-        return NextResponse.json({ error: 'Missing required fields: job_id, and one of gaps[] or missing_skills[]' }, { status: 400 })
+    // job_id is required for a job-scoped path; a profile-upskilling project (no job)
+    // must instead supply resume_id, since job_id is a NOT NULL-in-spirit FK to `jobs`
+    // and general-mode rows are looked up by resume_id instead.
+    if ((!job_id && !resume_id) || (!hasGaps && !hasMissing)) {
+        return NextResponse.json({ error: 'Missing required fields: job_id or resume_id, and one of gaps[] or missing_skills[]' }, { status: 400 })
     }
 
     if (typeof resume_id === 'string' && resume_id) {
@@ -196,7 +213,7 @@ export async function POST(request: NextRequest) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 user_id,
-                job_id,
+                job_id: typeof job_id === 'string' && job_id ? job_id : null,
                 resume_id: typeof resume_id === 'string' ? resume_id : undefined,
                 gaps: hasGaps ? gaps : undefined,
                 missing_skills: hasMissing ? missing_skills : undefined,

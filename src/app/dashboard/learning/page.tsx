@@ -7,7 +7,7 @@ import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
-    fetchLearningPaths, triggerLearningPathGeneration, fetchLearningPathSummaries, getPrimaryResumeId, type LearningPathSummary,
+    fetchLearningPaths, fetchGeneralLearningPaths, triggerLearningPathGeneration, fetchLearningPathSummaries, getPrimaryResumeId, type LearningPathSummary,
     fetchBuildPlanProjectSummaries, fetchProjectRoadmaps, generateProjectRoadmap, fetchProjectRoadmapDetail, startProjectRoadmap, saveMilestoneProgress,
     projectCoachTeachMe, projectCoachStuck, projectCoachReviewWork, completeMilestone, fetchProjectEvidence, fetchUserAchievements,
     type BuildPlanProjectSummary, type ProjectRoadmapSummary, type ProjectMilestoneWithProgress,
@@ -137,10 +137,6 @@ function useProgress(jobId: string | null) {
 function useStyles() {
     useEffect(() => {
         if (document.getElementById('lp-split-styles')) return
-        const link = document.createElement('link')
-        link.rel = 'stylesheet'
-        link.href = 'https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap'
-        document.head.appendChild(link)
 
         const el = document.createElement('style')
         el.id = 'lp-split-styles'
@@ -2750,11 +2746,23 @@ function MilestoneWorkspace({ roadmapId, onBack }: { roadmapId: string; onBack: 
 
 type LibFilter = 'all' | 'inprogress' | 'complete' | 'new'
 
-function LearningHistoryIndex({ summaries, initialSection }: { summaries: LearningPathSummary[]; initialSection?: 'skills' | 'projects' }) {
+/** A "Learn Project" deep-link for a profile-upskilling project that has no
+ *  roadmap yet — carries the project's own data since there's no build-plan
+ *  recommendation row to look it up from. */
+type PendingProfileProject = {
+    resumeId: string
+    title: string
+    why: string
+    skillsGained: string[]
+    estimatedDays?: number
+    unlocksRoles?: string[]
+}
+
+function LearningHistoryIndex({ summaries, initialSection, initialRoadmapId }: { summaries: LearningPathSummary[]; initialSection?: 'skills' | 'projects'; initialRoadmapId?: string | null }) {
     const [filter, setFilter] = useState<LibFilter>('all')
     const [visible, setVisible] = useState(false)
     const [section, setSection] = useState<'skills' | 'projects'>(initialSection ?? 'skills')
-    const [activeRoadmapId, setActiveRoadmapId] = useState<string | null>(null)
+    const [activeRoadmapId, setActiveRoadmapId] = useState<string | null>(initialRoadmapId ?? null)
     // null = not fetched yet — badge shows a loading dash instead of a
     // misleading "0" while the eager fetch is still in flight.
     const [projectCount, setProjectCount] = useState<number | null>(null)
@@ -2921,9 +2929,9 @@ function LibraryEmptyState() {
 }
 
 function PathCard({ s, idx, visible, progress }: { s: LearningPathSummary; idx: number; visible: boolean; progress: number }) {
-    const company = s.job?.company ?? 'Unknown company'
+    const company = s.is_general ? 'Profile Upskilling' : (s.job?.company ?? 'Unknown company')
     const city = (s.job?.location?.split(',')[0] || '').trim()
-    const title = s.job?.title ?? 'Untitled role'
+    const title = s.is_general ? 'Skills you’re building' : (s.job?.title ?? 'Untitled role')
     const [a, b] = paletteFor(company)
     const total = s.skill_count
     const skillsShown = s.top_skills.slice(0, 3)
@@ -2931,10 +2939,13 @@ function PathCard({ s, idx, visible, progress }: { s: LearningPathSummary; idx: 
     const done = progress === 100
     const started = progress > 0
     const cta = done ? 'Review' : started ? 'Continue' : 'Open'
+    const href = s.is_general
+        ? `/dashboard/learning?general=1&resumeId=${encodeURIComponent(s.resume_id ?? '')}`
+        : `/dashboard/learning?jobId=${s.job_id}`
 
     return (
         <Link
-            href={`/dashboard/learning?jobId=${s.job_id}`}
+            href={href}
             className={'lib-card' + (visible ? ' visible' : '')}
             style={{ transitionDelay: visible ? `${idx * 60}ms` : '0ms' }}
         >
@@ -3037,7 +3048,14 @@ function PathCard({ s, idx, visible, progress }: { s: LearningPathSummary; idx: 
 
 /* ─── Projects section ───────────────────────────────────────── */
 /** Joins a build-plan project with its roadmap (if one has been generated yet). */
-type ProjectEntry = { key: string; summary: BuildPlanProjectSummary; roadmap: ProjectRoadmapSummary | null }
+type ProjectEntry = { key: string; summary: BuildPlanProjectSummary; roadmap: ProjectRoadmapSummary | null; isProfile?: boolean }
+
+// Mirrors slugifyProjectTitle() in /api/project-roadmap/route.ts and the n8n
+// "Validate & Extract" node — used by the top-level "Learn Project" confirm
+// screen to check whether a profile project's roadmap already exists.
+function slugifyProjectTitle(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60)
+}
 
 function ProjectsSection({ onOpen, onCount, active }: { onOpen: (roadmapId: string) => void; onCount: (n: number) => void; active?: boolean }) {
     const { user } = useAuth()
@@ -3053,14 +3071,43 @@ function ProjectsSection({ onOpen, onCount, active }: { onOpen: (roadmapId: stri
         Promise.all([fetchBuildPlanProjectSummaries(user.id), fetchProjectRoadmaps()]).then(([summaries, roadmaps]) => {
             console.log('[ProjectsSection] fetch resolved', { cancelled, summariesLen: summaries.length, roadmapsLen: roadmaps.length, t: Date.now() })
             if (cancelled) return
-            const joined = summaries.map(summary => {
+            const joined: ProjectEntry[] = summaries.map(summary => {
                 const roadmap = roadmaps.find(r =>
                     r.resume_id === summary.resume_id && r.job_id === summary.job_id && r.build_plan_project_id === summary.build_plan_project_id
                 ) ?? null
                 return { key: `${summary.resume_id}:${summary.job_id}:${summary.build_plan_project_id}`, summary, roadmap }
             })
-            setEntries(joined)
-            onCount(joined.length)
+            // Profile-upskilling roadmaps (job_id null) have no build-plan summary to join
+            // against — they're always already generated by the time they land here
+            // (triggered from the resume upload page's "Learn Project" button), so
+            // synthesize a summary shape straight from the roadmap row instead.
+            const profileEntries: ProjectEntry[] = roadmaps
+                .filter(r => !r.job_id)
+                .map(r => ({
+                    key: `profile:${r.id}`,
+                    summary: {
+                        resume_id: r.resume_id ?? '',
+                        job_id: '',
+                        build_plan_project_id: r.build_plan_project_id,
+                        project: {
+                            id: r.build_plan_project_id,
+                            name: r.project_name,
+                            description: r.project_description ?? '',
+                            tech: r.tech_stack ?? [],
+                            addresses_gaps: [],
+                            severity_addressed: 'nice_to_have',
+                            impact_pct: r.expected_score_impact ?? 0,
+                            example_repos: [],
+                        },
+                        job_title: '',
+                        company_name: '',
+                    },
+                    roadmap: r,
+                    isProfile: true,
+                }))
+            const all = [...joined, ...profileEntries]
+            setEntries(all)
+            onCount(all.length)
         }).catch((err) => {
             console.error('[ProjectsSection] fetch REJECTED', err, { cancelled, t: Date.now() })
             if (!cancelled) { setEntries([]); onCount(0) }
@@ -3146,18 +3193,29 @@ function ProjectsSection({ onOpen, onCount, active }: { onOpen: (roadmapId: stri
                             <div className="lib-proj-header">
                                 <div className="lib-proj-meta">
                                     <span className={`lib-proj-badge ${badgeClass}`}>{badgeLabel}</span>
-                                    <span className="lib-proj-impact">
-                                        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                                            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                                            <polyline points="16 7 22 7 22 13" />
-                                        </svg>
-                                        +{p.impact_pct}% match score
-                                    </span>
+                                    {!entry.isProfile && (
+                                        <span className="lib-proj-impact">
+                                            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                                                <polyline points="16 7 22 7 22 13" />
+                                            </svg>
+                                            +{p.impact_pct}% match score
+                                        </span>
+                                    )}
                                 </div>
                                 <h3 className="lib-proj-title">{p.name}</h3>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8, fontSize: '.75rem', fontWeight: 700, color: T.blue }}>
-                                    <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="14" rx="2" /><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
-                                    <span>Built for {summary.company_name} · {summary.job_title}</span>
+                                    {entry.isProfile ? (
+                                        <>
+                                            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                                            <span>Level up your profile</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="14" rx="2" /><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                                            <span>Built for {summary.company_name} · {summary.job_title}</span>
+                                        </>
+                                    )}
                                 </div>
                                 <p className="lib-proj-desc">{p.description}</p>
                             </div>
@@ -3662,12 +3720,43 @@ function LearningPage() {
     // just ?section=projects — so it opens the Projects tab directly instead
     // of falling into the skills learning-path generation flow below.
     const sectionParam = searchParams.get('section') === 'projects' ? 'projects' : 'skills'
+    // "Learn Project" deep-link from the resume upload page's profile-upskilling
+    // recommendations — no job involved, so it's scoped by resume instead.
+    const generalParam = searchParams.get('general') === '1'
+    const resumeIdParam = searchParams.get('resumeId')
+    const projectTitleParam = searchParams.get('projectTitle')
+    const skillsParam = searchParams.get('skills')  // comma-separated skills_gained for the clicked project
+    const roadmapIdParam = searchParams.get('roadmapId')  // "Learn Project" deep-link: open this roadmap directly
+    // "Learn Project" deep-link (not-yet-generated case): the upload page passes the
+    // project's own data through the URL instead of generating anything itself — the
+    // Projects tab shows it as a pending card and only generates on explicit click.
+    const pendingProjectParam = searchParams.get('pendingProject') === '1'
+    const pendingProjectWhyParam = searchParams.get('projectWhy')
+    const pendingDaysParam = searchParams.get('days')
+    const pendingUnlocksParam = searchParams.get('unlocks')
+    const pendingProfileProject: PendingProfileProject | null = (pendingProjectParam && resumeIdParam && projectTitleParam && skillsParam)
+        ? {
+            resumeId: resumeIdParam,
+            title: projectTitleParam,
+            why: pendingProjectWhyParam || '',
+            skillsGained: skillsParam.split(',').map(s => s.trim()).filter(Boolean),
+            estimatedDays: pendingDaysParam ? Number(pendingDaysParam) || undefined : undefined,
+            unlocksRoles: pendingUnlocksParam ? pendingUnlocksParam.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+        }
+        : null
 
     const [job, setJob] = useState<Job | null>(null)
     const [paths, setPaths] = useState<LearningPath[]>([])
     const [missingSkills, setMissingSkills] = useState<string[]>([])
     const [gaps, setGaps] = useState<import('@/lib/types').JobGap[] | null>(null)
-    const [phase, setPhase] = useState<'loading' | 'idle' | 'picking' | 'history' | 'generating' | 'done' | 'error'>('loading')
+    const [phase, setPhase] = useState<'loading' | 'idle' | 'picking' | 'history' | 'generating' | 'done' | 'error' | 'general-confirm' | 'project-confirm' | 'project-workspace'>('loading')
+    // Skills a profile-upskilling project still needs generated — populated when
+    // landing in general mode with some/all skills missing; only spent on
+    // handleGenerateGeneral(), never automatically.
+    const [generalPendingSkills, setGeneralPendingSkills] = useState<string[]>([])
+    // "Learn Project" deep-link — the roadmap id once it exists (found already
+    // generated, or just generated via the confirm screen below).
+    const [pendingRoadmapId, setPendingRoadmapId] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [activeId, setActiveId] = useState<string | null>(null)
     const [summaries, setSummaries] = useState<LearningPathSummary[]>([])
@@ -3732,6 +3821,84 @@ function LearningPage() {
     }, [user?.id])
 
     const loadData = useCallback(async () => {
+        // "Learn Project" deep-link — dedicated single-project confirm screen, same
+        // shape as the general-mode skills flow below, instead of dropping the user
+        // into the Projects tab grid to find their own card among everyone else's.
+        if (pendingProjectParam && resumeIdParam && projectTitleParam) {
+            if (!user?.id) { setPhase('loading'); return }
+
+            const syntheticJob: Job = {
+                id: 'general', created_at: '', source: 'profile', source_id: 'general',
+                title: projectTitleParam, company: 'Build to level up your profile',
+                location: null, description: null, salary: null, posted_date: null, schedule_type: null,
+                source_url: null, experience_level: null, required_skills: null,
+            }
+            setJob(syntheticJob)
+
+            // Already generated (e.g. re-clicking "Learn project" after building it once)
+            // — jump straight into the milestone workspace instead of showing the confirm
+            // screen again.
+            const slug = `profile-${slugifyProjectTitle(projectTitleParam)}`
+            const allRoadmaps = await fetchProjectRoadmaps()
+            const existing = allRoadmaps.find(r => r.resume_id === resumeIdParam && r.build_plan_project_id === slug)
+            if (existing) {
+                setPendingRoadmapId(existing.id)
+                setPhase('project-workspace')
+                return
+            }
+
+            setPhase('project-confirm')
+            return
+        }
+
+        // Profile-upskilling project, no job attached — resume-scoped instead of job-scoped.
+        if (generalParam && resumeIdParam) {
+            if (!user?.id) { setPhase('loading'); return }
+
+            const syntheticJob: Job = {
+                id: 'general', created_at: '', source: 'profile', source_id: 'general',
+                title: projectTitleParam || 'Profile Upskilling Project', company: 'Build to level up your profile',
+                location: null, description: null, salary: null, posted_date: null, schedule_type: null,
+                source_url: null, experience_level: null, required_skills: null,
+            }
+            setJob(syntheticJob)
+
+            const skills = (skillsParam || '').split(',').map(s => s.trim()).filter(Boolean)
+            if (skills.length === 0) {
+                setError("This project didn't specify any skills to build a path for.")
+                setPhase('error')
+                return
+            }
+
+            // Scope to the skills THIS project actually asked for — a resume can have
+            // several profile projects, each generating its own general-mode rows, so
+            // "does the resume have any general rows at all" is the wrong check (it
+            // shows whichever project generated first, regardless of which one was
+            // clicked). Match by requested skill name instead.
+            const allGeneral = await fetchGeneralLearningPaths(user.id, resumeIdParam)
+            const matched = skills
+                .map(skill => findPathForSkill(allGeneral, skill))
+                .filter((p): p is LearningPath => !!p)
+            const matchedUnique = Array.from(new Map(matched.map(p => [p.id, p])).values())
+
+            if (matchedUnique.length >= skills.length) {
+                // Everything this project needs already exists — show it, no generation spent.
+                setPaths(matchedUnique)
+                setActiveId(matchedUnique[0]?.id ?? null)
+                setPhase('done')
+                return
+            }
+
+            // Something's missing — don't auto-generate (that's the whole point of this
+            // flow: the upload page only navigates here, it never spends a generation on
+            // its own). Show what's there, if anything, and require an explicit click.
+            setGeneralPendingSkills(skills)
+            setPaths(matchedUnique)
+            setActiveId(matchedUnique[0]?.id ?? null)
+            setPhase('general-confirm')
+            return
+        }
+
         if (!jobId) {
             // No job in URL → show the user's history of generated learning paths
             if (!user?.id) { setPhase('history'); return }
@@ -3846,7 +4013,7 @@ function LearningPage() {
         // choose what to start with; handleGenerateOne below does the actual
         // one-skill generation once they confirm.
         setPhase((mMissing.length > 0 || (mGaps && mGaps.length > 0)) ? 'picking' : 'idle')
-    }, [jobId, user?.id, skillParam])
+    }, [jobId, user?.id, skillParam, generalParam, resumeIdParam, projectTitleParam, skillsParam, pendingProjectParam])
 
     useEffect(() => { loadData() }, [loadData])
 
@@ -3881,6 +4048,62 @@ function LearningPage() {
             setPhase('done')
         } catch (e) {
             setError("We couldn't generate your learning path. Please try again.")
+            setPhase('error')
+        }
+    }
+
+    // Explicit-click generation for a profile-upskilling project's remaining
+    // skills — mirrors handleGenerate, but resume-scoped instead of job-scoped
+    // and only ever fired from the "general-confirm" screen's button, never
+    // automatically on page load.
+    const handleGenerateGeneral = async () => {
+        if (!resumeIdParam || generalPendingSkills.length === 0) return
+        setPhase('generating')
+        try {
+            await triggerLearningPathGeneration({
+                userId: user?.id ?? '',
+                resumeId: resumeIdParam,
+                missingSkills: generalPendingSkills,
+                jobTitle: projectTitleParam || 'Profile upskilling project',
+            })
+            const fresh = await fetchGeneralLearningPaths(user?.id ?? '', resumeIdParam)
+            const matched = generalPendingSkills
+                .map(skill => findPathForSkill(fresh, skill))
+                .filter((p): p is LearningPath => !!p)
+            const matchedUnique = Array.from(new Map(matched.map(p => [p.id, p])).values())
+            const shown = matchedUnique.length > 0 ? matchedUnique : fresh
+            setPaths(shown)
+            setActiveId(shown[0]?.id ?? null)
+            setPhase(shown.length > 0 ? 'done' : 'idle')
+        } catch (e) {
+            setError("We couldn't generate your learning path. Please try again.")
+            setPhase('error')
+        }
+    }
+
+    // "Learn Project" confirm screen's button — the only place a profile project's
+    // milestone roadmap actually gets generated; never fired automatically.
+    const handleGenerateProjectRoadmap = async () => {
+        if (!resumeIdParam || !projectTitleParam) return
+        setPhase('generating')
+        try {
+            const res = await generateProjectRoadmap({
+                resume_id: resumeIdParam,
+                project_title: projectTitleParam,
+                project_why: pendingProjectWhyParam || '',
+                skills_gained: pendingProfileProject?.skillsGained ?? [],
+                estimated_days: pendingProfileProject?.estimatedDays,
+                unlocks_roles: pendingProfileProject?.unlocksRoles,
+            })
+            if (res.success && res.roadmap_id) {
+                setPendingRoadmapId(res.roadmap_id)
+                setPhase('project-workspace')
+            } else {
+                setError(res.error || "We couldn't build the roadmap. Please try again.")
+                setPhase('error')
+            }
+        } catch (e) {
+            setError("We couldn't build the roadmap. Please try again.")
             setPhase('error')
         }
     }
@@ -3963,6 +4186,38 @@ function LearningPage() {
             )
         }
 
+        // ── Project workspace (milestone roadmap) — component is already responsive on its own ──
+        if (phase === 'project-workspace' && pendingRoadmapId) {
+            return <MilestoneWorkspace roadmapId={pendingRoadmapId} onBack={() => router.push('/dashboard/learning?section=projects')} />
+        }
+
+        // ── Confirm screens ("Learn skills" / "Learn project" from the upload page) ──
+        if (phase === 'general-confirm' || phase === 'project-confirm') {
+            const isProject = phase === 'project-confirm'
+            const count = isProject ? (pendingProfileProject?.skillsGained.length ?? 0) : generalPendingSkills.length
+            const onGenerate = isProject ? handleGenerateProjectRoadmap : handleGenerateGeneral
+            return (
+                <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                        <div style={{ width: 64, height: 64, borderRadius: 18, background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '2px dashed rgba(37,99,235,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={T.blue} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v4c3 3 9 3 12 0v-4" /></svg>
+                        </div>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: T.ink, marginBottom: 7, letterSpacing: '-0.02em' }}>
+                            {isProject ? 'No roadmap generated yet' : 'No learning paths generated yet'}
+                        </div>
+                        <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.65, maxWidth: 260, marginBottom: 22 }}>
+                            {job?.title && <>For <strong style={{ color: T.ink }}>{job.title}</strong>. </>}
+                            {count > 0 ? `${count} skill${count !== 1 ? 's' : ''} to build.` : 'Ready to generate.'}
+                        </div>
+                        <button onClick={onGenerate} style={{ padding: '11px 22px', background: T.blue, color: '#fff', border: 'none', borderRadius: 9, fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 14px -4px rgba(37,99,235,0.4)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <Icon.Sparkles width={13} height={13} />
+                            {isProject ? 'Generate roadmap' : 'Generate Learning Path'}
+                        </button>
+                    </div>
+                </div>
+            )
+        }
+
         // ── Empty ──
         const isEmptyState = (phase === 'history' && summaries.length === 0) || phase === 'idle'
         if (isEmptyState) {
@@ -4034,11 +4289,12 @@ function LearningPage() {
 
         // ── Error ──
         if (phase === 'error') {
+            const retry = pendingProjectParam ? handleGenerateProjectRoadmap : generalParam ? handleGenerateGeneral : handleGenerate
             return (
                 <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: T.bgAlt, minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 20px' }}>
                     <div style={{ width: '100%', maxWidth: 360, padding: '16px 20px', borderRadius: 12, background: T.redBg, border: '1px solid #FCA5A5' }}>
                         <div style={{ fontSize: '0.875rem', color: T.redText, fontWeight: 600, marginBottom: 10 }}>{error}</div>
-                        <button onClick={handleGenerate} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${T.redText}`, background: '#fff', color: T.redText, cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600, fontFamily: 'inherit' }}>Retry</button>
+                        <button onClick={retry} style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${T.redText}`, background: '#fff', color: T.redText, cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600, fontFamily: 'inherit' }}>Retry</button>
                     </div>
                 </div>
             )
@@ -4093,13 +4349,16 @@ function LearningPage() {
                             const sRingColor = spct < 20 ? '#dc2626' : spct < 60 ? '#f59e0b' : T.blue
                             const sCirc = 88
                             const sOffset = sCirc - (sCirc * spct / 100)
+                            const cardHref = s.is_general
+                                ? `/dashboard/learning?general=1&resumeId=${encodeURIComponent(s.resume_id ?? '')}`
+                                : `/dashboard/learning?jobId=${s.job_id}`
                             return (
-                                <div key={s.job_id} className="mob-lib-card" onClick={() => router.push(`/dashboard/learning?jobId=${s.job_id}`)} style={{ padding: 14, borderBottom: '1px solid #eef2f7', background: '#fff', cursor: 'pointer', transition: 'background 0.12s' }}>
+                                <div key={s.job_id} className="mob-lib-card" onClick={() => router.push(cardHref)} style={{ padding: 14, borderBottom: '1px solid #eef2f7', background: '#fff', cursor: 'pointer', transition: 'background 0.12s' }}>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
                                         {/* Left */}
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 4 }}>{s.job?.company ?? 'Unknown'}</div>
-                                            <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, letterSpacing: '-0.02em', marginBottom: 8, lineHeight: 1.25 }}>{s.job?.title ?? 'Untitled role'}</div>
+                                            <div style={{ fontFamily: 'var(--font-mono,monospace)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: T.muted2, marginBottom: 4 }}>{s.is_general ? 'Profile Upskilling' : (s.job?.company ?? 'Unknown')}</div>
+                                            <div style={{ fontSize: 15, fontWeight: 800, color: T.ink, letterSpacing: '-0.02em', marginBottom: 8, lineHeight: 1.25 }}>{s.is_general ? 'Skills you’re building' : (s.job?.title ?? 'Untitled role')}</div>
                                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const, alignItems: 'center' }}>
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 99, background: '#f1f5f9', border: `1px solid ${T.line}`, fontSize: 11, fontWeight: 600, color: T.muted }}>
                                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -4644,7 +4903,7 @@ function LearningPage() {
             </div>
         )
     }
-    if (phase === 'history') return <LearningHistoryIndex summaries={summaries} initialSection={sectionParam} />
+    if (phase === 'history') return <LearningHistoryIndex summaries={summaries} initialSection={sectionParam} initialRoadmapId={roadmapIdParam} />
     if (phase === 'generating') return renderCenteredState(<GeneratingState />)
     if (phase === 'picking') {
         const sel = pickedSkill ?? rankedSkillChoices[0]?.skill ?? ''
@@ -4659,27 +4918,35 @@ function LearningPage() {
         )
     }
     if (phase === 'idle') return renderCenteredState(<EmptyState onGenerate={handleGenerate} count={missingSkills.length} />)
-    if (phase === 'error') return renderCenteredState(
-        <div style={{
-            padding: '16px 20px', borderRadius: 12,
-            background: T.redBg, border: `1px solid #FCA5A5`,
-            display: 'flex', alignItems: 'center', gap: 12,
-        }}>
-            <span style={{ fontSize: '0.875rem', color: T.redText, fontWeight: 600 }}>
-                {error}
-            </span>
-            <button
-                onClick={handleGenerate}
-                style={{
-                    marginLeft: 'auto', padding: '7px 14px', borderRadius: 8,
-                    border: `1px solid ${T.redText}`, background: '#fff',
-                    color: T.redText, cursor: 'pointer',
-                    fontSize: '0.8125rem', fontWeight: 600,
-                    letterSpacing: '-0.005em',
-                }}
-            >Retry</button>
-        </div>
-    )
+    if (phase === 'general-confirm') return renderCenteredState(<EmptyState onGenerate={handleGenerateGeneral} count={generalPendingSkills.length} />)
+    if (phase === 'project-confirm') return renderCenteredState(<EmptyState onGenerate={handleGenerateProjectRoadmap} count={pendingProfileProject?.skillsGained.length ?? 0} />)
+    if (phase === 'project-workspace' && pendingRoadmapId) {
+        return <MilestoneWorkspace roadmapId={pendingRoadmapId} onBack={() => router.push('/dashboard/learning?section=projects')} />
+    }
+    if (phase === 'error') {
+        const retry = pendingProjectParam ? handleGenerateProjectRoadmap : generalParam ? handleGenerateGeneral : handleGenerate
+        return renderCenteredState(
+            <div style={{
+                padding: '16px 20px', borderRadius: 12,
+                background: T.redBg, border: `1px solid #FCA5A5`,
+                display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+                <span style={{ fontSize: '0.875rem', color: T.redText, fontWeight: 600 }}>
+                    {error}
+                </span>
+                <button
+                    onClick={retry}
+                    style={{
+                        marginLeft: 'auto', padding: '7px 14px', borderRadius: 8,
+                        border: `1px solid ${T.redText}`, background: '#fff',
+                        color: T.redText, cursor: 'pointer',
+                        fontSize: '0.8125rem', fontWeight: 600,
+                        letterSpacing: '-0.005em',
+                    }}
+                >Retry</button>
+            </div>
+        )
+    }
 
     /* ─── Split layout: phase === 'done' ───
        Fixed height + hidden overflow on the row, so the left rail and right

@@ -892,8 +892,20 @@ export async function fetchLearningPaths(userId: string, jobId: string): Promise
     return json.paths ?? []
 }
 
+/** Profile-upskilling learning paths — generated from a resume's `recommended_projects`,
+ *  not tied to any job (job_id is NULL server-side). Scoped by resume instead. */
+export async function fetchGeneralLearningPaths(userId: string, resumeId: string): Promise<LearningPath[]> {
+    if (!userId || !resumeId) return []
+    const res = await fetch(`/api/learning-path?general=1&resume_id=${encodeURIComponent(resumeId)}`)
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.paths ?? []
+}
+
 export interface LearningPathSummary {
     job_id: string
+    /** True for profile-upskilling entries (no job) — job_id above is a synthetic `general:<resume_id>` key, not a real job id. */
+    is_general?: boolean
     resume_id: string | null
     skill_count: number
     top_skills: string[]
@@ -927,14 +939,15 @@ export async function fetchLearningPathSummaries(userId: string): Promise<Learni
 
 export async function triggerLearningPathGeneration(payload: {
     userId: string
-    jobId: string
-    /** Active resume at generation time — stored on each learning_paths row so the history can show which resume produced this path. */
+    /** Omit for a profile-upskilling project (no job) — resumeId is then required instead. */
+    jobId?: string
+    /** Active resume at generation time — stored on each learning_paths row so the history can show which resume produced this path. Required when jobId is omitted. */
     resumeId?: string | null
     missingSkills: string[]
     /** Block B: structured gap analysis from scorer. Preferred over flat missingSkills when present. */
     gaps?: import('./types').JobGap[] | null
     jobTitle: string
-    companyName: string
+    companyName?: string
     company_research?: {
         overview?: string
         tech_stack?: Record<string, unknown>
@@ -947,12 +960,12 @@ export async function triggerLearningPathGeneration(payload: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             user_id: payload.userId,
-            job_id: payload.jobId,
+            job_id: payload.jobId ?? undefined,
             resume_id: payload.resumeId ?? undefined,
             missing_skills: payload.missingSkills,
             gaps: payload.gaps ?? undefined,
             job_title: payload.jobTitle,
-            company_name: payload.companyName,
+            company_name: payload.companyName ?? '',
             company_research: payload.company_research ?? undefined,
         }),
     })
@@ -1044,6 +1057,7 @@ export interface ProjectRoadmapSummary {
     job_id: string | null
     build_plan_project_id: string
     project_name: string
+    project_description: string | null
     tech_stack: string[]
     difficulty: 'beginner' | 'intermediate' | 'advanced'
     estimated_weeks: number | null
@@ -1070,6 +1084,14 @@ export async function generateProjectRoadmap(payload: {
     resume_id: string
     job_id: string
     build_plan_project_id: string
+} | {
+    /** Profile-upskilling project (no job) — from the resume upload page's "Learn Project" button. */
+    resume_id: string
+    project_title: string
+    project_why?: string
+    skills_gained: string[]
+    estimated_days?: number
+    unlocks_roles?: string[]
 }): Promise<{ success: boolean; cached?: boolean; roadmap_id?: string; error?: string }> {
     const res = await fetch('/api/project-roadmap', {
         method: 'POST',

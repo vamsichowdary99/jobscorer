@@ -296,6 +296,17 @@ export interface ResumeAiAnalysis {
     target_companies?: { start_here?: string; stretch_for?: string; skip_for_now?: string }
     cut_or_condense?: string[]
     recommended_certifications?: Array<{ name: string; priority: 'high' | 'medium' | 'low'; reason: string }>
+    // Profile-upskilling projects — not tied to any specific job. Each closes a
+    // different gap from `gaps` above; `unlocks_roles` is what the UI shows as
+    // the payoff for building it.
+    recommended_projects?: Array<{
+        title: string
+        why: string
+        skills_gained: string[]
+        estimated_days: number
+        expected_improvement: string
+        unlocks_roles?: string[]
+    }>
 }
 
 export interface Resume {

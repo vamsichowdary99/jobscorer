@@ -1243,7 +1243,7 @@ export default function UploadPage() {
                 </aside>
 
                 {/* ── Main ────────────────────────────────────────────── */}
-                <main style={S.main}>
+                <div style={S.main}>
                     <div style={{ ...S.scroll, ...(isMobile ? { padding: '16px 16px 100px' } : {}) }}>
                         <div style={{ ...S.inner, ...(isMobile ? { maxWidth: '100%' } : {}) }}>
 
@@ -1934,7 +1934,7 @@ export default function UploadPage() {
                                                     transition={POPOVER_TRANSITION}
                                                 >
                                                     <MorphingPopoverTrigger onClick={() => openAdd('links')} style={{ ...S.addBtn, margin: 0 } as React.CSSProperties}>
-                                                        <span style={{ color: '#7c3aed', fontSize: 16, lineHeight: 1 }}>+</span>
+                                                        <span style={{ color: '#135bec', fontSize: 16, lineHeight: 1 }}>+</span>
                                                         <span>{hasAnyLink ? 'Edit Links' : 'Add Links'}</span>
                                                     </MorphingPopoverTrigger>
                                                     <MorphingPopoverContent style={popContentStyle}>
@@ -2225,6 +2225,87 @@ export default function UploadPage() {
                                                         </div>
                                                     ) : null}
 
+                                                    {/* Level up your profile — portfolio projects, not tied to any job. Each
+                                                        closes one gap and points forward to roles it would newly unlock. */}
+                                                    {(resumeAnalysis.recommended_projects?.length ?? 0) > 0 && (
+                                                        <div style={{ borderTop: '1px solid #f1f5f9', padding: isMobile ? '12px 13px 14px' : '20px 28px 22px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14 }}>
+                                                                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#135bec' }} />
+                                                                <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.16em' }}>Level Up Your Profile</span>
+                                                                <span style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, #e5e7eb 0%, transparent 80%)' }} />
+                                                                <span style={{ fontFamily: 'monospace', fontSize: '0.6rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{resumeAnalysis.recommended_projects!.length} project{resumeAnalysis.recommended_projects!.length > 1 ? 's' : ''}</span>
+                                                            </div>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : `repeat(${Math.min(resumeAnalysis.recommended_projects!.length, 3)}, 1fr)`, gap: isMobile ? 10 : 12 }}>
+                                                                {resumeAnalysis.recommended_projects!.map((p, i) => (
+                                                                    <div key={i} className="pb-card" style={{ display: 'flex', flexDirection: 'column', padding: isMobile ? '12px 12px' : '16px 17px', borderRadius: 12, background: '#fff', border: '1px solid #e5e7eb', transition: 'all 0.18s ease' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+                                                                            <div style={{ width: 24, height: 24, borderRadius: 7, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#135bec" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                                                                            </div>
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.58rem' : '0.62rem', fontWeight: 700, color: '#135bec', textTransform: 'uppercase', letterSpacing: '0.12em' }}>~{p.estimated_days}d build</span>
+                                                                        </div>
+                                                                        <h4 style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.92rem' : '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 6px', lineHeight: 1.3 }}>{p.title}</h4>
+                                                                        <p style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.83rem', color: '#475569', margin: '0 0 12px', lineHeight: 1.5, flex: 1 }}>{p.why}</p>
+
+                                                                        {(p.skills_gained?.length ?? 0) > 0 && (
+                                                                            <div style={{ marginBottom: (p.unlocks_roles?.length ?? 0) > 0 ? 10 : 14 }}>
+                                                                                <div style={{ fontFamily: 'monospace', fontSize: isMobile ? '0.56rem' : '0.6rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Skills you&rsquo;ll gain</div>
+                                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                                                                                    {p.skills_gained.map((s, si) => (
+                                                                                        <span key={si} style={{ padding: '3px 8px', borderRadius: 5, background: '#f8fafc', border: '1px solid #e2e8f0', fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.68rem' : '0.72rem', fontWeight: 600, color: '#475569' }}>{s}</span>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {(p.unlocks_roles?.length ?? 0) > 0 && (
+                                                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 14 }}>
+                                                                                <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#60a5fa', flexShrink: 0, lineHeight: 1.4, marginTop: 1 }}>&rarr;</span>
+                                                                                <span style={{ fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.72rem' : '0.76rem', color: '#135bec', fontWeight: 600, lineHeight: 1.4, flex: 1, minWidth: 0 }}>Unlocks {p.unlocks_roles!.join(', ')}</span>
+                                                                            </div>
+                                                                        )}
+
+                                                                        <div style={{ marginTop: 'auto', display: 'flex', gap: 8 }}>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const resumeId = selectedResume?.id
+                                                                                    if (!resumeId) return
+                                                                                    const skills = (p.skills_gained || []).join(',')
+                                                                                    router.push(`/dashboard/learning?general=1&resumeId=${encodeURIComponent(resumeId)}&projectTitle=${encodeURIComponent(p.title)}&skills=${encodeURIComponent(skills)}`)
+                                                                                }}
+                                                                                style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: isMobile ? '9px 10px' : '9px 12px', borderRadius: 8, background: '#fff', border: '1px solid #135bec', color: '#135bec', fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+                                                                            >
+                                                                                Learn skills
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const resumeId = selectedResume?.id
+                                                                                    if (!resumeId) return
+                                                                                    const skills = (p.skills_gained || []).join(',')
+                                                                                    const unlocks = (p.unlocks_roles || []).join(',')
+                                                                                    const qs = new URLSearchParams({
+                                                                                        pendingProject: '1',
+                                                                                        resumeId,
+                                                                                        projectTitle: p.title,
+                                                                                        projectWhy: p.why || '',
+                                                                                        skills,
+                                                                                        days: String(p.estimated_days ?? ''),
+                                                                                        unlocks,
+                                                                                    })
+                                                                                    router.push(`/dashboard/learning?${qs.toString()}`)
+                                                                                }}
+                                                                                style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: isMobile ? '9px 10px' : '9px 12px', borderRadius: 8, background: '#135bec', border: 'none', color: '#fff', fontFamily: "'Inter', sans-serif", fontSize: isMobile ? '0.78rem' : '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+                                                                            >
+                                                                                Learn project
+                                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     {/* Full assessment — always shown at the bottom of the card */}
                                                     {resumeAnalysis.full_assessment && (
                                                         <div style={{ borderTop: '1px solid #f1f5f9' }}>
@@ -2284,7 +2365,7 @@ export default function UploadPage() {
                             </button>
                         </div>
                     </div>
-                </main>
+                </div>
 
             </div>{/* end body */}
 
