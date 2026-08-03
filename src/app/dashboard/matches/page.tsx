@@ -93,6 +93,27 @@ function formatDate(d: string | null): string {
     return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+// posted_date is a mix of real ISO timestamps and raw relative-time strings
+// ("3 days ago", "Today") depending on the job source — see formatDate above.
+// Sorting needs a real number from either shape, so parse both.
+function postedDateTimestamp(d: string | null | undefined): number {
+    if (!d) return 0
+    const iso = new Date(d)
+    if (!isNaN(iso.getTime())) return iso.getTime()
+    const s = d.trim().toLowerCase()
+    if (s === 'today') return Date.now()
+    if (s === 'yesterday') return Date.now() - 86400000
+    const hours = s.match(/^(\d+)\s*hour/)
+    if (hours) return Date.now() - parseInt(hours[1], 10) * 3600000
+    const days = s.match(/^(\d+)\s*day/)
+    if (days) return Date.now() - parseInt(days[1], 10) * 86400000
+    const weeks = s.match(/^(\d+)\s*week/)
+    if (weeks) return Date.now() - parseInt(weeks[1], 10) * 7 * 86400000
+    const months = s.match(/^(\d+)\s*month/)
+    if (months) return Date.now() - parseInt(months[1], 10) * 30 * 86400000
+    return 0
+}
+
 function matchLabel(s: number) {
     if (s >= 80) return 'Exceptional Match'
     if (s >= 60) return 'Good Match'
@@ -2239,6 +2260,7 @@ function ResumeSelector({
    MAIN PAGE
 ══════════════════════════════════════════════════════ */
 type FilterType = 'all' | 'high' | 'medium' | 'low' | 'recent'
+type SortOrder = 'relevance' | 'newest' | 'oldest'
 
 type TriggerProgress = { scored: number; total: number; batchDone: number; totalBatches: number }
 
@@ -2494,6 +2516,9 @@ export default function MatchesPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user])
 
+    const [sortOrder, setSortOrder] = useState<SortOrder>('relevance')
+    const [sortMenuOpen, setSortMenuOpen] = useState(false)
+
     // Resume-scoped view: when a resume is selected, only show its matches.
     // The counts in the score-tier tabs (High/Medium/Low) also reflect just
     // this resume's slice so the numbers always tell the truth.
@@ -2528,6 +2553,11 @@ export default function MatchesPage() {
         if (filter === 'medium') return s >= 60 && s < 80
         if (filter === 'low') return s < 60
         return true
+    }).sort((a, b) => {
+        if (sortOrder === 'relevance') return (b.relevance_score ?? 0) - (a.relevance_score ?? 0)
+        const aTime = postedDateTimestamp(a.job?.posted_date)
+        const bTime = postedDateTimestamp(b.job?.posted_date)
+        return sortOrder === 'newest' ? bTime - aTime : aTime - bTime
     })
 
     const highFit = locationScoped.filter(m => (m.relevance_score ?? 0) >= 80).length
@@ -2593,7 +2623,6 @@ export default function MatchesPage() {
     return (
         <>
             <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&display=swap');
                 .matches-root * { font-family: 'Manrope', -apple-system, sans-serif; }
                 @keyframes cardIn {
                     from { opacity: 0; transform: translateY(8px); }
@@ -2718,22 +2747,68 @@ export default function MatchesPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                             <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6b7280' }}>
                                 {loading ? '—' : filtered.length} matches found
-                                {!loading && filtered.length !== openResumeScoped.length && (
+                                {/* Dedup badge only means anything against the unfiltered "All" count —
+                                    on a score-tier filter, count naturally differs from openResumeScoped
+                                    just because the tier narrowed it, not because of deduplication. */}
+                                {!loading && filter === 'all' && filtered.length !== openResumeScoped.length && (
                                     <span style={{ color: '#9ca3af', fontWeight: 500 }}> · deduplicated</span>
                                 )}
                             </span>
-                            <button style={{
-                                display: 'flex', alignItems: 'center', gap: 5,
-                                padding: '4px 10px', borderRadius: 6,
-                                border: '1.5px solid #e5e7eb', background: 'white',
-                                fontSize: '0.7rem', fontWeight: 600, color: '#374151',
-                                cursor: 'pointer', fontFamily: "'Manrope', sans-serif",
-                            }}>
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
-                                </svg>
-                                Sort
-                            </button>
+                            <div style={{ position: 'relative' }}>
+                                <button
+                                    onClick={() => setSortMenuOpen(o => !o)}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 5,
+                                        padding: '4px 10px', borderRadius: 6,
+                                        border: `1.5px solid ${sortOrder !== 'relevance' ? '#135bec' : '#e5e7eb'}`,
+                                        background: sortOrder !== 'relevance' ? '#eff6ff' : 'white',
+                                        fontSize: '0.7rem', fontWeight: 600,
+                                        color: sortOrder !== 'relevance' ? '#135bec' : '#374151',
+                                        cursor: 'pointer', fontFamily: "'Manrope', sans-serif",
+                                    }}
+                                >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
+                                    </svg>
+                                    {sortOrder === 'relevance' ? 'Sort' : sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+                                </button>
+                                {sortMenuOpen && (
+                                    <>
+                                        {/* Click-outside catcher */}
+                                        <div
+                                            onClick={() => setSortMenuOpen(false)}
+                                            style={{ position: 'fixed', inset: 0, zIndex: 30 }}
+                                        />
+                                        <div style={{
+                                            position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                                            background: 'white', border: '1px solid #e5e7eb', borderRadius: 8,
+                                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden',
+                                            zIndex: 31, minWidth: 150,
+                                        }}>
+                                            {([
+                                                { key: 'relevance' as SortOrder, label: 'Best match' },
+                                                { key: 'newest' as SortOrder, label: 'Newest posted' },
+                                                { key: 'oldest' as SortOrder, label: 'Oldest posted' },
+                                            ]).map(opt => (
+                                                <button
+                                                    key={opt.key}
+                                                    onClick={() => { setSortOrder(opt.key); setSortMenuOpen(false) }}
+                                                    style={{
+                                                        display: 'block', width: '100%', textAlign: 'left',
+                                                        padding: '8px 12px', border: 'none',
+                                                        background: sortOrder === opt.key ? '#eff6ff' : 'white',
+                                                        color: sortOrder === opt.key ? '#135bec' : '#374151',
+                                                        fontSize: '0.75rem', fontWeight: sortOrder === opt.key ? 700 : 500,
+                                                        cursor: 'pointer', fontFamily: "'Manrope', sans-serif",
+                                                    }}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         {/* Filter chips */}
@@ -2755,7 +2830,6 @@ export default function MatchesPage() {
                                         }}
                                     >
                                         {f.key === 'all' ? 'All' : f.key === 'recent' ? 'Recent' : f.key === 'high' ? '80%+' : f.key === 'medium' ? '60–79%' : '<60%'}
-                                        {' '}{f.count}
                                     </button>
                                 )
                             })}
