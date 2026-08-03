@@ -489,6 +489,20 @@ export const TEMPLATES: TemplateMeta[] = [
 /** Get only active (implemented) templates */
 export const ACTIVE_TEMPLATES = TEMPLATES.filter(t => t.status === 'active')
 
+/**
+ * Free-tier template access. Only Classic is unlocked on the Free plan — it's
+ * the timeless serif anchor kept over near-identical alternatives (see its
+ * catalog note) and has the broadest cross-audience appeal, matching the
+ * product's "broad, all job seekers" positioning rather than just the
+ * IT-fresher wedge. Every other active template is Pro/Max only.
+ */
+export const FREE_TEMPLATE_IDS: ReadonlySet<string> = new Set(['classic'])
+
+export function isTemplateLocked(templateId: string, plan: 'free' | 'pro' | 'max'): boolean {
+  if (plan !== 'free') return false
+  return !FREE_TEMPLATE_IDS.has(templateId)
+}
+
 /** Thumbnail image for each active template, used by the template picker carousel */
 export const TEMPLATE_IMAGES: Record<string, string> = {
   // Verified against each renderer's actual accent color/layout (2026-07-18 audit):

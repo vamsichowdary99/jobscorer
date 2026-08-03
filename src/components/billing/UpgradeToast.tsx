@@ -18,6 +18,7 @@ const FEATURE_LABELS: Record<string, string> = {
   learning_path: 'learning paths',
   resumes: 'résumé slots',
   applications: 'tracked applications',
+  template: 'premium templates',
 };
 
 /**
@@ -70,7 +71,7 @@ export default function UpgradeToast() {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 3 }}>
-          You&apos;ve hit your {planName} plan limit
+          {prompt.feature === 'template' ? 'Premium template locked' : `You've hit your ${planName} plan limit`}
         </div>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', lineHeight: 1.45 }}>
           {prompt.message || `You're out of ${label} for this month. Upgrade for higher limits.`}
