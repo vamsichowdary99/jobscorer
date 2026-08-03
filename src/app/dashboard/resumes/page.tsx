@@ -7,7 +7,9 @@ import { Reorder } from 'framer-motion'
 import type { OptimizedResumeData, ParsedResume, BeforeAfterRole, SkillsDelta, CareerActionPlan, Resume, ResumeEditorState, ExperienceEntry, EducationEntry, ProjectEntry, LeadershipEntry, UserJobMatch, ProjectEvidence } from '@/lib/types'
 import { fetchAllOptimizedResumes, fetchResumeById, fetchResumes, fetchUserJobMatch, fetchConfirmedProjects, triggerTrimToFit, applyTrimResult } from '@/lib/api'
 import TemplatePickerModal, { type TemplateId } from '@/components/TemplatePickerModal'
-import { TEMPLATES, TEMPLATE_IMAGES } from '@/templates/catalog'
+import { TEMPLATES, TEMPLATE_IMAGES, isTemplateLocked } from '@/templates/catalog'
+import { usePlan } from '@/lib/hooks/usePlan'
+import { showUpgradePrompt } from '@/lib/quota'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { usePreviewDecorations, decorationKey, PreviewDecorationsProvider } from '@/components/resume-editor/PreviewDecorations'
 import { A } from '@/components/resume-editor/tokens'
@@ -5610,7 +5612,6 @@ function ResumeChangeLog({ entry, rawData, rawScore, rawJob }: {
 
             {/* Keyframes */}
             <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;600;700;800&display=swap');
                 @keyframes reportPulse { 0%,100% { opacity:0.5; transform:scale(1) } 50% { opacity:1; transform:scale(1.2) } }
             `}</style>
         </div>
@@ -6009,13 +6010,18 @@ const MERIDIAN_TEMPLATES: Array<{ id: string; label: string }> = [
     { id: 'rezi', label: 'Rezi' },
 ]
 
+function LockIcon({ size = 11 }: { size?: number }) {
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.2" /><path d="M8 10V7a4 4 0 018 0v3" /></svg>
+}
+
 // Segmented pill switcher — Meridian v2
 function TemplateSwitcher({
-    active, onChange, onMore,
+    active, onChange, onMore, plan,
 }: {
     active: string
     onChange: (id: string) => void
     onMore: () => void
+    plan: 'free' | 'pro' | 'max'
 }) {
     const isOther = !MERIDIAN_TEMPLATES.some(t => t.id === active)
     return (
@@ -6026,11 +6032,13 @@ function TemplateSwitcher({
         }}>
             {MERIDIAN_TEMPLATES.map(({ id, label }) => {
                 const isActive = active === id
+                const locked = isTemplateLocked(id, plan)
                 return (
                     <button
                         key={id}
                         onClick={() => onChange(id)}
                         style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
                             padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer',
                             fontSize: '0.78rem', fontWeight: 600,
                             fontFamily: M.fontBody,
@@ -6039,7 +6047,10 @@ function TemplateSwitcher({
                             boxShadow: isActive ? '0 1px 4px rgba(15,30,64,0.08)' : 'none',
                             transition: 'all 0.15s',
                         }}
-                    >{label}</button>
+                    >
+                        {locked && <LockIcon size={9} />}
+                        {label}
+                    </button>
                 )
             })}
             <button
@@ -6067,7 +6078,7 @@ function TemplateSwitcher({
 
 function MeridianPreviewPanel({
     state, templateId, onTemplateChange, onMoreTemplates, downloadButton,
-    coverLetterController, entry, job, profileState,
+    coverLetterController, entry, job, profileState, plan, isEmpty,
 }: {
     state: ResumeEditorState
     templateId: string
@@ -6078,6 +6089,8 @@ function MeridianPreviewPanel({
     entry: { resume_id: string; job_id: string } | null
     job: { title?: string | null; company?: string | null; location?: string | null } | null
     profileState: ResumeEditorState['profile']
+    plan: 'free' | 'pro' | 'max'
+    isEmpty?: boolean
 }) {
     const [desktopPreviewTab, setDesktopPreviewTab] = useState<'recruiters' | 'cover-letter'>('recruiters')
 
@@ -6117,10 +6130,10 @@ function MeridianPreviewPanel({
                         animation: 'm-pulse-green 2s ease-in-out infinite',
                     }} />
                     <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: M.text, fontFamily: M.fontBody }}>
-                        Live Preview
+                        Choose Template
                     </span>
                     <span style={{ fontSize: '0.6875rem', color: M.textFaint, fontFamily: M.fontBody }}>
-                        Auto-syncing
+                        Preview updates instantly
                     </span>
                 </div>
 
@@ -6129,6 +6142,7 @@ function MeridianPreviewPanel({
                         active={templateId}
                         onChange={onTemplateChange}
                         onMore={onMoreTemplates}
+                        plan={plan}
                     />
                 </div>
 
@@ -6166,7 +6180,33 @@ function MeridianPreviewPanel({
                         boxShadow: '0 4px 32px rgba(15,30,64,0.10), 0 1px 4px rgba(15,30,64,0.06), 0 12px 48px rgba(15,30,64,0.06)',
                         borderRadius: 2,
                     }}>
-                        {renderPreview()}
+                        {isEmpty ? (
+                            <div style={{
+                                minHeight: 880, display: 'flex', flexDirection: 'column',
+                                alignItems: 'center', justifyContent: 'center', textAlign: 'center',
+                                padding: '48px 40px', gap: 10,
+                            }}>
+                                <div style={{
+                                    width: 56, height: 56, borderRadius: 14, background: M.accentTint,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6,
+                                }}>
+                                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
+                                        <line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="13" y2="17" />
+                                    </svg>
+                                </div>
+                                <div style={{ fontSize: '1.0625rem', fontWeight: 700, color: M.text, fontFamily: M.fontHeading }}>
+                                    Nothing to preview yet
+                                </div>
+                                <div style={{ fontSize: '0.875rem', color: M.textMuted, fontFamily: M.fontBody, maxWidth: 340, lineHeight: 1.55 }}>
+                                    Fill in the sections on the left to build a resume here, or{' '}
+                                    <a href="/dashboard/upload" style={{ color: M.accent, fontWeight: 600, textDecoration: 'none' }}>
+                                        upload an existing resume
+                                    </a>{' '}
+                                    to get started.
+                                </div>
+                            </div>
+                        ) : renderPreview()}
                     </div>
                 </div>
             ) : (
@@ -6373,47 +6413,6 @@ function SourceResumeDropdown({
                         }}>Source Resume</span>
                     </div>
 
-                    {/* All resumes option */}
-                    <button
-                        onClick={() => { onSelect(null); setOpen(false) }}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-                            padding: '11px 14px', textAlign: 'left',
-                            background: selectedId === null ? M.accentLight : 'transparent',
-                            border: 'none', cursor: 'pointer',
-                            borderBottom: `1px solid ${M.borderLight}`,
-                        }}
-                    >
-                        <div style={{
-                            width: 32, height: 32, borderRadius: 7, flexShrink: 0,
-                            background: selectedId === null ? M.accent : M.surfaceAlt,
-                            color: selectedId === null ? '#fff' : M.accent,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                                <rect x="14" y="14" width="7" height="7" rx="1"/>
-                            </svg>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                                fontSize: '0.9375rem', fontWeight: 700,
-                                color: selectedId === null ? M.accent : M.text,
-                                fontFamily: M.fontHeading, letterSpacing: '-0.01em',
-                            }}>All resumes</div>
-                            <div style={{ fontSize: '0.8125rem', color: M.textMuted, fontFamily: M.fontBody, marginTop: 1 }}>
-                                Show everything you&apos;ve optimized
-                            </div>
-                        </div>
-                        {selectedId === null && (
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="3" style={{ flexShrink: 0 }}>
-                                <path d="M20 6L9 17l-5-5"/>
-                            </svg>
-                        )}
-                    </button>
-
                     {/* Individual uploaded resumes */}
                     <div style={{ maxHeight: 360, overflowY: 'auto' }}>
                         {resumes.length === 0 ? (
@@ -6554,6 +6553,35 @@ export default function ResumesPage() {
     const [selectedEntry, setSelectedEntry] = useState<SavedResumeEntry | null>(null)
     const [localOptimizedData, setLocalOptimizedData] = useState<OptimizedResumeData | null>(null)
     const [templateId, setTemplateId] = useState<string>('classic')
+    const { plan, loading: planLoading } = usePlan()
+    // Single gate all template-apply call sites route through (modal CTA, quick
+    // switcher, mobile preview "Use") so a Free user can never land on a locked
+    // template — instead of the raw setTemplateId, which had no such check.
+    const applyTemplate = useCallback((id: string) => {
+        if (isTemplateLocked(id, plan)) {
+            const meta = TEMPLATES.find(t => t.id === id)
+            showUpgradePrompt({
+                feature: 'template',
+                plan,
+                message: `"${meta?.name ?? id}" is a premium template. Upgrade to Pro to unlock it and every other design.`,
+            })
+            return
+        }
+        setTemplateId(id)
+        localStorage.setItem('jobscorer-template', id)
+    }, [plan])
+
+    // A saved/loaded template can be locked (e.g. a downgraded subscription, or
+    // a stale localStorage value) — silently fall back to the free template
+    // rather than rendering a design the current plan doesn't grant. No toast:
+    // this is a quiet correction, not a user-initiated action being blocked.
+    useEffect(() => {
+        if (planLoading || !loaded) return
+        if (isTemplateLocked(templateId, plan)) {
+            setTemplateId('classic')
+            localStorage.setItem('jobscorer-template', 'classic')
+        }
+    }, [plan, planLoading, loaded, templateId])
     // Fingerprint of the trim last generated for EACH template (keyed by
     // template id, not a single scalar — see Task 5 Step 0 in
     // plans/27-template-scoped-trim.md for why a shared scalar would lose
@@ -6952,6 +6980,7 @@ export default function ResumesPage() {
 
             if (optimizedList.length > 0) {
                 setSavedResumes(optimizedList)
+                setSourceResumeId(optimizedList[0].resume_id)
                 await loadOptimizedResume(optimizedList[0])
             } else if (uploadedList.length > 0) {
                 // No optimizations yet — show the most recent raw resume
@@ -7040,10 +7069,9 @@ export default function ResumesPage() {
     }, [savedResumes, uploadedResumes, loadOptimizedResume, loadRawResume])
 
     const handleTemplateSelect = useCallback((id: TemplateId) => {
-        setTemplateId(id)
-        localStorage.setItem('jobscorer-template', id)
+        applyTemplate(id)
         setShowTemplatePicker(false)
-    }, [])
+    }, [applyTemplate])
 
     const isFilled = useCallback((section: string): boolean => {
         switch (section) {
@@ -7126,7 +7154,10 @@ export default function ResumesPage() {
 
         const MOBILE_TEMPLATES = Object.entries(TEMPLATE_LABELS)
         const srcLabel = sourceResumeId
-            ? (uploadedResumes.find(r => r.id === sourceResumeId)?.original_filename ?? 'Selected resume')
+            ? (() => {
+                const r = uploadedResumes.find(r => r.id === sourceResumeId)
+                return r ? resumeDisplayName(r) : 'Selected resume'
+            })()
             : 'All resumes'
         const srcSubLabel = sourceResumeId
             ? `${optimizedCountsBySource[sourceResumeId] ?? 0} optimized variant${(optimizedCountsBySource[sourceResumeId] ?? 0) !== 1 ? 's' : ''}`
@@ -7241,26 +7272,17 @@ export default function ResumesPage() {
                     </button>
                     {mobileSrcDropOpen && (
                         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, border: `1.5px solid ${M.accent}`, borderTop: 'none', borderRadius: '0 0 10px 10px', background: M.white, overflow: 'hidden', boxShadow: '0 8px 20px rgba(15,30,64,0.1)' }}>
-                            <div onClick={() => { handleSourceChange(null); setMobileSrcDropOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', cursor: 'pointer', borderBottom: `1px solid ${M.borderLight}`, background: !sourceResumeId ? M.surfaceAlt : M.white }}>
-                                <div style={{ width: 30, height: 30, borderRadius: 8, background: M.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: '12.5px', fontWeight: 700, color: !sourceResumeId ? M.accent : M.text }}>All resumes</div>
-                                    <div style={{ fontSize: 11, color: M.textMuted }}>Show everything you've optimized</div>
-                                </div>
-                                {!sourceResumeId && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2.8" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
-                            </div>
                             {uploadedResumes.map(r => {
                                 const isSel = sourceResumeId === r.id
-                                const initial = mInitial(r.original_filename ?? '')
-                                const bg = mAvatarColor(r.original_filename ?? r.id)
+                                const name = resumeDisplayName(r)
+                                const initial = mInitial(name)
+                                const bg = mAvatarColor(name || r.id)
                                 const cnt = optimizedCountsBySource[r.id] ?? 0
                                 return (
                                     <div key={r.id} onClick={() => { handleSourceChange(r.id); setMobileSrcDropOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', cursor: 'pointer', borderBottom: `1px solid ${M.borderLight}`, background: isSel ? M.surfaceAlt : M.white }}>
                                         <div style={{ width: 30, height: 30, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff', fontWeight: 700, fontSize: 13 }}>{initial}</div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontSize: '12.5px', fontWeight: 700, color: isSel ? M.accent : M.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{r.original_filename ?? `Resume ${r.id.slice(0, 6)}`}</div>
+                                            <div style={{ fontSize: '12.5px', fontWeight: 700, color: isSel ? M.accent : M.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{name}</div>
                                             <div style={{ fontSize: 11, color: M.textMuted }}>{cnt} optimized variant{cnt !== 1 ? 's' : ''}</div>
                                         </div>
                                         {isSel && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={M.accent} strokeWidth="2.8" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
@@ -7432,6 +7454,7 @@ export default function ResumesPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                                 {MOBILE_TEMPLATES.map(([id, name]) => {
                                     const isActive = templateId === id
+                                    const locked = isTemplateLocked(id, plan)
                                     const accent = TMPL_ACCENT[id] ?? '#0f1e40'
                                     return (
                                         <div key={id} onClick={() => {
@@ -7472,6 +7495,11 @@ export default function ResumesPage() {
                                                 {isActive && (
                                                     <div style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: '50%', background: M.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(29,106,245,0.5)' }}>
                                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                                                    </div>
+                                                )}
+                                                {locked && (
+                                                    <div style={{ position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: '50%', background: 'rgba(15,23,42,.72)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(15,23,42,.35)', color: '#fff' }}>
+                                                        <LockIcon size={10} />
                                                     </div>
                                                 )}
                                             </div>
@@ -7529,10 +7557,14 @@ export default function ResumesPage() {
                                 Cancel
                             </button>
                             <button
-                                onClick={() => { handleTemplateSelect(previewingTemplate.id as any); setPreviewingTemplate(null) }}
-                                style={{ flex: 2, padding: 11, background: '#135bec', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: M.fontBody, boxShadow: '0 3px 10px rgba(19,91,236,0.3)' }}
+                                onClick={() => {
+                                    const wasLocked = isTemplateLocked(previewingTemplate.id, plan)
+                                    handleTemplateSelect(previewingTemplate.id as any)
+                                    if (!wasLocked) setPreviewingTemplate(null)
+                                }}
+                                style={{ flex: 2, padding: 11, background: isTemplateLocked(previewingTemplate.id, plan) ? '#0f172a' : '#135bec', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: M.fontBody, boxShadow: '0 3px 10px rgba(19,91,236,0.3)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                             >
-                                Use this template →
+                                {isTemplateLocked(previewingTemplate.id, plan) ? (<><LockIcon size={12} /> Upgrade to unlock</>) : 'Use this template →'}
                             </button>
                         </div>
                     </div>
@@ -7623,6 +7655,24 @@ export default function ResumesPage() {
                         </div>
                     </div>
                 </>
+            )}
+
+            {/* ── Trim with AI review (bug fix: previously only rendered in the
+                desktop return below — the mobile early-return above never
+                included it, so the API call succeeded but nothing appeared) ── */}
+            {trimChanges && (
+                <TrimReviewPanel
+                    changes={trimChanges}
+                    onApply={applyTrimWithAI}
+                    onCancel={() => setTrimChanges(null)}
+                />
+            )}
+            {trimError && (
+                <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0F172A', color: '#fff', padding: '10px 18px', borderRadius: 9999, fontSize: 13, zIndex: 500 }}
+                     onClick={() => setTrimError(null)}
+                >
+                    {trimError}
+                </div>
             )}
             </>
         )
@@ -7862,16 +7912,15 @@ export default function ResumesPage() {
                     <MeridianPreviewPanel
                         state={effectiveState}
                         templateId={templateId}
-                        onTemplateChange={(t) => {
-                            setTemplateId(t)
-                            localStorage.setItem('jobscorer-template', t)
-                        }}
+                        onTemplateChange={applyTemplate}
                         onMoreTemplates={() => setShowTemplatePicker(true)}
                         downloadButton={null}
                         coverLetterController={coverLetterController}
                         entry={selectedEntry}
                         job={meridianJob}
                         profileState={editorState.profile}
+                        plan={plan}
+                        isEmpty={completionSections.filter(s => isFilled(s)).length === 0}
                     />
                 </PreviewDecorationsProvider>
             </div>
