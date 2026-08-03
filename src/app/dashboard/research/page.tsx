@@ -1490,8 +1490,6 @@ function CompanyIntelPage() {
     return (
         <>
             <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Playfair+Display:wght@700;800&display=swap');
-
                 .ci-shell {
                     display: flex;
                     height: calc(100vh - 64px);

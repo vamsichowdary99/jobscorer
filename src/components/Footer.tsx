@@ -54,6 +54,7 @@ export default function Footer() {
                             <Link href="/legal/privacy" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>Privacy Policy</Link>
                             <Link href="/legal/terms" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>Terms of Service</Link>
                             <Link href="/legal/cookies" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>Cookie Policy</Link>
+                            <Link href="/legal/refund" style={{ color: 'var(--color-text-tertiary)', textDecoration: 'none', fontSize: '0.8125rem' }}>Refund Policy</Link>
                         </div>
                     </div>
                 </div>

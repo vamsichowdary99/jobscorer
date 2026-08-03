@@ -2224,7 +2224,7 @@ export default function AIChatPage() {
                 />
             )}
 
-            <main className="rs-chat-main" style={{ position: 'relative' }}>
+            <div className="rs-chat-main" style={{ position: 'relative' }}>
                 {/* Mobile hamburger for empty state (no messages) */}
                 {isMobile && !hasMessages && (
                     <button
@@ -2497,7 +2497,7 @@ export default function AIChatPage() {
                         {isMobile && error && <ErrorBar text={error} onClose={() => setError(null)} />}
                     </>
                 )}
-            </main>
+            </div>
 
             {toastMsg && (
                 <div role="status" aria-live="polite" className="rs-toast" style={{

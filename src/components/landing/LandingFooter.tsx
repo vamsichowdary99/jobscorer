@@ -22,6 +22,7 @@ const COLS: Array<{ t: string; ls: Array<[string, string]> }> = [
     ['Privacy Policy',    '/legal/privacy'],
     ['Terms of Service',  '/legal/terms'],
     ['Cookie Policy',     '/legal/cookies'],
+    ['Refund Policy',     '/legal/refund'],
   ]},
 ];
 

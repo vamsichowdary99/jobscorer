@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, Outfit, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
+import './self-hosted-fonts.css'
 import ConsentBanner from '@/components/legal/ConsentBanner'
 import PostHogProvider from '@/components/providers/PostHogProvider'
 import { AuthProvider } from '@/components/providers/AuthProvider'
@@ -72,7 +73,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${outfit.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" data-scroll-behavior="smooth" className={`${inter.variable} ${outfit.variable} ${jetbrainsMono.variable}`}>
       <body className={inter.className}>
         <AuthProvider>
           {children}

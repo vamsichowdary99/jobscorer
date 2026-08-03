@@ -119,6 +119,7 @@ export default function Pricing() {
               <div
                 role="switch"
                 aria-checked={isYearly}
+                aria-label="Toggle yearly billing"
                 tabIndex={0}
                 onClick={() => setIsYearly(v => !v)}
                 onKeyDown={e => { if (e.key === ' ') setIsYearly(v => !v); }}

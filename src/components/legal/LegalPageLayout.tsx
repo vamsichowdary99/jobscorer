@@ -27,6 +27,7 @@ export default function LegalPageLayout({
             <Link href="/legal/terms" style={{ color: '#475569', textDecoration: 'none' }}>Terms</Link>
             <Link href="/legal/privacy" style={{ color: '#475569', textDecoration: 'none' }}>Privacy</Link>
             <Link href="/legal/cookies" style={{ color: '#475569', textDecoration: 'none' }}>Cookies</Link>
+            <Link href="/legal/refund" style={{ color: '#475569', textDecoration: 'none' }}>Refunds</Link>
           </nav>
         </div>
       </header>
