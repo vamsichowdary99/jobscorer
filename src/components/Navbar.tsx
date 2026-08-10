@@ -421,7 +421,6 @@ export default function Navbar() {
                     ) : (
                         <nav className="rs-nav-public">
                             <Link href="/browse">Browse Jobs</Link>
-                            <Link href="/login">Login</Link>
                         </nav>
                     )}
                 </div>
@@ -478,7 +477,6 @@ export default function Navbar() {
                 <div className="rs-mobile-menu">
                     {(isDashboard ? navLinks : [
                         { href: '/browse', label: 'Browse Jobs', icon: null },
-                        { href: '/login', label: 'Login', icon: null },
                     ]).map((link) => {
                         const active = isNavActive(pathname, link.href)
                         return (
