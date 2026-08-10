@@ -107,6 +107,11 @@ function firstInitial(s: string | null | undefined) {
 }
 
 // Plan-aware usage meters: feature keys (from PLAN_QUOTAS) → display labels + icon.
+// Must cover every key in PLAN_QUOTAS (src/lib/plan.ts) — the usage API returns
+// all of them dynamically, so a feature missing here silently falls back to its
+// raw snake_case name in the UI instead of a proper label (see the `?? {...}`
+// fallback below). resume_edit, project_roadmap, project_coach were missing
+// until this was audited against plan.ts (2026-08-07).
 const USAGE_FEATURE_META: Record<string, { label: string; icon: IconName }> = {
     job_search: { label: 'Job Searches', icon: 'search' },
     score: { label: 'AI Match Runs', icon: 'target' },
@@ -116,6 +121,9 @@ const USAGE_FEATURE_META: Record<string, { label: string; icon: IconName }> = {
     chat: { label: 'AI Chat Messages', icon: 'sparkles' },
     learning_path: { label: 'Learning Paths', icon: 'link' },
     cover_letter: { label: 'Cover Letters', icon: 'doc' },
+    resume_edit: { label: 'Resume Editor Messages', icon: 'sparkles' },
+    project_roadmap: { label: 'Project Roadmaps', icon: 'monitor' },
+    project_coach: { label: 'AI Project Coach', icon: 'user' },
 }
 
 type PlanUsage = { plan: 'free' | 'pro' | 'max'; usage: { feature: string; used: number; limit: number }[] }

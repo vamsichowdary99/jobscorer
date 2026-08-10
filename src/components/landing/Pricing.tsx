@@ -36,7 +36,7 @@ const PLANS: Plan[] = [
     monthlyLabel: '/month', yearlyLabel: '/year',
     yearlySaving: 'You save ₹1,089 vs monthly', badge: '⭐ RECOMMENDED', hero: true,
     cta: 'Start Pro Plan →', href: '/signup',
-    features: ['60 job searches / month', '30 AI match runs / month', '20 tailored resumes / month', '20 company researches / month', '200 AI chat messages / month', '10 build plans + 15 learning paths', 'Unlimited application tracking', 'All 4 ATS résumé templates', 'Skill-gap analysis'],
+    features: ['60 job searches / month', '30 AI match runs / month', '20 tailored resumes / month', '20 company researches / month', '200 AI chat messages / month', '10 build plans + 15 learning paths', 'Unlimited application tracking', 'All 16 ATS résumé templates', 'Skill-gap analysis'],
   },
   {
     id: 'power', name: 'Max', tagline: 'Go all-in on your search',
@@ -54,17 +54,24 @@ const TABLE_ROWS: Row[] = [
   { section: 'Core Features' },
   { label: 'Job searches / month',     vals: ['5', '60', '200'] },
   { label: 'AI match runs / month',    vals: ['3', '30', '80'] },
+  { label: 'Resume storage slots',     vals: ['1', '5', '20'] },
   { label: 'Tailored resumes / month', vals: ['1', '20', '40'] },
   { label: 'Company researches / month', vals: ['2', '20', '40'] },
   { label: 'AI chat messages / month', vals: ['10', '200', '600'] },
+  { label: 'Application tracking',     vals: ['3', 'Unlimited', 'Unlimited'] },
+  { section: 'Resume Tools' },
+  { label: 'Resume Editor AI messages / month', vals: ['3', '150', '500'] },
+  { label: 'Cover letters / month',    vals: ['1', '15', '30'] },
+  { label: 'ATS résumé templates',     vals: ['1', 'All 16', 'All 16'] },
+  { section: 'Career Growth' },
   { label: 'Build plans / month',      vals: ['1', '10', '30'] },
   { label: 'Learning paths / month',   vals: ['1', '15', '30'] },
-  { label: 'Application tracking',     vals: ['3', 'Unlimited', 'Unlimited'] },
+  { label: 'Project roadmaps / month', vals: ['1', '10', '30'] },
+  { label: 'AI Project Coach actions / month', vals: ['10', '75', '250'] },
   { section: 'AI Intelligence' },
   { label: 'Resume fit score',         vals: ['✅', '✅', '✅'] },
   { label: 'Skill-gap analysis',       vals: ['✅', '✅', '✅'] },
   { label: 'Company intelligence',     vals: ['Basic', 'Full', 'Full'] },
-  { label: 'ATS résumé templates',     vals: ['1', 'All 4', 'All 4'] },
   { section: 'Support' },
   { label: 'Support channel',          vals: ['Community', 'Email', 'Priority email'] },
   { label: 'Response time',            vals: ['—', '24 hrs', '12 hrs'] },
@@ -342,7 +349,7 @@ export default function Pricing() {
             </table>
           </div>
           <p style={{ textAlign: 'center', fontSize: 12.5, color: C.textTer, marginTop: 28, fontFamily: MONO, letterSpacing: '0.02em' }}>
-            🚧 Coming soon: real-time job alerts · interview prep &amp; STAR stories · ghost-job detection
+            🚧 Coming soon: real-time job alerts · AI interview prep &amp; STAR stories
           </p>
         </div>
       </div>

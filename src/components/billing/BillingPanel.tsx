@@ -30,12 +30,12 @@ const PLAN_META: Record<Plan, { name: string; tagline: string; features: string[
   pro: {
     name: 'Pro',
     tagline: 'For an active job hunt',
-    features: ['60 job searches / mo', '30 AI match runs / mo', '20 tailored resumes / mo', '200 AI chat messages / mo', 'Company research + build plans', 'Unlimited application tracking'],
+    features: ['60 job searches / mo', '30 AI match runs / mo', '20 tailored resumes / mo', '200 AI chat messages / mo', '150 resume editor messages / mo', 'Company research + build plans + project roadmaps', 'Unlimited application tracking'],
   },
   max: {
     name: 'Max',
     tagline: 'Go all-in on your search',
-    features: ['200 job searches / mo', '80 AI match runs / mo', '40 tailored resumes / mo', '600 AI chat messages / mo', 'Everything in Pro', 'Priority support · 12h'],
+    features: ['200 job searches / mo', '80 AI match runs / mo', '40 tailored resumes / mo', '600 AI chat messages / mo', '500 resume editor messages / mo', 'Everything in Pro', 'Priority support · 12h'],
   },
 };
 
