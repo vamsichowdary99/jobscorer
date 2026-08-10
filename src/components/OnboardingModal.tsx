@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/providers/AuthProvider'
-import { fetchUserSettings, updateUserSettings, triggerResumeUpload, fetchResumes } from '@/lib/api'
+import { fetchUserSettings, updateUserSettings, fileToBase64 } from '@/lib/api'
+import { setPendingUpload } from '@/lib/pendingResumeUpload'
 import {
     ONBOARDING_ROLE_OPTIONS, ONBOARDING_LOCATION_OPTIONS,
     CAREER_EXPERIENCE_OPTIONS, CAREER_CHALLENGE_OPTIONS, JOB_TIMELINE_OPTIONS,
@@ -147,9 +148,15 @@ export default function OnboardingModal() {
             onboarding_completed: true,
         })
         if (resumeFile) {
-            // Fire-and-forget — the success card's "Resume Analysis" item reflects
-            // this running in the background; we don't block on n8n's parse step.
-            void triggerResumeUpload(resumeFile, user.id).then(() => fetchResumes(user.id))
+            // Hand off to the same pending-upload mechanism the landing page uses
+            // (Hero.tsx) so /dashboard/upload picks it up on mount and shows the
+            // real "AI Analyzing your profile…" progress state — instead of the
+            // generic success card, which had no live status of its own.
+            const base64 = await fileToBase64(resumeFile)
+            setPendingUpload({ filename: resumeFile.name, mimeType: resumeFile.type || 'application/pdf', base64 })
+            setShow(false)
+            router.push('/dashboard/upload')
+            return
         }
         setSubmitting(false)
         setShow(false)
@@ -176,33 +183,40 @@ export default function OnboardingModal() {
         const userName = (user?.user_metadata?.full_name as string | undefined) ?? user?.email?.split('@')[0] ?? 'there'
         return (
             <div
+                className="onb-overlay"
                 style={{
-                    position: 'fixed', top: 100, left: '50%', transform: 'translateX(-50%)',
-                    width: 'min(520px, calc(100% - 32px))', background: '#fff', borderRadius: 20,
-                    boxShadow: '0 30px 70px -15px rgba(15,23,42,0.35)', padding: 28, zIndex: 1000,
-                    fontFamily: SANS,
+                    position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(6px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16,
                 }}
-                className="onb-modal"
             >
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, marginBottom: 14 }}>🤖</div>
-                <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>Welcome, {userName}!</div>
-                <p style={{ fontSize: 14, color: '#475569', marginTop: 6, lineHeight: 1.5 }}>
-                    You&rsquo;re targeting {roleLabel}. We&rsquo;ve already started building your personalized career roadmap.
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '18px 0' }}>
-                    {['Resume Analysis', 'Skill Gap Detection', 'Recommended Learning Path', 'Job Matching'].map((label, i) => (
-                        <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: '#334155', fontWeight: 600 }}>
-                            <span className="onb-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: BLUE, flexShrink: 0, animationDelay: `${i * 0.2}s` }} />
-                            {label}
-                        </div>
-                    ))}
-                </div>
-                <button
-                    onClick={() => { setShowSuccess(false); router.push('/dashboard') }}
-                    style={{ width: '100%', padding: '13px 24px', background: BLUE, color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, fontFamily: SANS, cursor: 'pointer' }}
+                <div
+                    style={{
+                        width: 'min(460px, 100%)', background: '#fff', borderRadius: 20,
+                        boxShadow: '0 30px 70px -15px rgba(15,23,42,0.35)', padding: 28,
+                        fontFamily: SANS,
+                    }}
+                    className="onb-modal"
                 >
-                    Go to dashboard
-                </button>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, marginBottom: 14 }}>🤖</div>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>Welcome, {userName}!</div>
+                    <p style={{ fontSize: 14, color: '#475569', marginTop: 6, lineHeight: 1.5 }}>
+                        You&rsquo;re targeting {roleLabel}. We&rsquo;ve already started building your personalized career roadmap.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '18px 0' }}>
+                        {['Resume Analysis', 'Skill Gap Detection', 'Recommended Learning Path', 'Job Matching'].map((label, i) => (
+                            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: '#334155', fontWeight: 600 }}>
+                                <span className="onb-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: BLUE, flexShrink: 0, animationDelay: `${i * 0.2}s` }} />
+                                {label}
+                            </div>
+                        ))}
+                    </div>
+                    <button
+                        onClick={() => { setShowSuccess(false); router.push('/dashboard') }}
+                        style={{ width: '100%', padding: '13px 24px', background: BLUE, color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, fontFamily: SANS, cursor: 'pointer' }}
+                    >
+                        Go to dashboard
+                    </button>
+                </div>
             </div>
         )
     }
