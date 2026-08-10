@@ -56,7 +56,7 @@ export default function BrowseJobsPage() {
                     {!loading && jobs.length > 0 && (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
                             {jobs.map((job) => (
-                                <JobCard key={job.id} job={job} />
+                                <JobCard key={job.id} job={job} publicMode />
                             ))}
                         </div>
                     )}

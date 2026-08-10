@@ -7,9 +7,13 @@ interface Readonly_JobCardProps {
     readonly job: Job
     readonly showScore?: boolean
     readonly score?: number
+    /** Signed-out contexts (e.g. /browse) — routes "View" to signup instead of
+     *  the external source_url, so visitors convert into an account instead
+     *  of clicking straight off-platform to apply without ever signing up. */
+    readonly publicMode?: boolean
 }
 
-export default function JobCard({ job, showScore, score }: Readonly_JobCardProps) {
+export default function JobCard({ job, showScore, score, publicMode }: Readonly_JobCardProps) {
     const timeAgo = job.posted_date ?? 'Recently'
 
     return (
@@ -114,7 +118,11 @@ export default function JobCard({ job, showScore, score }: Readonly_JobCardProps
                 <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-tertiary)' }}>
                     {timeAgo} • {job.source}
                 </span>
-                {job.source_url && (
+                {publicMode ? (
+                    <Link href="/signup" style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600, textDecoration: 'none' }}>
+                        Sign up to view & apply →
+                    </Link>
+                ) : job.source_url && (
                     <Link href={job.source_url} target="_blank" style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 500, textDecoration: 'none' }}>
                         View →
                     </Link>
